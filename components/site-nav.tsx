@@ -17,7 +17,7 @@ export function SiteNav() {
     <header className="fixed inset-x-0 top-4 z-50 flex justify-center px-4">
       <nav
         className={cn(
-          "flex w-full max-w-5xl items-center justify-between gap-4 rounded-full border border-border bg-card/60 px-4 py-2.5 backdrop-blur-xl transition-colors",
+          "flex w-full max-w-5xl items-center justify-between gap-4 rounded-full border border-zinc-800/60 bg-zinc-950/70 px-4 py-2.5 backdrop-blur-md transition-colors",
           "sm:px-6"
         )}
       >
@@ -37,8 +37,8 @@ export function SiteNav() {
                 <Link
                   href={link.href}
                   className={cn(
-                    "rounded-full px-3.5 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
-                    active && "bg-secondary text-foreground"
+                    "rounded-full px-3.5 py-2 text-sm font-medium text-zinc-400 transition-colors hover:text-foreground",
+                    active && "bg-zinc-900 text-foreground"
                   )}
                 >
                   {link.label}
@@ -53,7 +53,7 @@ export function SiteNav() {
             href="/contact"
             className={cn(
               buttonVariants(),
-              "rounded-full bg-primary px-5 text-primary-foreground shadow-[0_0_24px_-4px_var(--color-primary)] hover:bg-primary/90"
+              "rounded-full border border-transparent bg-zinc-900 px-5 text-foreground transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:bg-zinc-900 hover:text-foreground hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             )}
           >
             Book Session
@@ -72,7 +72,7 @@ export function SiteNav() {
       </nav>
 
       {open && (
-        <div className="absolute inset-x-4 top-[calc(100%+0.5rem)] rounded-3xl border border-border bg-card/95 p-4 backdrop-blur-xl md:hidden">
+        <div className="absolute inset-x-4 top-[calc(100%+0.5rem)] rounded-3xl border border-zinc-800/60 bg-zinc-950/95 p-4 backdrop-blur-md md:hidden">
           <ul className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <li key={link.href}>
@@ -80,8 +80,8 @@ export function SiteNav() {
                   href={link.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    "block rounded-2xl px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground",
-                    pathname === link.href && "bg-secondary text-foreground"
+                    "block rounded-2xl px-4 py-3 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-foreground",
+                    pathname === link.href && "bg-zinc-900 text-foreground"
                   )}
                 >
                   {link.label}
@@ -94,7 +94,7 @@ export function SiteNav() {
             onClick={() => setOpen(false)}
             className={cn(
               buttonVariants(),
-              "mt-2 w-full rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+              "mt-2 w-full rounded-full bg-zinc-900 text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             )}
           >
             Book Session

@@ -1,9 +1,9 @@
 "use client"
 
-import Image from "next/image"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { useMemo } from "react"
 
+import { ImageSlot } from "@/components/image-slot"
 import { galleryItems, type Discipline } from "@/lib/site-data"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +40,7 @@ export function GalleryGrid() {
 
   return (
     <div>
-      <div className="sticky top-20 z-20 -mx-6 flex gap-2 overflow-x-auto bg-background/80 px-6 py-4 backdrop-blur-xl sm:-mx-10 sm:justify-center sm:px-10">
+      <div className="sticky top-20 z-20 -mx-6 flex gap-2 overflow-x-auto bg-[#09090b]/80 px-6 py-4 backdrop-blur-md sm:-mx-10 sm:justify-center sm:px-10">
         {filters.map((filter) => (
           <button
             key={filter}
@@ -49,8 +49,8 @@ export function GalleryGrid() {
             className={cn(
               "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
               active === filter
-                ? "bg-primary text-primary-foreground"
-                : "bg-secondary text-muted-foreground hover:text-foreground"
+                ? "bg-[#e829f1] text-white"
+                : "bg-zinc-900 text-zinc-400 hover:text-foreground"
             )}
           >
             {filter === "All" ? "All Work" : filter}
@@ -63,24 +63,19 @@ export function GalleryGrid() {
           <div
             key={item.id}
             className={cn(
-              "group relative overflow-hidden rounded-2xl border border-border",
+              "group relative overflow-hidden rounded-2xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
               i % 5 === 0
                 ? "col-span-2 aspect-[16/10] sm:aspect-[4/3]"
                 : "aspect-[3/4]"
             )}
           >
-            <Image
-              src={item.image}
-              alt={item.title}
-              fill
-              className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+            <ImageSlot aspect={item.aspect} label="" className="border-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#09090b]/85 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
               <p className="text-sm font-medium text-foreground">
                 {item.title}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-zinc-500">
                 {item.category} &middot; {item.creator}
               </p>
             </div>
@@ -89,7 +84,7 @@ export function GalleryGrid() {
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-16 text-center text-sm text-muted-foreground">
+        <p className="mt-16 text-center text-sm text-zinc-500">
           No work in this category yet.
         </p>
       ) : null}

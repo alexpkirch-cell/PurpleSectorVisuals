@@ -1,7 +1,7 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ArrowUpRight } from "lucide-react"
 
@@ -20,21 +20,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 const categories = ["Sports", "Automotive", "Portraits", "Events"]
-const shooters = ["Studio Match", "Alex", "Gabe", "Both"]
+const shooters = ["Studio Match", "Alex", "Gabe", "Dual Coverage"] as const
+
+const focusClasses =
+  "focus-visible:border-[#e829f1] focus-visible:ring-[#e829f1]/20"
 
 export function BookingForm() {
   const searchParams = useSearchParams()
   const initialShooter = searchParams.get("shooter")
   const initialTier = searchParams.get("tier")
 
-  const [shooterPreference, setShooterPreference] = useState(
-    shooters.includes(initialShooter ?? "") ? initialShooter! : ""
-  )
+  const [shooterPreference, setShooterPreference] = useState<string>(() => {
+    if (initialShooter && (shooters as readonly string[]).includes(initialShooter)) {
+      return initialShooter
+    }
+    return ""
+  })
   const [category, setCategory] = useState("")
+  const [location, setLocation] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -47,16 +57,17 @@ export function BookingForm() {
     })
 
     setSubmitting(false)
-    event.currentTarget.reset()
+    formRef.current?.reset()
     setShooterPreference("")
     setCategory("")
+    setLocation("")
   }
 
   return (
-    <form onSubmit={handleSubmit} className="w-full">
+    <form ref={formRef} onSubmit={handleSubmit} className="w-full">
       <FieldGroup>
         {initialTier ? (
-          <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground">
+          <div className="rounded-2xl border border-[#e829f1]/30 bg-[#e829f1]/10 px-4 py-3 text-sm text-foreground">
             Requesting the <span className="font-medium">{initialTier}</span>{" "}
             package
           </div>
@@ -64,8 +75,14 @@ export function BookingForm() {
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="name">Name</FieldLabel>
-            <Input id="name" name="name" placeholder="Jordan Rivera" required />
+            <FieldLabel htmlFor="name">Client Name</FieldLabel>
+            <Input
+              id="name"
+              name="name"
+              placeholder="Jordan Rivera"
+              required
+              className={focusClasses}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>
@@ -75,6 +92,7 @@ export function BookingForm() {
               type="email"
               placeholder="you@example.com"
               required
+              className={focusClasses}
             />
           </Field>
         </div>
@@ -87,66 +105,83 @@ export function BookingForm() {
               name="phone"
               type="tel"
               placeholder="(555) 010-2020"
+              className={focusClasses}
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="date">Project Date</FieldLabel>
-            <Input id="date" name="date" type="date" required />
-          </Field>
-        </div>
-
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field>
-            <FieldLabel htmlFor="category">Category</FieldLabel>
-            <Select
-              value={category}
-              onValueChange={(value) => setCategory(value ?? "")}
-              name="category"
-            >
-              <SelectTrigger id="category" className="w-full">
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {categories.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field>
-            <FieldLabel htmlFor="shooter">Shooter Preference</FieldLabel>
-            <Select
-              value={shooterPreference}
-              onValueChange={(value) => setShooterPreference(value ?? "")}
-              name="shooter"
-            >
-              <SelectTrigger id="shooter" className="w-full">
-                <SelectValue placeholder="Select a preference" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {shooters.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+            <FieldLabel htmlFor="date">Event Date</FieldLabel>
+            <Input
+              id="date"
+              name="date"
+              type="date"
+              required
+              className={focusClasses}
+            />
           </Field>
         </div>
 
         <Field>
-          <FieldLabel htmlFor="notes">Project Notes</FieldLabel>
+          <FieldLabel htmlFor="location">Location</FieldLabel>
+          <Input
+            id="location"
+            name="location"
+            placeholder="Track, studio, or venue address"
+            value={location}
+            onChange={(event) => setLocation(event.target.value)}
+            className={focusClasses}
+          />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="category">Service</FieldLabel>
+          <Select
+            value={category}
+            onValueChange={(value) => setCategory(value ?? "")}
+            name="category"
+          >
+            <SelectTrigger id="category" className={cn("w-full", focusClasses)}>
+              <SelectValue placeholder="Select a service" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="shooter">Artist Preference</FieldLabel>
+          <ToggleGroup
+            value={shooterPreference ? [shooterPreference] : []}
+            onValueChange={(value) => setShooterPreference(value[0] ?? "")}
+            variant="outline"
+            className="w-full flex-wrap"
+          >
+            {shooters.map((s) => (
+              <ToggleGroupItem
+                key={s}
+                value={s}
+                className="flex-1 rounded-full border-zinc-800 text-zinc-400 aria-pressed:border-[#e829f1] aria-pressed:bg-[#e829f1] aria-pressed:text-white"
+              >
+                {s}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <input type="hidden" name="shooter" value={shooterPreference} />
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="notes">Project Vision</FieldLabel>
           <Input
             id="notes"
             name="notes"
             placeholder="Location, timing, or anything else we should know"
+            className={focusClasses}
           />
           <FieldDescription>Optional, but it helps us prep.</FieldDescription>
         </Field>
@@ -154,7 +189,7 @@ export function BookingForm() {
         <Button
           type="submit"
           disabled={submitting}
-          className="mt-2 w-full rounded-full bg-primary py-6 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          className="mt-2 w-full rounded-full bg-[#e829f1] py-6 text-sm font-medium text-white hover:bg-[#e829f1]/90"
         >
           {submitting ? "Sending..." : "Send Booking Request"}
           {!submitting && <ArrowUpRight className="size-4" data-icon="inline-end" />}
@@ -163,3 +198,4 @@ export function BookingForm() {
     </form>
   )
 }
+
