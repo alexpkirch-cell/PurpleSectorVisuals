@@ -1,6 +1,8 @@
+import Image from "next/image"
 import { Camera } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
 interface ImageSlotProps {
   aspect?: string
@@ -8,6 +10,13 @@ interface ImageSlotProps {
   glow?: boolean
   compact?: boolean
   className?: string
+  /** Registry key this slot is bound to. Enables the admin asset override. */
+  slotKey?: string
+  /** Full overrides map (slot_key -> public URL), fetched once per page. */
+  overrides?: SiteSlotOverrides
+  /** Resolved image URL, if the caller has already looked it up. */
+  imageUrl?: string | null
+  imageAlt?: string
 }
 
 export function ImageSlot({
@@ -16,7 +25,28 @@ export function ImageSlot({
   glow = false,
   compact = false,
   className,
+  slotKey,
+  overrides,
+  imageUrl,
+  imageAlt,
 }: ImageSlotProps) {
+  const resolvedUrl =
+    imageUrl ?? (slotKey && overrides ? overrides[slotKey] : undefined)
+
+  if (resolvedUrl) {
+    return (
+      <div className={cn("relative size-full overflow-hidden bg-[#121214]", className)}>
+        <Image
+          src={resolvedUrl}
+          alt={imageAlt ?? label ?? "Site asset"}
+          fill
+          sizes="(max-width: 768px) 100vw, 50vw"
+          className="object-cover"
+        />
+      </div>
+    )
+  }
+
   return (
     <div
       className={cn(

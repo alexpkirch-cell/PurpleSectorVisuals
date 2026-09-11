@@ -5,6 +5,7 @@ import { useMemo } from "react"
 
 import { ImageSlot } from "@/components/image-slot"
 import { galleryItems, type Discipline } from "@/lib/site-data"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { cn } from "@/lib/utils"
 
 const filters: (Discipline | "All")[] = [
@@ -15,7 +16,11 @@ const filters: (Discipline | "All")[] = [
   "Events",
 ]
 
-export function GalleryGrid() {
+export function GalleryGrid({
+  overrides,
+}: {
+  overrides?: SiteSlotOverrides
+}) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -69,7 +74,13 @@ export function GalleryGrid() {
                 : "aspect-[3/4]"
             )}
           >
-            <ImageSlot aspect={item.aspect} label="" className="border-none" />
+            <ImageSlot
+              aspect={item.aspect}
+              label=""
+              className="border-none"
+              slotKey={`gallery.${item.id}`}
+              overrides={overrides}
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-[#09090b]/85 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
             <div className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
               <p className="text-sm font-medium text-foreground">

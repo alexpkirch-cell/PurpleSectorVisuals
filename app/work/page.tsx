@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { GalleryGrid } from "@/components/gallery-grid"
+import { getSiteSlots } from "@/lib/site-slots"
 
 export const metadata: Metadata = {
   title: "Work | Purple Sector Visuals",
@@ -9,7 +10,9 @@ export const metadata: Metadata = {
     "Browse the full portfolio from Purple Sector Visuals across sports, automotive, portrait, and event photography.",
 }
 
-export default function WorkPage() {
+export default async function WorkPage() {
+  const overrides = await getSiteSlots()
+
   return (
     <div className="mx-auto min-h-svh max-w-6xl px-6 pb-24 pt-36 sm:px-10">
       <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
@@ -25,7 +28,7 @@ export default function WorkPage() {
 
       <div className="mt-4">
         <Suspense fallback={null}>
-          <GalleryGrid />
+          <GalleryGrid overrides={overrides} />
         </Suspense>
       </div>
     </div>

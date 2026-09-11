@@ -3,6 +3,7 @@ import { ArrowUpRight } from "lucide-react"
 
 import { ImageSlot } from "@/components/image-slot"
 import { galleryItems, type GalleryItem } from "@/lib/site-data"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { cn } from "@/lib/utils"
 
 interface CreatorPageProps {
@@ -10,9 +11,16 @@ interface CreatorPageProps {
   role: string
   bio: string
   specialties: string[]
+  overrides?: SiteSlotOverrides
 }
 
-export function CreatorPage({ name, role, bio, specialties }: CreatorPageProps) {
+export function CreatorPage({
+  name,
+  role,
+  bio,
+  specialties,
+  overrides,
+}: CreatorPageProps) {
   const shots: GalleryItem[] = galleryItems.filter(
     (item) => item.creator === name
   )
@@ -21,7 +29,13 @@ export function CreatorPage({ name, role, bio, specialties }: CreatorPageProps) 
     <div className="bg-[#09090b]">
       <section className="relative flex min-h-[80svh] w-full items-end overflow-hidden">
         <div className="absolute inset-0">
-          <ImageSlot aspect="16:9 Slot" label={`${name} Portrait Slot`} className="border-none" />
+          <ImageSlot
+            aspect="16:9 Slot"
+            label={`${name} Portrait Slot`}
+            className="border-none"
+            slotKey={`creator.${name.toLowerCase()}.hero`}
+            overrides={overrides}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-[#09090b]/20" />
         </div>
 
@@ -72,7 +86,13 @@ export function CreatorPage({ name, role, bio, specialties }: CreatorPageProps) 
                 i % 3 === 0 ? "col-span-2 aspect-[16/10] sm:col-span-1 sm:aspect-[3/4]" : "aspect-[3/4]"
               )}
             >
-              <ImageSlot aspect={shot.aspect} label="" className="border-none" />
+              <ImageSlot
+                aspect={shot.aspect}
+                label=""
+                className="border-none"
+                slotKey={`gallery.${shot.id}`}
+                overrides={overrides}
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090b]/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="absolute inset-x-0 bottom-0 p-4 opacity-0 transition-opacity group-hover:opacity-100">
                 <p className="text-sm font-medium text-foreground">

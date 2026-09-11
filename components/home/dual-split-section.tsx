@@ -5,6 +5,7 @@ import { useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 
 import { ImageSlot } from "@/components/image-slot"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { cn } from "@/lib/utils"
 
 type Side = "alex" | "gabe" | null
@@ -34,7 +35,11 @@ const cardOffsets = [
   "-right-4 bottom-0 w-16 rotate-3 sm:-right-6 sm:w-24",
 ]
 
-export function DualSplitSection() {
+export function DualSplitSection({
+  overrides,
+}: {
+  overrides?: SiteSlotOverrides
+}) {
   const [hovered, setHovered] = useState<Side>(null)
 
   return (
@@ -97,6 +102,8 @@ export function DualSplitSection() {
                   <ImageSlot
                     aspect="3:4 Slot"
                     label={creator.slotLabel}
+                    slotKey={`home.dual-split.${creator.key}.main`}
+                    overrides={overrides}
                     className={cn(
                       "transition-all duration-500 ease-out",
                       isHovered &&
@@ -115,6 +122,8 @@ export function DualSplitSection() {
                         aspect=""
                         label={card}
                         compact
+                        slotKey={`home.dual-split.${creator.key}.card.${i}`}
+                        overrides={overrides}
                         className={cn(
                           "transition-all duration-500 ease-out",
                           isHovered &&
@@ -153,17 +162,28 @@ export function DualSplitSection() {
                 </p>
               </div>
               <div className="aspect-[3/4] w-full">
-                <ImageSlot aspect="3:4 Slot" label={creator.slotLabel} />
+                <ImageSlot
+                  aspect="3:4 Slot"
+                  label={creator.slotLabel}
+                  slotKey={`home.dual-split.${creator.key}.main`}
+                  overrides={overrides}
+                />
               </div>
             </Link>
 
             <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory [scrollbar-width:none]">
-              {creator.cards.map((card) => (
+              {creator.cards.map((card, i) => (
                 <div
                   key={card}
                   className="aspect-[3/4] w-32 shrink-0 snap-start"
                 >
-                  <ImageSlot aspect="" label={card} compact />
+                  <ImageSlot
+                    aspect=""
+                    label={card}
+                    compact
+                    slotKey={`home.dual-split.${creator.key}.card.${i}`}
+                    overrides={overrides}
+                  />
                 </div>
               ))}
             </div>

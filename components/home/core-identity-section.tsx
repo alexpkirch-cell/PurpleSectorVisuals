@@ -1,6 +1,11 @@
 import { ImageSlot } from "@/components/image-slot"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
-export function CoreIdentitySection() {
+export function CoreIdentitySection({
+  overrides,
+}: {
+  overrides?: SiteSlotOverrides
+}) {
   return (
     <section className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:px-10">
@@ -27,7 +32,13 @@ export function CoreIdentitySection() {
             </p>
           </div>
           <div className="aspect-[4/3] w-full">
-            <ImageSlot aspect="4:3 Slot" label="Studio Reel Slot" glow />
+            <ImageSlot
+              aspect="4:3 Slot"
+              label="Studio Reel Slot"
+              glow
+              slotKey="home.core-identity"
+              overrides={overrides}
+            />
           </div>
         </div>
       </div>

@@ -2,8 +2,13 @@ import Link from "next/link"
 
 import { ImageSlot } from "@/components/image-slot"
 import { disciplines } from "@/lib/site-data"
+import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
-export function DisciplinesSection() {
+export function DisciplinesSection({
+  overrides,
+}: {
+  overrides?: SiteSlotOverrides
+}) {
   return (
     <section className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:px-10">
@@ -32,7 +37,13 @@ export function DisciplinesSection() {
               className="group relative flex h-80 flex-col justify-end overflow-hidden rounded-3xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             >
               <div className="absolute inset-0">
-                <ImageSlot aspect={discipline.aspect} label="" className="border-none" />
+                <ImageSlot
+                  aspect={discipline.aspect}
+                  label=""
+                  className="border-none"
+                  slotKey={`home.discipline.${discipline.name.toLowerCase()}`}
+                  overrides={overrides}
+                />
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/40 to-transparent" />
               <div className="relative z-10 p-6">
