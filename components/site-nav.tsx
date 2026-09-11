@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { Menu, X } from "lucide-react"
+import { Menu, ShieldCheck, X } from "lucide-react"
 
 import { navLinks } from "@/lib/site-data"
 import { buttonVariants } from "@/components/ui/button"
@@ -48,7 +48,17 @@ export function SiteNav() {
           })}
         </ul>
 
-        <div className="hidden shrink-0 md:block">
+        <div className="hidden shrink-0 items-center gap-2 md:flex">
+          <Link
+            href="/admin/login"
+            aria-label="Open admin login"
+            className={cn(
+              "inline-flex size-10 items-center justify-center rounded-full border border-zinc-800 text-zinc-400 transition-colors hover:border-[#e829f1] hover:text-foreground",
+              pathname.startsWith("/admin") && "border-[#e829f1] text-foreground"
+            )}
+          >
+            <ShieldCheck className="size-4" aria-hidden="true" />
+          </Link>
           <Link
             href="/contact"
             className={cn(
@@ -89,16 +99,29 @@ export function SiteNav() {
               </li>
             ))}
           </ul>
-          <Link
-            href="/contact"
-            onClick={() => setOpen(false)}
-            className={cn(
-              buttonVariants(),
-              "mt-2 w-full rounded-full bg-zinc-900 text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
-            )}
-          >
-            Book Session
-          </Link>
+          <div className="mt-2 flex gap-2">
+            <Link
+              href="/admin/login"
+              onClick={() => setOpen(false)}
+              className={cn(
+                "inline-flex size-11 shrink-0 items-center justify-center rounded-full border border-zinc-800 text-zinc-400 transition-colors hover:border-[#e829f1] hover:text-foreground",
+                pathname.startsWith("/admin") && "border-[#e829f1] text-foreground"
+              )}
+              aria-label="Open admin login"
+            >
+              <ShieldCheck className="size-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/contact"
+              onClick={() => setOpen(false)}
+              className={cn(
+                buttonVariants(),
+                "w-full rounded-full bg-zinc-900 text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+              )}
+            >
+              Book Session
+            </Link>
+          </div>
         </div>
       )}
     </header>
