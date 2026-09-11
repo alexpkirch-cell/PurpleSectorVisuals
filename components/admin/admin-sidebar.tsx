@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils"
 
 const links = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
-  { href: "/admin/galleries", label: "Galleries", icon: Images },
+  { href: "/admin/galleries", label: "Vaults", icon: Images },
   { href: "/admin/assets", label: "Site Assets", icon: LayoutGrid },
 ]
 
