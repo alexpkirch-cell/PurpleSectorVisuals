@@ -3,8 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { Menu, ShieldCheck, X } from "lucide-react"
-
+import {
+  Menu,
+  ShieldCheck,
+  X,
+} from "lucide-react"
 
 import { navLinks } from "@/lib/site-data"
 import { buttonVariants } from "@/components/ui/button"
