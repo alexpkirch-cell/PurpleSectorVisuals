@@ -1,12 +1,14 @@
 "use server"
 
-import { randomBytes } from "node:crypto"
+import { randomInt } from "node:crypto"
 
 import { revalidatePath } from "next/cache"
 
 import { createClient } from "@/lib/supabase/server"
 
 const GALLERY_PHOTOS_BUCKET = "gallery-photos"
+
+export type UsbStatus = "pending" | "mailed" | "hand_delivered"
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -31,8 +33,28 @@ async function requireAdmin() {
   return { supabase, user }
 }
 
-function generateAccessKey() {
-  return randomBytes(9).toString("base64url")
+function generateNumericAccessKey() {
+  // 9-digit numeric access code, e.g. 048213957
+  return Array.from({ length: 9 }, () => randomInt(0, 10)).join("")
+}
+
+async function generateUniqueAccessKey(
+  supabase: Awaited<ReturnType<typeof createClient>>
+) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = generateNumericAccessKey()
+    const { data } = await supabase
+      .from("galleries")
+      .select("id")
+      .eq("access_key", candidate)
+      .maybeSingle()
+
+    if (!data) {
+      return candidate
+    }
+  }
+
+  throw new Error("Could not generate a unique access code. Please try again.")
 }
 
 export async function createGallery(formData: FormData) {
@@ -45,12 +67,14 @@ export async function createGallery(formData: FormData) {
     throw new Error("A gallery title is required")
   }
 
+  const accessKey = await generateUniqueAccessKey(supabase)
+
   const { data, error } = await supabase
     .from("galleries")
     .insert({
       title,
       client_name: clientName || null,
-      access_key: generateAccessKey(),
+      access_key: accessKey,
       created_by: user.id,
     })
     .select("id")
@@ -62,6 +86,21 @@ export async function createGallery(formData: FormData) {
 
   revalidatePath("/admin/galleries")
   return data.id as string
+}
+
+export async function updateUsbStatus(galleryId: string, status: UsbStatus) {
+  const { supabase } = await requireAdmin()
+
+  const { error } = await supabase
+    .from("galleries")
+    .update({ usb_status: status })
+    .eq("id", galleryId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath(`/admin/galleries/${galleryId}`)
 }
 
 export async function deleteGallery(galleryId: string) {
@@ -93,7 +132,8 @@ export async function recordGalleryPhoto(
   storagePath: string,
   fileName: string,
   contentType: string,
-  sizeBytes: number
+  sizeBytes: number,
+  beforeAfter?: { beforeStoragePath: string }
 ) {
   const { supabase } = await requireAdmin()
 
@@ -103,6 +143,8 @@ export async function recordGalleryPhoto(
     file_name: fileName,
     content_type: contentType,
     size_bytes: sizeBytes,
+    is_before_after: Boolean(beforeAfter),
+    before_storage_path: beforeAfter?.beforeStoragePath ?? null,
   })
 
   if (error) {

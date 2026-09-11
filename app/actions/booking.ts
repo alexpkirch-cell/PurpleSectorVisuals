@@ -18,6 +18,8 @@ export interface BookingSubmission {
   package: BookingPackage
   brief: string
   instagramHandle: string
+  locationJump: boolean
+  printPackage: boolean
 }
 
 export async function submitBooking(
@@ -35,6 +37,8 @@ export async function submitBooking(
     package: pkg,
     brief,
     instagramHandle,
+    locationJump,
+    printPackage,
   } = submission
 
   if (
@@ -65,6 +69,8 @@ export async function submitBooking(
     package: pkg,
     brief: brief.trim() || null,
     instagram_handle: instagramHandle.trim() || null,
+    location_jump: locationJump,
+    print_package: printPackage,
   })
 
   if (error) {

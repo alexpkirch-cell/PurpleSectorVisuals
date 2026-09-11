@@ -5,6 +5,7 @@ import { Download, DownloadCloud } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
+import { BeforeAfterSlider } from "@/components/vault/before-after-slider"
 
 const GALLERY_PHOTOS_BUCKET = "gallery-photos"
 
@@ -12,6 +13,8 @@ type Photo = {
   id: string
   file_name: string
   storage_path: string
+  is_before_after: boolean
+  before_storage_path: string | null
 }
 
 export function VaultGallery({ galleryId, photos }: { galleryId: string; photos: Photo[] }) {
@@ -55,12 +58,60 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-        {photos.map((photo) => (
-          <PhotoTile key={photo.id} storagePath={photo.storage_path} fileName={photo.file_name} />
-        ))}
+        {photos.map((photo) =>
+          photo.is_before_after && photo.before_storage_path ? (
+            <BeforeAfterTile
+              key={photo.id}
+              storagePath={photo.storage_path}
+              beforeStoragePath={photo.before_storage_path}
+              fileName={photo.file_name}
+            />
+          ) : (
+            <PhotoTile key={photo.id} storagePath={photo.storage_path} fileName={photo.file_name} />
+          )
+        )}
       </div>
     </div>
   )
+}
+
+function BeforeAfterTile({
+  storagePath,
+  beforeStoragePath,
+  fileName,
+}: {
+  storagePath: string
+  beforeStoragePath: string
+  fileName: string
+}) {
+  const [afterUrl, setAfterUrl] = useState<string | null>(null)
+  const [beforeUrl, setBeforeUrl] = useState<string | null>(null)
+
+  if (afterUrl === null || beforeUrl === null) {
+    const supabase = createClient()
+    if (afterUrl === null) {
+      supabase.storage
+        .from(GALLERY_PHOTOS_BUCKET)
+        .createSignedUrl(storagePath, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl) setAfterUrl(data.signedUrl)
+        })
+    }
+    if (beforeUrl === null) {
+      supabase.storage
+        .from(GALLERY_PHOTOS_BUCKET)
+        .createSignedUrl(beforeStoragePath, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl) setBeforeUrl(data.signedUrl)
+        })
+    }
+  }
+
+  if (!afterUrl || !beforeUrl) {
+    return <div className="aspect-square animate-pulse rounded-lg bg-muted" />
+  }
+
+  return <BeforeAfterSlider beforeUrl={beforeUrl} afterUrl={afterUrl} fileName={fileName} />
 }
 
 function PhotoTile({ storagePath, fileName }: { storagePath: string; fileName: string }) {

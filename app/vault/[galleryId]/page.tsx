@@ -25,7 +25,7 @@ export default async function VaultGalleryPage({
   const admin = createAdminClient()
   const { data: photos } = await admin
     .from("gallery_photos")
-    .select("id, file_name, storage_path")
+    .select("id, file_name, storage_path, is_before_after, before_storage_path")
     .eq("gallery_id", galleryId)
     .order("created_at", { ascending: true })
 

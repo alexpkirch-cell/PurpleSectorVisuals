@@ -9,6 +9,8 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { InfoBubble } from "@/components/ui/info-bubble"
 import { cn } from "@/lib/utils"
 import {
@@ -112,6 +114,8 @@ interface BookingState {
   package: BookingPackage | ""
   brief: string
   instagramHandle: string
+  locationJump: boolean
+  printPackage: boolean
 }
 
 const initialState: BookingState = {
@@ -126,7 +130,26 @@ const initialState: BookingState = {
   package: "",
   brief: "",
   instagramHandle: "",
+  locationJump: false,
+  printPackage: false,
 }
+
+const ADD_ONS: {
+  key: "locationJump" | "printPackage"
+  label: string
+  info: string
+}[] = [
+  {
+    key: "locationJump",
+    label: "Location Jump",
+    info: "Add a second location to your session, back to back with the first.",
+  },
+  {
+    key: "printPackage",
+    label: "Print Packages",
+    info: "Physical prints of your favorite final images, delivered alongside your USB.",
+  },
+]
 
 const focusClasses =
   "focus-visible:border-[#e829f1] focus-visible:ring-[#e829f1]/20"
@@ -283,6 +306,8 @@ export function BookingForm() {
       package: data.package,
       brief: data.brief,
       instagramHandle: data.instagramHandle,
+      locationJump: data.locationJump,
+      printPackage: data.printPackage,
     })
 
     setSubmitting(false)
@@ -513,6 +538,34 @@ export function BookingForm() {
                       className={focusClasses}
                     />
                     <FieldDescription>Optional.</FieldDescription>
+                  </Field>
+                  <Field>
+                    <FieldLabel className="gap-1.5">Add-Ons</FieldLabel>
+                    <div className="flex flex-col gap-3 rounded-2xl border border-zinc-800 px-4 py-4">
+                      {ADD_ONS.map((addOn) => (
+                        <div key={addOn.key} className="flex items-center gap-2.5">
+                          <Checkbox
+                            id={addOn.key}
+                            checked={data[addOn.key]}
+                            onCheckedChange={(checked) =>
+                              update(addOn.key, checked === true)
+                            }
+                          />
+                          <Label
+                            htmlFor={addOn.key}
+                            className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-normal text-foreground"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              {addOn.label}
+                              <InfoBubble>{addOn.info}</InfoBubble>
+                            </span>
+                            <span className="text-xs font-medium text-[#e829f1]">
+                              [Pricing TBD]
+                            </span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
                   </Field>
                   {submitError ? (
                     <p className="text-sm text-destructive">{submitError}</p>
