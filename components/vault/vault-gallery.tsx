@@ -57,7 +57,7 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <div className="columns-2 gap-3 sm:columns-3 md:columns-4 [&>*]:mb-3">
         {photos.map((photo) =>
           photo.is_before_after && photo.before_storage_path ? (
             <BeforeAfterTile
@@ -108,7 +108,7 @@ function BeforeAfterTile({
   }
 
   if (!afterUrl || !beforeUrl) {
-    return <div className="aspect-square animate-pulse rounded-lg bg-muted" />
+    return <div className="aspect-[4/5] animate-pulse rounded-lg bg-muted" />
   }
 
   return <BeforeAfterSlider beforeUrl={beforeUrl} afterUrl={afterUrl} fileName={fileName} />
@@ -138,12 +138,12 @@ function PhotoTile({ storagePath, fileName }: { storagePath: string; fileName: s
   }
 
   return (
-    <div className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted">
+    <div className="group relative overflow-hidden rounded-lg border border-border bg-muted">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and not worth Next Image optimization
-        <img src={url} alt={fileName} className="size-full object-cover" crossOrigin="anonymous" />
+        <img src={url} alt={fileName} className="block w-full object-cover" crossOrigin="anonymous" />
       ) : (
-        <div className="size-full animate-pulse bg-muted" />
+        <div className="aspect-[4/5] w-full animate-pulse bg-muted" />
       )}
       <button
         type="button"

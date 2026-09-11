@@ -41,7 +41,7 @@ export function BeforeAfterSlider({
   return (
     <div
       ref={containerRef}
-      className="group relative aspect-square touch-none select-none overflow-hidden rounded-lg border border-border bg-muted"
+      className="group relative touch-none select-none overflow-hidden rounded-lg border border-border bg-muted"
       onPointerDown={(e) => {
         ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
         startDrag(e.clientX)
