@@ -1,0 +1,138 @@
+"use client"
+
+import { useState } from "react"
+import { Calendar, User } from "lucide-react"
+
+import { Badge } from "@/components/ui/badge"
+import { moveShootStage, type Shoot, type ShootStatus } from "@/app/actions/shoots"
+import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
+import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
+import { toast } from "sonner"
+
+const COLUMNS: { status: ShootStatus; label: string }[] = [
+  { status: "INQUIRY", label: "Inquiry" },
+  { status: "CONFIRMED", label: "Confirmed" },
+  { status: "SHOT", label: "Shot" },
+  { status: "EDITING", label: "Editing" },
+  { status: "DELIVERED", label: "Delivered" },
+  { status: "SETTLED", label: "Settled" },
+]
+
+function formatDate(iso: string | null) {
+  if (!iso) return null
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
+export function ShootsPipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
+  const [shoots, setShoots] = useState(initialShoots)
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
+  const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null)
+
+  async function moveCard(id: string, status: ShootStatus) {
+    const previous = shoots
+    setShoots((current) => current.map((s) => (s.id === id ? { ...s, status } : s)))
+    try {
+      await moveShootStage(id, status)
+    } catch (error) {
+      setShoots(previous)
+      toast.error(error instanceof Error ? error.message : "Failed to move shoot")
+    }
+  }
+
+  function handleShootUpdated(updated: Shoot) {
+    setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
+    setSelectedShoot(updated)
+  }
+
+  return (
+    <>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {COLUMNS.map((column) => {
+          const columnShoots = shoots.filter((s) => s.status === column.status)
+          const isDragOver = dragOverStatus === column.status
+          return (
+            <div
+              key={column.status}
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDragOverStatus(column.status)
+              }}
+              onDragLeave={() => setDragOverStatus((current) => (current === column.status ? null : current))}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDragOverStatus(null)
+                if (draggingId) {
+                  moveCard(draggingId, column.status)
+                  setDraggingId(null)
+                }
+              }}
+              className={
+                "flex min-h-40 flex-col gap-2 rounded-lg border p-2.5 transition-colors " +
+                (isDragOver ? "border-primary bg-primary/5" : "border-border bg-accent/20")
+              }
+            >
+              <div className="flex items-center justify-between px-1">
+                <h3 className="text-xs font-semibold tracking-wide text-foreground">{column.label}</h3>
+                <span className="text-xs text-muted-foreground">{columnShoots.length}</span>
+              </div>
+
+              {columnShoots.length === 0 ? (
+                <p className="px-1 py-4 text-center text-xs text-muted-foreground">No shoots</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {columnShoots.map((shoot) => (
+                    <button
+                      key={shoot.id}
+                      type="button"
+                      draggable
+                      onDragStart={() => setDraggingId(shoot.id)}
+                      onDragEnd={() => setDraggingId(null)}
+                      onClick={() => setSelectedShoot(shoot)}
+                      className={
+                        "group flex cursor-grab flex-col gap-1.5 rounded-md border border-border bg-card p-2.5 text-left shadow-sm active:cursor-grabbing " +
+                        (draggingId === shoot.id ? "opacity-50" : "")
+                      }
+                    >
+                      <p className="text-sm font-medium text-foreground">{shoot.client_name}</p>
+
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="secondary" className="text-[0.6rem]">
+                          {shoot.shoot_type}
+                        </Badge>
+                        {shoot.preferred_shooter && (
+                          <Badge variant="outline" className="gap-1 text-[0.6rem]">
+                            <User className="size-2.5" />
+                            {shoot.preferred_shooter}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {shoot.shoot_date && (
+                        <span className="flex items-center gap-1 text-[0.7rem] text-muted-foreground">
+                          <Calendar className="size-3 shrink-0" />
+                          {formatDate(shoot.shoot_date)}
+                        </span>
+                      )}
+
+                      <ShootPayoutBadge
+                        basePrice={Number(shoot.base_price)}
+                        travelFee={Number(shoot.travel_fee)}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <ShootDetailSheet
+        shoot={selectedShoot}
+        onOpenChange={(open) => !open && setSelectedShoot(null)}
+        onUpdated={handleShootUpdated}
+      />
+    </>
+  )
+}
