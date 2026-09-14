@@ -18,12 +18,7 @@ import {
 } from "@/components/ui/sheet"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { updateShoot, type Shoot } from "@/app/actions/shoots"
-import {
-  generateLedgerForShoot,
-  listLedgerEntries,
-  markLedgerEntryPaid,
-  type LedgerEntry,
-} from "@/app/actions/ledger"
+import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -55,7 +50,6 @@ export function ShootDetailSheet({
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [isLoadingLedger, setIsLoadingLedger] = useState(false)
-  const [isGeneratingLedger, setIsGeneratingLedger] = useState(false)
 
   useEffect(() => {
     if (shoot) {
@@ -74,25 +68,6 @@ export function ShootDetailSheet({
       setLedgerEntries([])
     }
   }, [shoot])
-
-  async function handleGenerateLedger() {
-    if (!shoot) return
-    setIsGeneratingLedger(true)
-    try {
-      const entries = await generateLedgerForShoot(shoot.id, {
-        basePrice: Number(basePrice) || 0,
-        travelFee: Number(travelFee) || 0,
-        assignedShooter: assignedShooter || null,
-        assignedEditor: assignedEditor || null,
-      })
-      setLedgerEntries(entries)
-      toast.success("Settlement ledger generated")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to generate ledger")
-    } finally {
-      setIsGeneratingLedger(false)
-    }
-  }
 
   async function handleTogglePaid(entry: LedgerEntry, paid: boolean) {
     const previous = ledgerEntries
@@ -250,29 +225,14 @@ export function ShootDetailSheet({
               </div>
 
               <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-foreground">Settlement ledger</span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-[0.7rem]"
-                    onClick={handleGenerateLedger}
-                    disabled={isGeneratingLedger}
-                  >
-                    {isGeneratingLedger
-                      ? "Generating…"
-                      : ledgerEntries.length > 0
-                        ? "Refresh ledger"
-                        : "Generate ledger"}
-                  </Button>
-                </div>
+                <span className="text-xs font-medium text-foreground">Settlement ledger</span>
 
                 {isLoadingLedger ? (
                   <p className="text-[0.7rem] text-muted-foreground">Loading ledger…</p>
                 ) : ledgerEntries.length === 0 ? (
                   <p className="text-[0.7rem] text-muted-foreground">
-                    No settlement entries yet. Generate a ledger to record per-recipient payouts.
+                    No settlement yet. Drag this shoot&apos;s card into Sent/Finished on the pipeline board
+                    to finalize the charge and generate payouts.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-1.5">

@@ -4,8 +4,20 @@ import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
+import { generateLedgerForShoot } from "@/app/actions/ledger"
 
-export type ShootStatus = "INQUIRY" | "CONFIRMED" | "SHOT" | "EDITING" | "DELIVERED" | "SETTLED"
+export type ShootStatus =
+  | "new_inquiry"
+  | "contacted"
+  | "shoot_scheduled"
+  | "editing"
+  | "vault_created"
+  | "sent_finished"
+
+export interface SettlementItem {
+  label: string
+  amount: number
+}
 
 export interface Shoot {
   id: string
@@ -25,6 +37,8 @@ export interface Shoot {
   notes: string | null
   vault_access_code: string
   created_at: string
+  final_amount: string | null
+  settlement_items: SettlementItem[] | null
 }
 
 export interface ShootPhoto {
@@ -100,7 +114,7 @@ export async function createShootInquiry(formData: {
     RETURNING id
   `
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
 
   return { shootId: rows[0].id, vaultAccessCode }
 }
@@ -139,17 +153,70 @@ export async function updateShoot(
     WHERE id = ${id}
   `
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
 }
 
 export async function moveShootStage(id: string, status: ShootStatus) {
   await requireAdmin()
 
+  if (status === "sent_finished") {
+    throw new Error("Moving to Sent/Finished requires finalizing a settlement")
+  }
+
   await sql`
     UPDATE shoots SET status = ${status} WHERE id = ${id}
   `
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
+}
+
+/**
+ * Finalizes a shoot's settlement when its card is dropped into Sent/Finished.
+ * Locks in the itemized total, marks the shoot paid, and generates the
+ * per-recipient ledger entries from the final split.
+ */
+export async function finalizeSettlement(
+  id: string,
+  input: {
+    basePrice: number
+    travelFee: number
+    addons: SettlementItem[]
+    assignedShooter: string | null
+    assignedEditor: string | null
+  },
+): Promise<Shoot> {
+  await requireAdmin()
+
+  const addonsTotal = input.addons.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+  const settledBasePrice = (Number(input.basePrice) || 0) + addonsTotal
+  const settledTravelFee = Number(input.travelFee) || 0
+  const finalAmount = settledBasePrice + settledTravelFee
+
+  await sql`
+    UPDATE shoots SET
+      status = 'sent_finished',
+      is_paid = true,
+      base_price = ${settledBasePrice},
+      travel_fee = ${settledTravelFee},
+      final_amount = ${finalAmount},
+      settlement_items = ${JSON.stringify(input.addons)},
+      assigned_shooter = COALESCE(${input.assignedShooter}, assigned_shooter),
+      assigned_editor = COALESCE(${input.assignedEditor}, assigned_editor)
+    WHERE id = ${id}
+  `
+
+  await generateLedgerForShoot(id, {
+    basePrice: settledBasePrice,
+    travelFee: settledTravelFee,
+    assignedShooter: input.assignedShooter,
+    assignedEditor: input.assignedEditor,
+  })
+
+  revalidatePath("/admin")
+  revalidatePath("/admin/financials")
+
+  const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
+  return rows[0]
 }
 
 export async function addShootPhoto(shootId: string, url: string, isSneakPeek: boolean) {
@@ -160,7 +227,7 @@ export async function addShootPhoto(shootId: string, url: string, isSneakPeek: b
     VALUES (${shootId}, ${url}, ${isSneakPeek})
   `
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
 }
 
 export async function deleteShootPhoto(id: string) {
@@ -168,7 +235,7 @@ export async function deleteShootPhoto(id: string) {
 
   await sql`DELETE FROM photos WHERE id = ${id}`
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
 }
 
 export async function verifyVaultAccess(email: string, code: string) {

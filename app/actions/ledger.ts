@@ -20,6 +20,11 @@ export interface LedgerEntry {
   created_at: string
 }
 
+export interface LedgerEntryWithShoot extends LedgerEntry {
+  client_name: string
+  shoot_type: string
+}
+
 async function requireAdmin() {
   const supabase = await createClient()
   const {
@@ -42,6 +47,19 @@ export async function listLedgerEntries(shootId: string): Promise<LedgerEntry[]>
 
   const { rows } = await sql<LedgerEntry>`
     SELECT * FROM ledger_entries WHERE shoot_id = ${shootId} ORDER BY created_at ASC
+  `
+
+  return rows
+}
+
+export async function listAllLedgerEntries(): Promise<LedgerEntryWithShoot[]> {
+  await requireAdmin()
+
+  const { rows } = await sql<LedgerEntryWithShoot>`
+    SELECT le.*, s.client_name, s.shoot_type
+    FROM ledger_entries le
+    JOIN shoots s ON s.id = le.shoot_id
+    ORDER BY le.created_at DESC
   `
 
   return rows
@@ -87,7 +105,8 @@ export async function generateLedgerForShoot(
     `
   }
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
+  revalidatePath("/admin/financials")
 
   return listLedgerEntries(shootId)
 }
@@ -101,5 +120,6 @@ export async function markLedgerEntryPaid(id: string, paid: boolean) {
     WHERE id = ${id}
   `
 
-  revalidatePath("/admin/shoots-pipeline")
+  revalidatePath("/admin")
+  revalidatePath("/admin/financials")
 }
