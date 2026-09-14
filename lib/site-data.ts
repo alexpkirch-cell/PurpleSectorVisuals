@@ -51,8 +51,9 @@ export const galleryItems: GalleryItem[] = [
 ]
 
 export const navLinks = [
-  { label: "About", href: "/" },
+  { label: "Home", href: "/" },
   { label: "Portfolio", href: "/work" },
   { label: "Packages", href: "/services" },
   { label: "Contact", href: "/contact" },
+  { label: "Vault", href: "/vault" },
 ]

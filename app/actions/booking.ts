@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 
-export type BookingSubject = "automotive" | "sports" | "senior" | "headshots"
+export type BookingSubject = "automotive" | "sports" | "senior" | "headshots" | "event"
 export type BookingCreator = "match" | "alex" | "gabe" | "dual"
 export type BookingPackage = "standard" | "action" | "dual-build"
 

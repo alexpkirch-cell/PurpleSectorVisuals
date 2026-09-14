@@ -22,7 +22,7 @@ export default async function WorkPage() {
         The full body of work.
       </h1>
       <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-zinc-400">
-        Every frame shot by Alex and Gabe, sorted by discipline. Filter to
+        Every frame from our lead shooters, sorted by discipline. Filter to
         find what matches your project.
       </p>
 

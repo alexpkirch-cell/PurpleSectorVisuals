@@ -7,56 +7,49 @@ import { cn } from "@/lib/utils"
 export const metadata: Metadata = {
   title: "Packages | Purple Sector Visuals",
   description:
-    "Three coverage tiers from Purple Sector Visuals: Studio Match, Select Artist, and Dual Coverage.",
+    "Three coverage tiers from Purple Sector Visuals: Senior Portraits, Automotive Feature, and Single-Athlete Sports.",
 }
 
 const tiers = [
   {
-    name: "Studio Match",
-    price: "$450",
+    name: "Senior Portraits",
+    price: "$175",
     unit: "per session",
-    description: "Matched with either Alex or Gabe, whoever fits your date.",
+    description: "A dedicated portrait session built around your look.",
     features: [
-      "Up to 2 hours on location",
-      "Studio-matched shooter",
-      "50+ edited images",
-      "72-hour turnaround",
-      "Private online gallery",
+      "Up to 60 minutes on location",
+      "Unlimited outfit changes",
+      "12–15 signature retouched hero images",
+      "Full digital print release & Private Vault delivery",
     ],
-    href: "/contact?tier=Studio%20Match",
+    href: "/contact?tier=Senior%20Portraits",
     featured: false,
   },
   {
-    name: "Select Artist",
-    price: "$650",
+    name: "Automotive Feature",
+    price: "$225",
     unit: "per session",
-    description: "Dedicated booking with the specific creator you choose.",
+    description: "Static and motion coverage for a single vehicle.",
     features: [
-      "Up to 3 hours on location",
-      "Choice of Alex or Gabe",
-      "80+ edited images",
-      "48-hour turnaround",
-      "Private online gallery",
-      "1 print-ready hero image",
+      "Static + motion vehicle set",
+      "1 primary location",
+      "High-res photo gallery + 1 short vertical reel for socials",
+      "48-hour turnaround on sneak peeks",
     ],
-    href: "/contact?tier=Select%20Artist",
+    href: "/contact?tier=Automotive%20Feature",
     featured: true,
   },
   {
-    name: "Dual Coverage",
-    price: "$1,100",
+    name: "Single-Athlete Sports",
+    price: "$175",
     unit: "per session",
-    description: "The full crew — both creators shooting your set together.",
+    description: "Dedicated coverage for one athlete, one game.",
     features: [
-      "Up to 4 hours on location",
-      "Alex and Gabe on set together",
-      "150+ edited images",
-      "48-hour turnaround",
-      "Private online gallery",
-      "3 print-ready hero images",
-      "Behind-the-scenes reel",
+      "Dedicated individual coverage for one game/event",
+      "Edited action set + highlight gallery",
+      "High-speed dynamic edits",
     ],
-    href: "/contact?tier=Dual%20Coverage",
+    href: "/contact?tier=Single-Athlete%20Sports",
     featured: false,
   },
 ]
@@ -78,8 +71,9 @@ export default function ServicesPage() {
         Coverage built around your shoot.
       </h1>
       <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-zinc-400">
-        Three tiers, from a studio-matched shooter to the full two-creator
-        crew. Every package includes a private gallery and fast turnaround.
+        Three baseline packages covering portraits, automotive features, and
+        single-athlete sports coverage. Every package includes a private
+        gallery and fast turnaround.
       </p>
 
       <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
