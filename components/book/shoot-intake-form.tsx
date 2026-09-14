@@ -18,7 +18,13 @@ import {
 } from "@/components/ui/select"
 import { createShootInquiry } from "@/app/actions/shoots"
 
-const SHOOT_TYPES = ["Portrait", "Event", "Automotive", "Product", "Brand", "Other"]
+const SHOOT_TYPES = [
+  "Senior Portraits",
+  "Automotive Feature",
+  "Single-Athlete Spotlight",
+  "Team/Club Sports",
+  "Commercial Event",
+]
 const SHOOTERS = ["Alex", "Gabe", "No Preference"]
 
 export function ShootIntakeForm() {

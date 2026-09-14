@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ArrowDownRight } from "lucide-react"
 
-import { HardwareRigShowcase } from "@/components/home/hardware-rig-showcase"
+import { ThreeDHero } from "@/components/home/three-d-hero"
 
 const tags = ["Sports", "Automotive", "Portraits", "Creative Sessions"]
 
@@ -39,7 +39,7 @@ export function HeroSection() {
         </div>
 
         <div className="psv-fade-up flex flex-1 items-center justify-center py-12 sm:py-16" style={{ animationDelay: "200ms" }}>
-          <HardwareRigShowcase />
+          <ThreeDHero />
         </div>
 
         <div className="pb-16 sm:pb-20">

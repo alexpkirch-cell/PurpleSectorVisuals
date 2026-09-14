@@ -34,24 +34,29 @@ const SUBJECTS: {
   info: string
 }[] = [
   {
-    value: "automotive",
-    label: "Automotive",
-    info: "Static car features, dynamic rolling shots, or full club meets.",
-  },
-  {
-    value: "sports",
-    label: "Sports & Action",
-    info: "Game-day sideline coverage, track meets, or team tournaments.",
-  },
-  {
     value: "senior",
     label: "Senior Portraits",
     info: "High school or college graduation photos tailored to your style.",
   },
   {
+    value: "automotive",
+    label: "Automotive Feature",
+    info: "Static car features, dynamic rolling shots, or full club meets.",
+  },
+  {
     value: "headshots",
-    label: "Athlete Headshots",
+    label: "Single-Athlete Spotlight",
     info: "Moody, high-contrast fitness portraits or recruiting profiles.",
+  },
+  {
+    value: "sports",
+    label: "Team/Club Sports",
+    info: "Game-day sideline coverage, track meets, or team tournaments.",
+  },
+  {
+    value: "event",
+    label: "Commercial Event",
+    info: "Brand activations, launches, and business event coverage.",
   },
 ]
 
