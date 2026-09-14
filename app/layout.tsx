@@ -24,7 +24,7 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: "Purple Sector Visuals",
   description:
-    "Purple Sector Visuals is a two-creator studio by Alex & Gabe capturing sports, automotive, portrait, and event photography with a kinetic, cinematic edge. Book your session today.",
+    "Purple Sector Visuals is a two-creator studio capturing sports, automotive, portrait, and event photography with a kinetic, cinematic edge. Book your session today.",
   generator: "v0.app",
 }
 

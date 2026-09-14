@@ -22,9 +22,10 @@ export function CoreIdentitySection({
               Two Visions. One Engine.
             </h2>
             <p className="mt-6 text-pretty text-base leading-relaxed text-zinc-400">
-              Alex brings the kinetic eye &mdash; high-speed burst tracking,
-              sideline instincts, and a reflex for the split-second moment
-              that separates a good shot from the one that gets shared. Gabe
+              Our lead shooters split the craft between them: one brings the
+              kinetic eye &mdash; high-speed burst tracking, sideline
+              instincts, and a reflex for the split-second moment that
+              separates a good shot from the one that gets shared. The other
               brings the atmosphere &mdash; mood, light, and the patience to
               wait for a frame instead of chasing it. Two very different
               creative instincts, running on one shared engine of gear,
@@ -55,14 +56,22 @@ export function CoreIdentitySection({
               ))}
             </div>
           </div>
-          <div className="aspect-[4/3] w-full">
-            <ImageSlot
-              aspect="4:3 Slot"
-              label="Studio Reel Slot"
-              glow
-              slotKey="home.core-identity"
-              overrides={overrides}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2 aspect-[16/10] w-full">
+              <ImageSlot
+                aspect="16:10 Slot"
+                label="Automotive Reel Slot"
+                glow
+                slotKey="home.core-identity"
+                overrides={overrides}
+              />
+            </div>
+            <div className="aspect-square w-full">
+              <ImageSlot aspect="1:1 Slot" label="Sports Action Slot" />
+            </div>
+            <div className="aspect-square w-full">
+              <ImageSlot aspect="1:1 Slot" label="Portrait Slot" />
+            </div>
           </div>
         </div>
       </div>

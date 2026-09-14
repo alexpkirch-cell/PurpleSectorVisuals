@@ -1,45 +1,38 @@
 import Link from "next/link"
 import { ArrowDownRight } from "lucide-react"
 
-import { ThreeDHero } from "@/components/home/three-d-hero"
+import { VideoSlot } from "@/components/video-slot"
 
 const tags = ["Sports", "Automotive", "Portraits", "Creative Sessions"]
 
 export function HeroSection() {
   return (
     <section className="relative flex min-h-[100svh] w-full flex-col overflow-hidden bg-[#09090b]">
+      <VideoSlot label="Hero Reel Slot" />
+
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#09090b]/70 via-[#09090b]/55 to-[#09090b]" />
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(circle at 20% 15%, rgba(232,41,241,0.14), transparent 55%)",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(#e4e4e7 1px, transparent 1px), linear-gradient(90deg, #e4e4e7 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
+            "radial-gradient(circle at 20% 15%, rgba(232,41,241,0.18), transparent 55%)",
         }}
       />
 
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 pt-32 sm:px-10 sm:pt-40">
-        <div>
+        <div className="flex flex-1 flex-col justify-center">
           <p className="psv-fade-up font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
             Purple Sector Visuals
           </p>
           <h1 className="psv-fade-up mt-6 max-w-3xl text-balance font-heading text-5xl font-bold leading-[0.95] tracking-tight text-foreground sm:text-7xl md:text-8xl">
             Motion, captured with intent.
           </h1>
-          <p className="psv-fade-up mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-400 sm:text-lg">
+          <p className="psv-fade-up mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-300 sm:text-lg">
             A two-creator studio built around speed, light, and the moments
-            most people miss.
+            most people miss. We merge two distinct visual disciplines: a
+            dark, cinematic edge built for high-speed action, and a vibrant,
+            emotionally charged style for portraits and lifestyle.
           </p>
-        </div>
-
-        <div className="psv-fade-up flex flex-1 items-center justify-center py-12 sm:py-16" style={{ animationDelay: "200ms" }}>
-          <ThreeDHero />
         </div>
 
         <div className="pb-16 sm:pb-20">
@@ -47,7 +40,7 @@ export function HeroSection() {
             {tags.map((tag, i) => (
               <span
                 key={tag}
-                className="psv-fade-up rounded-full border border-zinc-800 bg-zinc-950/60 px-4 py-1.5 text-xs font-medium text-zinc-400"
+                className="psv-fade-up rounded-full border border-zinc-800 bg-zinc-950/60 px-4 py-1.5 text-xs font-medium text-zinc-300 backdrop-blur-sm"
                 style={{ animationDelay: `${i * 90 + 320}ms` }}
               >
                 {tag}
@@ -68,7 +61,7 @@ export function HeroSection() {
             </Link>
             <Link
               href="/work"
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/40 px-7 py-3.5 text-sm font-medium text-foreground backdrop-blur-sm transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+              className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/50 px-7 py-3.5 text-sm font-medium text-foreground backdrop-blur-sm transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             >
               View the Portfolio
             </Link>
