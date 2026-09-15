@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -16,11 +17,13 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   createPackage,
   deletePackage,
   updatePackage,
+  type AddOn,
   type PackageStatus,
   type ServicePackage,
 } from "@/app/actions/packages"
@@ -34,9 +37,22 @@ interface FormState {
   price: string
   status: PackageStatus
   deliverables: string[]
+  addOns: AddOn[]
 }
 
-const emptyForm: FormState = { title: "", price: "", status: "draft", deliverables: [""] }
+const emptyForm: FormState = { title: "", price: "", status: "draft", deliverables: [""], addOns: [] }
+
+const QUICK_ADD_ADDONS: { name: string; price: number }[] = [
+  { name: "Rush 24hr Delivery", price: 50 },
+  { name: "Extra Location", price: 25 },
+  { name: "Highlight Reel", price: 75 },
+]
+
+function createAddOnId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `addon-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
 
 export function PackageManager({ initialPackages }: { initialPackages: ServicePackage[] }) {
   const [packages, setPackages] = useState(initialPackages)
@@ -44,10 +60,14 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [saving, setSaving] = useState(false)
+  const [customAddOnName, setCustomAddOnName] = useState("")
+  const [customAddOnPrice, setCustomAddOnPrice] = useState("")
 
   function openCreate() {
     setEditingId(null)
     setForm(emptyForm)
+    setCustomAddOnName("")
+    setCustomAddOnPrice("")
     setDialogOpen(true)
   }
 
@@ -58,7 +78,10 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
       price: String(pkg.price),
       status: pkg.status,
       deliverables: pkg.deliverables.length > 0 ? pkg.deliverables : [""],
+      addOns: pkg.available_addons ?? [],
     })
+    setCustomAddOnName("")
+    setCustomAddOnPrice("")
     setDialogOpen(true)
   }
 
@@ -89,6 +112,7 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
           price,
           status: form.status,
           deliverables: form.deliverables,
+          availableAddons: form.addOns,
         })
         setPackages((current) => current.map((p) => (p.id === editingId ? updated : p)))
         toast.success("Package updated")
@@ -98,6 +122,7 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
           price,
           status: form.status,
           deliverables: form.deliverables,
+          availableAddons: form.addOns,
         })
         setPackages((current) => [created, ...current])
         toast.success("Package created")
@@ -123,6 +148,53 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
 
   function removeDeliverable(index: number) {
     setForm((prev) => ({ ...prev, deliverables: prev.deliverables.filter((_, i) => i !== index) }))
+  }
+
+  function isQuickAddChecked(name: string) {
+    return form.addOns.some((addOn) => addOn.isQuickAdd && addOn.name === name)
+  }
+
+  function toggleQuickAddOn(quickAddOn: { name: string; price: number }, checked: boolean) {
+    setForm((prev) => {
+      if (checked) {
+        return {
+          ...prev,
+          addOns: [
+            ...prev.addOns,
+            { id: createAddOnId(), name: quickAddOn.name, price: quickAddOn.price, isQuickAdd: true },
+          ],
+        }
+      }
+      return {
+        ...prev,
+        addOns: prev.addOns.filter((addOn) => !(addOn.isQuickAdd && addOn.name === quickAddOn.name)),
+      }
+    })
+  }
+
+  function updateAddOnPrice(id: string, price: string) {
+    setForm((prev) => ({
+      ...prev,
+      addOns: prev.addOns.map((addOn) => (addOn.id === id ? { ...addOn, price: Number(price) || 0 } : addOn)),
+    }))
+  }
+
+  function removeAddOn(id: string) {
+    setForm((prev) => ({ ...prev, addOns: prev.addOns.filter((addOn) => addOn.id !== id) }))
+  }
+
+  function addCustomAddOn() {
+    const price = Number(customAddOnPrice)
+    if (!customAddOnName.trim() || !Number.isFinite(price) || price < 0) {
+      toast.error("Enter a valid add-on name and price.")
+      return
+    }
+    setForm((prev) => ({
+      ...prev,
+      addOns: [...prev.addOns, { id: createAddOnId(), name: customAddOnName.trim(), price, isQuickAdd: false }],
+    }))
+    setCustomAddOnName("")
+    setCustomAddOnPrice("")
   }
 
   return (
@@ -161,6 +233,16 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {pkg.available_addons.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {pkg.available_addons.map((addOn) => (
+                    <Badge key={addOn.id} variant="outline" className="text-xs font-normal">
+                      {addOn.name} · {formatCurrency(addOn.price)}
+                    </Badge>
+                  ))}
+                </div>
               )}
 
               <div className="mt-auto flex items-center gap-2 pt-2">
@@ -256,6 +338,85 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
                   <Plus className="size-3.5" />
                   Add deliverable
                 </Button>
+              </div>
+            </Field>
+
+            <Field>
+              <FieldLabel>Add-Ons</FieldLabel>
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                <div className="flex flex-col gap-2">
+                  {QUICK_ADD_ADDONS.map((quickAddOn) => (
+                    <div key={quickAddOn.name} className="flex items-center gap-2.5">
+                      <Checkbox
+                        id={`quick-add-${quickAddOn.name}`}
+                        checked={isQuickAddChecked(quickAddOn.name)}
+                        onCheckedChange={(checked) => toggleQuickAddOn(quickAddOn, checked === true)}
+                      />
+                      <Label
+                        htmlFor={`quick-add-${quickAddOn.name}`}
+                        className="cursor-pointer text-sm font-normal text-foreground"
+                      >
+                        {quickAddOn.name} (+{formatCurrency(quickAddOn.price)})
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+
+                {form.addOns.length > 0 && (
+                  <div className="flex flex-col gap-2 border-t border-border pt-3">
+                    {form.addOns.map((addOn) => (
+                      <div key={addOn.id} className="flex items-center gap-2">
+                        <span className="flex-1 truncate text-sm text-foreground">
+                          {addOn.name}
+                          {addOn.isQuickAdd ? (
+                            <span className="ml-1.5 text-xs text-muted-foreground">Quick-add</span>
+                          ) : null}
+                        </span>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <span>$</span>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={addOn.price}
+                            onChange={(e) => updateAddOnPrice(addOn.id, e.target.value)}
+                            className="h-8 w-20"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeAddOn(addOn.id)}
+                          aria-label={`Remove ${addOn.name}`}
+                          className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 border-t border-border pt-3">
+                  <Input
+                    value={customAddOnName}
+                    onChange={(e) => setCustomAddOnName(e.target.value)}
+                    placeholder="Custom add-on name"
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={customAddOnPrice}
+                    onChange={(e) => setCustomAddOnPrice(e.target.value)}
+                    placeholder="Price"
+                    className="w-24"
+                  />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={addCustomAddOn}>
+                    <Plus className="size-3.5" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </Field>
           </div>

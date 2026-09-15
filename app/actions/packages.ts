@@ -7,12 +7,20 @@ import { createClient } from "@/lib/supabase/server"
 
 export type PackageStatus = "active" | "draft"
 
+export interface AddOn {
+  id: string
+  name: string
+  price: number
+  isQuickAdd: boolean
+}
+
 export interface ServicePackage {
   id: string
   title: string
   price: string
   status: PackageStatus
   deliverables: string[]
+  available_addons: AddOn[]
   created_at: string
   updated_at: string
 }
@@ -44,11 +52,33 @@ export async function listPackages(): Promise<ServicePackage[]> {
   return rows
 }
 
+// Public read used by the marketing /services page. No auth required, but
+// only packages marked "active" are ever returned.
+export async function listActivePackages(): Promise<ServicePackage[]> {
+  const { rows } = await sql<ServicePackage>`
+    SELECT * FROM packages WHERE status = 'active' ORDER BY created_at ASC
+  `
+
+  return rows
+}
+
+function sanitizeAddOns(addOns: AddOn[]): AddOn[] {
+  return addOns
+    .filter((addOn) => addOn.name.trim().length > 0)
+    .map((addOn) => ({
+      id: addOn.id,
+      name: addOn.name.trim(),
+      price: Number.isFinite(addOn.price) ? addOn.price : 0,
+      isQuickAdd: Boolean(addOn.isQuickAdd),
+    }))
+}
+
 export async function createPackage(input: {
   title: string
   price: number
   status: PackageStatus
   deliverables: string[]
+  availableAddons: AddOn[]
 }): Promise<ServicePackage> {
   await requireAdmin()
 
@@ -57,10 +87,11 @@ export async function createPackage(input: {
   }
 
   const deliverables = input.deliverables.map((d) => d.trim()).filter(Boolean)
+  const availableAddons = sanitizeAddOns(input.availableAddons)
 
   const { rows } = await sql<ServicePackage>`
-    INSERT INTO packages (title, price, status, deliverables)
-    VALUES (${input.title.trim()}, ${input.price}, ${input.status}, ${JSON.stringify(deliverables)})
+    INSERT INTO packages (title, price, status, deliverables, available_addons)
+    VALUES (${input.title.trim()}, ${input.price}, ${input.status}, ${JSON.stringify(deliverables)}, ${JSON.stringify(availableAddons)})
     RETURNING *
   `
 
@@ -77,6 +108,7 @@ export async function updatePackage(
     price: number
     status: PackageStatus
     deliverables: string[]
+    availableAddons: AddOn[]
   },
 ): Promise<ServicePackage> {
   await requireAdmin()
@@ -86,6 +118,7 @@ export async function updatePackage(
   }
 
   const deliverables = input.deliverables.map((d) => d.trim()).filter(Boolean)
+  const availableAddons = sanitizeAddOns(input.availableAddons)
 
   const { rows } = await sql<ServicePackage>`
     UPDATE packages SET
@@ -93,6 +126,7 @@ export async function updatePackage(
       price = ${input.price},
       status = ${input.status},
       deliverables = ${JSON.stringify(deliverables)},
+      available_addons = ${JSON.stringify(availableAddons)},
       updated_at = now()
     WHERE id = ${id}
     RETURNING *
