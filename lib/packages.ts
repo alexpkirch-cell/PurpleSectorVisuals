@@ -1,4 +1,6 @@
-export const PACKAGE_CATEGORIES = ["Portraits", "Automotive", "Athletics", "Events"] as const
+import { CORE_CATEGORIES } from "@/lib/constants"
+
+export const PACKAGE_CATEGORIES = CORE_CATEGORIES
 
 export type PackageCategory = (typeof PACKAGE_CATEGORIES)[number]
 

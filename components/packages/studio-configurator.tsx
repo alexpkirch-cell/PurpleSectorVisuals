@@ -130,66 +130,69 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
         })}
       </div>
 
-      {/* Package selector within category */}
-      {categoryPackages.length > 1 ? (
-        <div className="mt-6 flex flex-wrap gap-2">
-          {categoryPackages.map((pkg) => {
-            const active = pkg.id === activePackage?.id
-            return (
-              <button
-                key={pkg.id}
-                type="button"
-                onClick={() => selectPackage(pkg.id)}
-                className={cn(
-                  "rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "border-[#e829f1] bg-[#e829f1]/10 text-[#e829f1]"
-                    : "border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-foreground",
-                )}
-              >
-                {pkg.title}
-              </button>
-            )
-          })}
-        </div>
-      ) : null}
-
       {activePackage ? (
-        <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
-          {/* Base package display */}
-          <div className="flex flex-col gap-6 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-8">
-            <div>
-              <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                {activePackage.title}
-              </h2>
-              {activePackage.duration ? (
-                <p className="mt-1 text-sm text-zinc-500">{activePackage.duration}</p>
-              ) : null}
-            </div>
+        <div className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1fr]">
+          {/* Base package selector */}
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Choose Your Base Package
+            </p>
+            <div className="flex flex-col gap-3">
+              {categoryPackages.map((pkg) => {
+                const active = pkg.id === activePackage.id
+                return (
+                  <button
+                    key={pkg.id}
+                    type="button"
+                    onClick={() => selectPackage(pkg.id)}
+                    className={cn(
+                      "flex flex-col gap-4 rounded-3xl border p-6 text-left transition-all duration-200 ease-out",
+                      active
+                        ? "border-[#e829f1] bg-[#121214] shadow-[0_0_40px_-12px_rgba(232,41,241,0.5)]"
+                        : "border-zinc-800/80 bg-[#121214]/60 hover:border-zinc-700",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h2 className="font-heading text-xl font-bold tracking-tight text-foreground">
+                          {pkg.title}
+                        </h2>
+                        {pkg.duration ? (
+                          <p className="mt-1 text-sm text-zinc-500">{pkg.duration}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex items-baseline gap-1.5 shrink-0">
+                        <span className="font-heading text-2xl font-bold text-foreground">
+                          {formatCurrency(Number(pkg.base_price))}
+                        </span>
+                      </div>
+                    </div>
 
-            <div className="flex items-baseline gap-2">
-              <span className="font-heading text-4xl font-bold text-foreground">
-                {formatCurrency(basePrice)}
-              </span>
-              <span className="text-sm text-zinc-500">base price</span>
+                    {pkg.deliverables.length > 0 ? (
+                      <ul className="flex flex-col gap-2">
+                        {pkg.deliverables.map((feature) => (
+                          <li key={feature} className="flex items-start gap-2.5 text-sm text-foreground">
+                            <Check
+                              className={cn(
+                                "mt-0.5 size-4 shrink-0",
+                                active ? "text-[#e829f1]" : "text-zinc-600",
+                              )}
+                            />
+                            <span className="leading-relaxed">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </button>
+                )
+              })}
             </div>
-
-            {activePackage.deliverables.length > 0 ? (
-              <ul className="flex flex-col gap-3">
-                {activePackage.deliverables.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5 text-sm text-foreground">
-                    <Check className="mt-0.5 size-4 shrink-0 text-[#e829f1]" />
-                    <span className="leading-relaxed">{feature}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
           </div>
 
-          {/* Interactive add-ons */}
-          <div className="flex flex-col gap-4 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-8">
+          {/* Interactive add-ons for the selected base package */}
+          <div className="flex h-fit flex-col gap-4 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-              Add-Ons
+              Add-Ons for {activePackage.title}
             </p>
             {activePackage.add_ons.length === 0 ? (
               <p className="text-sm text-zinc-500">No add-ons available for this package.</p>
