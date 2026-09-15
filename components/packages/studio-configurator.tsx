@@ -33,7 +33,10 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set())
 
   const categoryPackages = useMemo(
-    () => packages.filter((p) => p.category === activeCategory),
+    () =>
+      packages
+        .filter((p) => p.category === activeCategory)
+        .sort((a, b) => Number(a.base_price) - Number(b.base_price)),
     [packages, activeCategory],
   )
 
