@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Images, LayoutGrid, LogOut, Wallet } from "lucide-react"
+import { Images, LayoutGrid, LogOut, Package, Wallet } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 const links = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
   { href: "/admin/galleries", label: "Vaults", icon: Images },
+  { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/financials", label: "Financials & Ledger", icon: Wallet },
   { href: "/admin/assets", label: "Site Assets", icon: LayoutGrid },
 ]

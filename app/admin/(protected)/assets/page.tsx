@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { getSiteSlots } from "@/lib/site-slots"
+import { getSiteSlots, getSiteText } from "@/lib/site-slots"
 import { AssetManager } from "@/components/admin/asset-manager"
 
 export const metadata: Metadata = {
@@ -9,19 +9,19 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminAssetsPage() {
-  const overrides = await getSiteSlots()
+  const [overrides, textOverrides] = await Promise.all([getSiteSlots(), getSiteText()])
 
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="font-heading text-2xl font-medium text-foreground">Site Placeholder Assets</h1>
+        <h1 className="font-heading text-2xl font-medium text-foreground">Site Content & Assets</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Upload a real photo to replace any wireframe slot on the live site. Changes go live
-          immediately — no code required.
+          Edit copy and upload photos to replace any wireframe slot on the live site. Changes go
+          live immediately — no code required.
         </p>
       </div>
 
-      <AssetManager overrides={overrides} />
+      <AssetManager overrides={overrides} textOverrides={textOverrides} />
     </div>
   )
 }

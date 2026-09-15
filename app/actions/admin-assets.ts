@@ -83,3 +83,22 @@ export async function clearSiteSlot(slotKey: string) {
   revalidatePath("/", "layout")
   revalidatePath("/admin/assets")
 }
+
+/** Saves a copy block override so it renders live on the marketing site. */
+export async function setSiteText(key: string, value: string) {
+  const { supabase, user } = await requireAdmin()
+
+  const { error } = await supabase.from("site_text_content").upsert({
+    key,
+    value,
+    updated_by: user.id,
+    updated_at: new Date().toISOString(),
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  revalidatePath("/", "layout")
+  revalidatePath("/admin/assets")
+}

@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { createShootInquiry } from "@/app/actions/shoots"
 
 export type BookingSubject = "automotive" | "sports" | "senior" | "headshots" | "event"
 export type BookingCreator = "match" | "alex" | "gabe" | "dual"
@@ -57,6 +58,7 @@ export async function submitBooking(
 
   const supabase = await createClient()
 
+  // Keep the raw submission for reference alongside the pipeline record created below.
   const { error } = await supabase.from("booking_requests").insert({
     first_name: firstName.trim(),
     last_name: lastName.trim(),
@@ -79,6 +81,36 @@ export async function submitBooking(
       success: false,
       error: "Something went wrong submitting your request. Please try again.",
     }
+  }
+
+  const noteLines = [
+    `Package: ${pkg}`,
+    instagramHandle.trim() ? `Instagram: @${instagramHandle.trim()}` : null,
+    locationJump ? "Add-on: Location jump" : null,
+    printPackage ? "Add-on: Print package" : null,
+    brief.trim() ? `Brief: ${brief.trim()}` : null,
+  ].filter(Boolean)
+
+  try {
+    // Surface every new booking as a card in the New Inquiry column so nothing
+    // submitted from the public Contact form is missed by the admin pipeline.
+    await createShootInquiry({
+      clientName: `${firstName.trim()} ${lastName.trim()}`,
+      clientEmail: email.trim(),
+      clientPhone: phone.trim(),
+      shootType: subject,
+      shootDate: preferredDate.trim(),
+      location: location.trim(),
+      preferredShooter: creator,
+      notes: noteLines.join("\n"),
+    })
+  } catch (shootError) {
+    console.log(
+      "[v0] failed to create pipeline shoot from booking",
+      shootError instanceof Error ? shootError.message : shootError,
+    )
+    // The booking request itself was saved successfully above, so we still
+    // report success to the client rather than blocking their submission.
   }
 
   return { success: true }

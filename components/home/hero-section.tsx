@@ -2,10 +2,11 @@ import Link from "next/link"
 import { ArrowDownRight } from "lucide-react"
 
 import { VideoSlot } from "@/components/video-slot"
+import type { SiteTextOverrides } from "@/lib/site-slots"
 
 const tags = ["Sports", "Automotive", "Portraits", "Creative Sessions"]
 
-export function HeroSection() {
+export function HeroSection({ text }: { text: SiteTextOverrides }) {
   return (
     <section className="relative flex min-h-[100svh] w-full flex-col overflow-hidden bg-[#09090b]">
       <VideoSlot label="Hero Reel Slot" />
@@ -22,16 +23,13 @@ export function HeroSection() {
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 pt-32 sm:px-10 sm:pt-40">
         <div className="flex flex-1 flex-col justify-center">
           <p className="psv-fade-up font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
-            Purple Sector Visuals
+            {text["home.hero.eyebrow"]}
           </p>
           <h1 className="psv-fade-up mt-6 max-w-3xl text-balance font-heading text-5xl font-bold leading-[0.95] tracking-tight text-foreground sm:text-7xl md:text-8xl">
-            Motion, captured with intent.
+            {text["home.hero.headline"]}
           </h1>
           <p className="psv-fade-up mt-6 max-w-xl text-pretty text-base leading-relaxed text-zinc-300 sm:text-lg">
-            A two-creator studio built around speed, light, and the moments
-            most people miss. We merge two distinct visual disciplines: a
-            dark, cinematic edge built for high-speed action, and a vibrant,
-            emotionally charged style for portraits and lifestyle.
+            {text["home.hero.body"]}
           </p>
         </div>
 
