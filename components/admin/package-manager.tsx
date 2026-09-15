@@ -47,6 +47,13 @@ const emptyForm: FormState = {
 
 const MAX_ADD_ONS = 5
 
+const QUICK_ADD_ONS: AddOn[] = [
+  { id: "quick-rush-delivery", name: "Rush Delivery", price: 75 },
+  { id: "quick-highlight-reel", name: "Highlight Reel", price: 100 },
+  { id: "quick-extra-outfit", name: "Extra Outfit / Location", price: 50 },
+  { id: "quick-print-package", name: "Print Package", price: 85 },
+]
+
 function createAddOnId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -158,6 +165,24 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
       ...prev,
       addOns: [...prev.addOns, { id: createAddOnId(), name: "", price: 0 }],
     }))
+  }
+
+  function toggleQuickAddOn(quickAddOn: AddOn, checked: boolean) {
+    if (checked) {
+      if (form.addOns.length >= MAX_ADD_ONS) {
+        toast.error(`You can add up to ${MAX_ADD_ONS} add-ons per package.`)
+        return
+      }
+      setForm((prev) => ({
+        ...prev,
+        addOns: [...prev.addOns, { id: createAddOnId(), name: quickAddOn.name, price: quickAddOn.price }],
+      }))
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        addOns: prev.addOns.filter((addOn) => addOn.name !== quickAddOn.name),
+      }))
+    }
   }
 
   function updateAddOnName(id: string, name: string) {
@@ -378,7 +403,32 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
                   {form.addOns.length}/{MAX_ADD_ONS}
                 </span>
               </div>
-              <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+                <div className="flex flex-col gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">Quick add</p>
+                  <div className="flex flex-wrap gap-3">
+                    {QUICK_ADD_ONS.map((quickAddOn) => {
+                      const checked = form.addOns.some((addOn) => addOn.name === quickAddOn.name)
+                      return (
+                        <label
+                          key={quickAddOn.id}
+                          className="flex items-center gap-2 text-sm text-foreground"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => toggleQuickAddOn(quickAddOn, e.target.checked)}
+                            className="size-4 rounded border-border accent-primary"
+                          />
+                          {quickAddOn.name} · {formatCurrency(quickAddOn.price)}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
                 {form.addOns.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No add-ons yet.</p>
                 ) : (
