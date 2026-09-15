@@ -3,56 +3,19 @@ import Link from "next/link"
 import { Check } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { listActivePackages } from "@/app/actions/packages"
 
 export const metadata: Metadata = {
   title: "Packages | Purple Sector Visuals",
   description:
-    "Three coverage tiers from Purple Sector Visuals: Senior Portraits, Automotive Feature, and Single-Athlete Sports.",
+    "Coverage tiers from Purple Sector Visuals, spanning portraits, automotive features, and single-athlete sports.",
 }
 
-const tiers = [
-  {
-    name: "Senior Portraits",
-    price: "$175",
-    unit: "per session",
-    description: "A dedicated portrait session built around your look.",
-    features: [
-      "Up to 60 minutes on location",
-      "Unlimited outfit changes",
-      "12–15 signature retouched hero images",
-      "Full digital print release & Private Vault delivery",
-    ],
-    href: "/contact?tier=Senior%20Portraits",
-    featured: false,
-  },
-  {
-    name: "Automotive Feature",
-    price: "$225",
-    unit: "per session",
-    description: "Static and motion coverage for a single vehicle.",
-    features: [
-      "Static + motion vehicle set",
-      "1 primary location",
-      "High-res photo gallery + 1 short vertical reel for socials",
-      "48-hour turnaround on sneak peeks",
-    ],
-    href: "/contact?tier=Automotive%20Feature",
-    featured: true,
-  },
-  {
-    name: "Single-Athlete Sports",
-    price: "$175",
-    unit: "per session",
-    description: "Dedicated coverage for one athlete, one game.",
-    features: [
-      "Dedicated individual coverage for one game/event",
-      "Edited action set + highlight gallery",
-      "High-speed dynamic edits",
-    ],
-    href: "/contact?tier=Single-Athlete%20Sports",
-    featured: false,
-  },
-]
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
+    value,
+  )
+}
 
 const serviceCategories = [
   { name: "Athletics", deliverable: "Edited action set + highlight reel" },
@@ -61,7 +24,14 @@ const serviceCategories = [
   { name: "Creative Sessions", deliverable: "Concept-driven edited set" },
 ]
 
-export default function ServicesPage() {
+export default async function ServicesPage() {
+  const packages = await listActivePackages()
+  const featuredId = packages.reduce<string | null>((highestId, pkg) => {
+    if (!highestId) return pkg.id
+    const current = packages.find((p) => p.id === highestId)
+    return Number(pkg.price) > Number(current?.price ?? 0) ? pkg.id : highestId
+  }, null)
+
   return (
     <div className="mx-auto min-h-svh max-w-6xl px-6 pb-24 pt-36 sm:px-10">
       <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
@@ -71,70 +41,97 @@ export default function ServicesPage() {
         Coverage built around your shoot.
       </h1>
       <p className="mt-4 max-w-xl text-pretty text-base leading-relaxed text-zinc-400">
-        Three baseline packages covering portraits, automotive features, and
+        Baseline packages covering portraits, automotive features, and
         single-athlete sports coverage. Every package includes a private
         gallery and fast turnaround.
       </p>
 
-      <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {tiers.map((tier) => (
-          <div
-            key={tier.name}
-            className={cn(
-              "relative flex flex-col gap-8 rounded-3xl border p-8 transition-all duration-500 ease-out hover:scale-[1.02]",
-              tier.featured
-                ? "border-[#e829f1] bg-[#121214] shadow-[0_0_48px_-12px_rgba(232,41,241,0.4)]"
-                : "border-zinc-800/80 bg-[#121214]/60 hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
-            )}
-          >
-            {tier.featured ? (
-              <span className="absolute -top-3 left-8 rounded-full bg-[#e829f1] px-3 py-1 text-xs font-semibold text-white">
-                Most booked
-              </span>
-            ) : null}
+      {packages.length === 0 ? (
+        <p className="mt-14 rounded-3xl border border-dashed border-zinc-800 px-8 py-16 text-center text-sm text-zinc-500">
+          Packages are being updated. Check back shortly, or reach out via the contact page for current pricing.
+        </p>
+      ) : (
+        <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {packages.map((pkg) => {
+            const featured = pkg.id === featuredId
+            return (
+              <div
+                key={pkg.id}
+                className={cn(
+                  "relative flex flex-col gap-8 rounded-3xl border p-8 transition-all duration-500 ease-out hover:scale-[1.02]",
+                  featured
+                    ? "border-[#e829f1] bg-[#121214] shadow-[0_0_48px_-12px_rgba(232,41,241,0.4)]"
+                    : "border-zinc-800/80 bg-[#121214]/60 hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+                )}
+              >
+                {featured ? (
+                  <span className="absolute -top-3 left-8 rounded-full bg-[#e829f1] px-3 py-1 text-xs font-semibold text-white">
+                    Most booked
+                  </span>
+                ) : null}
 
-            <div>
-              <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                {tier.name}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-                {tier.description}
-              </p>
-            </div>
+                <div>
+                  <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground">
+                    {pkg.title}
+                  </h2>
+                </div>
 
-            <div className="flex items-baseline gap-2">
-              <span className="font-heading text-4xl font-bold text-foreground">
-                {tier.price}
-              </span>
-              <span className="text-sm text-zinc-500">{tier.unit}</span>
-            </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-heading text-4xl font-bold text-foreground">
+                    {formatCurrency(Number(pkg.price))}
+                  </span>
+                  <span className="text-sm text-zinc-500">per session</span>
+                </div>
 
-            <ul className="flex flex-1 flex-col gap-3">
-              {tier.features.map((feature) => (
-                <li
-                  key={feature}
-                  className="flex items-start gap-2.5 text-sm text-foreground"
+                <ul className="flex flex-1 flex-col gap-3">
+                  {pkg.deliverables.map((feature) => (
+                    <li
+                      key={feature}
+                      className="flex items-start gap-2.5 text-sm text-foreground"
+                    >
+                      <Check className="mt-0.5 size-4 shrink-0 text-[#e829f1]" />
+                      <span className="leading-relaxed">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                {pkg.available_addons.length > 0 ? (
+                  <div className="flex flex-col gap-2 border-t border-zinc-800 pt-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      Available add-ons
+                    </p>
+                    <ul className="flex flex-col gap-1.5">
+                      {pkg.available_addons.map((addOn) => (
+                        <li
+                          key={addOn.id}
+                          className="flex items-center justify-between gap-2 text-sm text-zinc-400"
+                        >
+                          <span>{addOn.name}</span>
+                          <span className="font-medium text-[#e829f1]">
+                            +{formatCurrency(addOn.price)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                <Link
+                  href={`/contact?tier=${encodeURIComponent(pkg.title)}`}
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition-transform hover:scale-[1.02] active:scale-[0.98]",
+                    featured
+                      ? "bg-[#e829f1] text-white"
+                      : "bg-zinc-900 text-foreground"
+                  )}
                 >
-                  <Check className="mt-0.5 size-4 shrink-0 text-[#e829f1]" />
-                  <span className="leading-relaxed">{feature}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Link
-              href={tier.href}
-              className={cn(
-                "inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-medium transition-transform hover:scale-[1.02] active:scale-[0.98]",
-                tier.featured
-                  ? "bg-[#e829f1] text-white"
-                  : "bg-zinc-900 text-foreground"
-              )}
-            >
-              Book {tier.name}
-            </Link>
-          </div>
-        ))}
-      </div>
+                  Book {pkg.title}
+                </Link>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className="mt-20">
         <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
