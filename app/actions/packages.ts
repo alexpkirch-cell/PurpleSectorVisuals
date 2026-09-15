@@ -4,26 +4,9 @@ import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
+import { PACKAGE_CATEGORIES, type AddOn, type PackageCategory, type ServicePackage } from "@/lib/packages"
 
-export type PackageStatus = "active" | "draft"
-
-export interface AddOn {
-  id: string
-  name: string
-  price: number
-  isQuickAdd: boolean
-}
-
-export interface ServicePackage {
-  id: string
-  title: string
-  price: string
-  status: PackageStatus
-  deliverables: string[]
-  available_addons: AddOn[]
-  created_at: string
-  updated_at: string
-}
+const MAX_ADD_ONS = 5
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -46,17 +29,17 @@ export async function listPackages(): Promise<ServicePackage[]> {
   await requireAdmin()
 
   const { rows } = await sql<ServicePackage>`
-    SELECT * FROM packages ORDER BY created_at DESC
+    SELECT * FROM packages ORDER BY category ASC, created_at ASC
   `
 
   return rows
 }
 
-// Public read used by the marketing /services page. No auth required, but
-// only packages marked "active" are ever returned.
+// Public read used by the /packages configurator. No auth required, but
+// only packages marked active are ever returned.
 export async function listActivePackages(): Promise<ServicePackage[]> {
   const { rows } = await sql<ServicePackage>`
-    SELECT * FROM packages WHERE status = 'active' ORDER BY created_at ASC
+    SELECT * FROM packages WHERE is_active = true ORDER BY category ASC, created_at ASC
   `
 
   return rows
@@ -65,20 +48,26 @@ export async function listActivePackages(): Promise<ServicePackage[]> {
 function sanitizeAddOns(addOns: AddOn[]): AddOn[] {
   return addOns
     .filter((addOn) => addOn.name.trim().length > 0)
+    .slice(0, MAX_ADD_ONS)
     .map((addOn) => ({
       id: addOn.id,
       name: addOn.name.trim(),
       price: Number.isFinite(addOn.price) ? addOn.price : 0,
-      isQuickAdd: Boolean(addOn.isQuickAdd),
     }))
+}
+
+function assertCategory(category: string): category is PackageCategory {
+  return (PACKAGE_CATEGORIES as readonly string[]).includes(category)
 }
 
 export async function createPackage(input: {
   title: string
-  price: number
-  status: PackageStatus
+  category: string
+  basePrice: number
+  duration: string
   deliverables: string[]
-  availableAddons: AddOn[]
+  addOns: AddOn[]
+  isActive: boolean
 }): Promise<ServicePackage> {
   await requireAdmin()
 
@@ -86,17 +75,29 @@ export async function createPackage(input: {
     throw new Error("Title is required")
   }
 
+  if (!assertCategory(input.category)) {
+    throw new Error("Invalid category")
+  }
+
   const deliverables = input.deliverables.map((d) => d.trim()).filter(Boolean)
-  const availableAddons = sanitizeAddOns(input.availableAddons)
+  const addOns = sanitizeAddOns(input.addOns)
 
   const { rows } = await sql<ServicePackage>`
-    INSERT INTO packages (title, price, status, deliverables, available_addons)
-    VALUES (${input.title.trim()}, ${input.price}, ${input.status}, ${JSON.stringify(deliverables)}, ${JSON.stringify(availableAddons)})
+    INSERT INTO packages (category, title, base_price, duration, deliverables, add_ons, is_active)
+    VALUES (
+      ${input.category},
+      ${input.title.trim()},
+      ${input.basePrice},
+      ${input.duration.trim() || null},
+      ${JSON.stringify(deliverables)},
+      ${JSON.stringify(addOns)},
+      ${input.isActive}
+    )
     RETURNING *
   `
 
   revalidatePath("/admin/packages")
-  revalidatePath("/services")
+  revalidatePath("/packages")
 
   return rows[0]
 }
@@ -105,10 +106,12 @@ export async function updatePackage(
   id: string,
   input: {
     title: string
-    price: number
-    status: PackageStatus
+    category: string
+    basePrice: number
+    duration: string
     deliverables: string[]
-    availableAddons: AddOn[]
+    addOns: AddOn[]
+    isActive: boolean
   },
 ): Promise<ServicePackage> {
   await requireAdmin()
@@ -117,23 +120,28 @@ export async function updatePackage(
     throw new Error("Title is required")
   }
 
+  if (!assertCategory(input.category)) {
+    throw new Error("Invalid category")
+  }
+
   const deliverables = input.deliverables.map((d) => d.trim()).filter(Boolean)
-  const availableAddons = sanitizeAddOns(input.availableAddons)
+  const addOns = sanitizeAddOns(input.addOns)
 
   const { rows } = await sql<ServicePackage>`
     UPDATE packages SET
+      category = ${input.category},
       title = ${input.title.trim()},
-      price = ${input.price},
-      status = ${input.status},
+      base_price = ${input.basePrice},
+      duration = ${input.duration.trim() || null},
       deliverables = ${JSON.stringify(deliverables)},
-      available_addons = ${JSON.stringify(availableAddons)},
-      updated_at = now()
+      add_ons = ${JSON.stringify(addOns)},
+      is_active = ${input.isActive}
     WHERE id = ${id}
     RETURNING *
   `
 
   revalidatePath("/admin/packages")
-  revalidatePath("/services")
+  revalidatePath("/packages")
 
   return rows[0]
 }
@@ -144,5 +152,5 @@ export async function deletePackage(id: string) {
   await sql`DELETE FROM packages WHERE id = ${id}`
 
   revalidatePath("/admin/packages")
-  revalidatePath("/services")
+  revalidatePath("/packages")
 }

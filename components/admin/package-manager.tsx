@@ -1,12 +1,11 @@
 "use client"
 
-import { useId, useState } from "react"
+import { useState } from "react"
 import { Plus, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -17,16 +16,10 @@ import {
 } from "@/components/ui/dialog"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  createPackage,
-  deletePackage,
-  updatePackage,
-  type AddOn,
-  type PackageStatus,
-  type ServicePackage,
-} from "@/app/actions/packages"
+import { Switch } from "@/components/ui/switch"
+import { createPackage, deletePackage, updatePackage } from "@/app/actions/packages"
+import { PACKAGE_CATEGORIES, type AddOn, type PackageCategory, type ServicePackage } from "@/lib/packages"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -34,19 +27,25 @@ function formatCurrency(value: number) {
 
 interface FormState {
   title: string
-  price: string
-  status: PackageStatus
+  category: PackageCategory
+  basePrice: string
+  duration: string
   deliverables: string[]
   addOns: AddOn[]
+  isActive: boolean
 }
 
-const emptyForm: FormState = { title: "", price: "", status: "draft", deliverables: [""], addOns: [] }
+const emptyForm: FormState = {
+  title: "",
+  category: "Portraits",
+  basePrice: "",
+  duration: "",
+  deliverables: [""],
+  addOns: [],
+  isActive: true,
+}
 
-const QUICK_ADD_ADDONS: { name: string; price: number }[] = [
-  { name: "Rush 24hr Delivery", price: 50 },
-  { name: "Extra Location", price: 25 },
-  { name: "Highlight Reel", price: 75 },
-]
+const MAX_ADD_ONS = 5
 
 function createAddOnId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -60,14 +59,10 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<FormState>(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [customAddOnName, setCustomAddOnName] = useState("")
-  const [customAddOnPrice, setCustomAddOnPrice] = useState("")
 
-  function openCreate() {
+  function openCreate(category?: PackageCategory) {
     setEditingId(null)
-    setForm(emptyForm)
-    setCustomAddOnName("")
-    setCustomAddOnPrice("")
+    setForm({ ...emptyForm, category: category ?? "Portraits" })
     setDialogOpen(true)
   }
 
@@ -75,13 +70,13 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
     setEditingId(pkg.id)
     setForm({
       title: pkg.title,
-      price: String(pkg.price),
-      status: pkg.status,
+      category: pkg.category,
+      basePrice: String(pkg.base_price),
+      duration: pkg.duration ?? "",
       deliverables: pkg.deliverables.length > 0 ? pkg.deliverables : [""],
-      addOns: pkg.available_addons ?? [],
+      addOns: pkg.add_ons ?? [],
+      isActive: pkg.is_active,
     })
-    setCustomAddOnName("")
-    setCustomAddOnPrice("")
     setDialogOpen(true)
   }
 
@@ -98,9 +93,9 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
   }
 
   async function handleSubmit() {
-    const price = Number(form.price)
-    if (!form.title.trim() || !Number.isFinite(price) || price < 0) {
-      toast.error("Enter a valid title and price.")
+    const basePrice = Number(form.basePrice)
+    if (!form.title.trim() || !Number.isFinite(basePrice) || basePrice < 0) {
+      toast.error("Enter a valid title and base price.")
       return
     }
 
@@ -109,22 +104,26 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
       if (editingId) {
         const updated = await updatePackage(editingId, {
           title: form.title,
-          price,
-          status: form.status,
+          category: form.category,
+          basePrice,
+          duration: form.duration,
           deliverables: form.deliverables,
-          availableAddons: form.addOns,
+          addOns: form.addOns,
+          isActive: form.isActive,
         })
         setPackages((current) => current.map((p) => (p.id === editingId ? updated : p)))
         toast.success("Package updated")
       } else {
         const created = await createPackage({
           title: form.title,
-          price,
-          status: form.status,
+          category: form.category,
+          basePrice,
+          duration: form.duration,
           deliverables: form.deliverables,
-          availableAddons: form.addOns,
+          addOns: form.addOns,
+          isActive: form.isActive,
         })
-        setPackages((current) => [created, ...current])
+        setPackages((current) => [...current, created])
         toast.success("Package created")
       }
       setDialogOpen(false)
@@ -150,26 +149,22 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
     setForm((prev) => ({ ...prev, deliverables: prev.deliverables.filter((_, i) => i !== index) }))
   }
 
-  function isQuickAddChecked(name: string) {
-    return form.addOns.some((addOn) => addOn.isQuickAdd && addOn.name === name)
+  function addAddOn() {
+    if (form.addOns.length >= MAX_ADD_ONS) {
+      toast.error(`You can add up to ${MAX_ADD_ONS} add-ons per package.`)
+      return
+    }
+    setForm((prev) => ({
+      ...prev,
+      addOns: [...prev.addOns, { id: createAddOnId(), name: "", price: 0 }],
+    }))
   }
 
-  function toggleQuickAddOn(quickAddOn: { name: string; price: number }, checked: boolean) {
-    setForm((prev) => {
-      if (checked) {
-        return {
-          ...prev,
-          addOns: [
-            ...prev.addOns,
-            { id: createAddOnId(), name: quickAddOn.name, price: quickAddOn.price, isQuickAdd: true },
-          ],
-        }
-      }
-      return {
-        ...prev,
-        addOns: prev.addOns.filter((addOn) => !(addOn.isQuickAdd && addOn.name === quickAddOn.name)),
-      }
-    })
+  function updateAddOnName(id: string, name: string) {
+    setForm((prev) => ({
+      ...prev,
+      addOns: prev.addOns.map((addOn) => (addOn.id === id ? { ...addOn, name } : addOn)),
+    }))
   }
 
   function updateAddOnPrice(id: string, price: string) {
@@ -183,136 +178,171 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
     setForm((prev) => ({ ...prev, addOns: prev.addOns.filter((addOn) => addOn.id !== id) }))
   }
 
-  function addCustomAddOn() {
-    const price = Number(customAddOnPrice)
-    if (!customAddOnName.trim() || !Number.isFinite(price) || price < 0) {
-      toast.error("Enter a valid add-on name and price.")
-      return
-    }
-    setForm((prev) => ({
-      ...prev,
-      addOns: [...prev.addOns, { id: createAddOnId(), name: customAddOnName.trim(), price, isQuickAdd: false }],
-    }))
-    setCustomAddOnName("")
-    setCustomAddOnPrice("")
-  }
+  const groupedPackages = PACKAGE_CATEGORIES.map((category) => ({
+    category,
+    packages: packages.filter((p) => p.category === category),
+  }))
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-10">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{packages.length} package{packages.length === 1 ? "" : "s"}</p>
-        <Button onClick={openCreate} className="gap-2">
+        <p className="text-sm text-muted-foreground">
+          {packages.length} package{packages.length === 1 ? "" : "s"} across {PACKAGE_CATEGORIES.length} categories
+        </p>
+        <Button onClick={() => openCreate()} className="gap-2">
           <Plus className="size-4" />
           New Package
         </Button>
       </div>
 
-      {packages.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          No packages yet. Create one to make it available on the public Packages page.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {packages.map((pkg) => (
-            <div key={pkg.id} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-heading text-base font-semibold text-foreground">{pkg.title}</h3>
-                  <p className="mt-1 text-lg font-semibold text-foreground">{formatCurrency(Number(pkg.price))}</p>
-                </div>
-                <Badge variant={pkg.status === "active" ? "default" : "secondary"} className="capitalize">
-                  {pkg.status}
-                </Badge>
-              </div>
+      {groupedPackages.map(({ category, packages: categoryPackages }) => (
+        <div key={category} className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-heading text-lg font-semibold text-foreground">{category}</h2>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openCreate(category)}>
+              <Plus className="size-3.5" />
+              Add to {category}
+            </Button>
+          </div>
 
-              {pkg.deliverables.length > 0 && (
-                <ul className="flex flex-col gap-1.5">
-                  {pkg.deliverables.map((item, i) => (
-                    <li key={i} className="text-sm leading-relaxed text-muted-foreground">
-                      &bull; {item}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {pkg.available_addons.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {pkg.available_addons.map((addOn) => (
-                    <Badge key={addOn.id} variant="outline" className="text-xs font-normal">
-                      {addOn.name} · {formatCurrency(addOn.price)}
+          {categoryPackages.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+              No packages in this category yet.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {categoryPackages.map((pkg) => (
+                <div key={pkg.id} className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-heading text-base font-semibold text-foreground">{pkg.title}</h3>
+                      <p className="mt-1 text-lg font-semibold text-foreground">
+                        {formatCurrency(Number(pkg.base_price))}
+                      </p>
+                      {pkg.duration ? (
+                        <p className="text-xs text-muted-foreground">{pkg.duration}</p>
+                      ) : null}
+                    </div>
+                    <Badge variant={pkg.is_active ? "default" : "secondary"}>
+                      {pkg.is_active ? "Active" : "Draft"}
                     </Badge>
-                  ))}
-                </div>
-              )}
+                  </div>
 
-              <div className="mt-auto flex items-center gap-2 pt-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(pkg)}>
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(pkg.id)}
-                  aria-label={`Delete ${pkg.title}`}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
+                  {pkg.deliverables.length > 0 && (
+                    <ul className="flex flex-col gap-1.5">
+                      {pkg.deliverables.map((item, i) => (
+                        <li key={i} className="text-sm leading-relaxed text-muted-foreground">
+                          &bull; {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {pkg.add_ons.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {pkg.add_ons.map((addOn) => (
+                        <Badge key={addOn.id} variant="outline" className="text-xs font-normal">
+                          {addOn.name} · {formatCurrency(addOn.price)}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-auto flex items-center gap-2 pt-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(pkg)}>
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(pkg.id)}
+                      aria-label={`Delete ${pkg.title}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      ))}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit Package" : "New Package"}</DialogTitle>
             <DialogDescription>
-              Packages marked Active appear on the public Packages page immediately.
+              Active packages appear immediately in the public Studio Configurator.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
-            <Field>
-              <FieldLabel htmlFor="pkg-title">Title</FieldLabel>
-              <Input
-                id="pkg-title"
-                value={form.title}
-                onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="Automotive Feature"
-              />
-            </Field>
+          <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-4">
+              <Field>
+                <FieldLabel htmlFor="pkg-title">Title</FieldLabel>
+                <Input
+                  id="pkg-title"
+                  value={form.title}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="The Base Package"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="pkg-category">Category</FieldLabel>
+                <Select
+                  value={form.category}
+                  onValueChange={(value) => setForm((prev) => ({ ...prev, category: value as PackageCategory }))}
+                >
+                  <SelectTrigger id="pkg-category">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PACKAGE_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <Field>
-                <FieldLabel htmlFor="pkg-price">Price (USD)</FieldLabel>
+                <FieldLabel htmlFor="pkg-price">Base Price (USD)</FieldLabel>
                 <Input
                   id="pkg-price"
                   type="number"
                   min="0"
                   step="1"
-                  value={form.price}
-                  onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                  placeholder="225"
+                  value={form.basePrice}
+                  onChange={(e) => setForm((prev) => ({ ...prev, basePrice: e.target.value }))}
+                  placeholder="175"
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="pkg-status">Status</FieldLabel>
-                <Select
-                  value={form.status}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, status: value as PackageStatus }))}
-                >
-                  <SelectTrigger id="pkg-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="draft">Draft</SelectItem>
-                  </SelectContent>
-                </Select>
+                <FieldLabel htmlFor="pkg-duration">Duration</FieldLabel>
+                <Input
+                  id="pkg-duration"
+                  value={form.duration}
+                  onChange={(e) => setForm((prev) => ({ ...prev, duration: e.target.value }))}
+                  placeholder="Up to 60 minutes"
+                />
               </Field>
             </div>
+
+            <Field>
+              <div className="flex items-center justify-between">
+                <FieldLabel htmlFor="pkg-active">Active</FieldLabel>
+                <Switch
+                  id="pkg-active"
+                  checked={form.isActive}
+                  onCheckedChange={(checked) => setForm((prev) => ({ ...prev, isActive: checked }))}
+                />
+              </div>
+            </Field>
 
             <Field>
               <FieldLabel>Deliverables</FieldLabel>
@@ -322,7 +352,7 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
                     <Input
                       value={item}
                       onChange={(e) => updateDeliverable(i, e.target.value)}
-                      placeholder="12-15 signature retouched hero images"
+                      placeholder="15 retouched images"
                     />
                     <button
                       type="button"
@@ -342,81 +372,57 @@ export function PackageManager({ initialPackages }: { initialPackages: ServicePa
             </Field>
 
             <Field>
-              <FieldLabel>Add-Ons</FieldLabel>
-              <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-                <div className="flex flex-col gap-2">
-                  {QUICK_ADD_ADDONS.map((quickAddOn) => (
-                    <div key={quickAddOn.name} className="flex items-center gap-2.5">
-                      <Checkbox
-                        id={`quick-add-${quickAddOn.name}`}
-                        checked={isQuickAddChecked(quickAddOn.name)}
-                        onCheckedChange={(checked) => toggleQuickAddOn(quickAddOn, checked === true)}
+              <div className="flex items-center justify-between">
+                <FieldLabel>Add-Ons</FieldLabel>
+                <span className="text-xs text-muted-foreground">
+                  {form.addOns.length}/{MAX_ADD_ONS}
+                </span>
+              </div>
+              <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+                {form.addOns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No add-ons yet.</p>
+                ) : (
+                  form.addOns.map((addOn) => (
+                    <div key={addOn.id} className="flex items-center gap-2">
+                      <Input
+                        value={addOn.name}
+                        onChange={(e) => updateAddOnName(addOn.id, e.target.value)}
+                        placeholder="Add-on name"
+                        className="flex-1"
                       />
-                      <Label
-                        htmlFor={`quick-add-${quickAddOn.name}`}
-                        className="cursor-pointer text-sm font-normal text-foreground"
-                      >
-                        {quickAddOn.name} (+{formatCurrency(quickAddOn.price)})
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-
-                {form.addOns.length > 0 && (
-                  <div className="flex flex-col gap-2 border-t border-border pt-3">
-                    {form.addOns.map((addOn) => (
-                      <div key={addOn.id} className="flex items-center gap-2">
-                        <span className="flex-1 truncate text-sm text-foreground">
-                          {addOn.name}
-                          {addOn.isQuickAdd ? (
-                            <span className="ml-1.5 text-xs text-muted-foreground">Quick-add</span>
-                          ) : null}
-                        </span>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <span>$</span>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={addOn.price}
-                            onChange={(e) => updateAddOnPrice(addOn.id, e.target.value)}
-                            className="h-8 w-20"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeAddOn(addOn.id)}
-                          aria-label={`Remove ${addOn.name}`}
-                          className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-                        >
-                          <X className="size-4" />
-                        </button>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <span>$</span>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={addOn.price}
+                          onChange={(e) => updateAddOnPrice(addOn.id, e.target.value)}
+                          className="h-9 w-20"
+                        />
                       </div>
-                    ))}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAddOn(addOn.id)}
+                        aria-label="Remove add-on"
+                        className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))
                 )}
-
-                <div className="flex items-center gap-2 border-t border-border pt-3">
-                  <Input
-                    value={customAddOnName}
-                    onChange={(e) => setCustomAddOnName(e.target.value)}
-                    placeholder="Custom add-on name"
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={customAddOnPrice}
-                    onChange={(e) => setCustomAddOnPrice(e.target.value)}
-                    placeholder="Price"
-                    className="w-24"
-                  />
-                  <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={addCustomAddOn}>
-                    <Plus className="size-3.5" />
-                    Add
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-1 w-fit gap-1.5"
+                  onClick={addAddOn}
+                  disabled={form.addOns.length >= MAX_ADD_ONS}
+                >
+                  <Plus className="size-3.5" />
+                  Add add-on
+                </Button>
               </div>
             </Field>
           </div>

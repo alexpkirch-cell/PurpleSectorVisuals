@@ -222,10 +222,19 @@ function OptionCard({
   )
 }
 
+const CATEGORY_TO_SUBJECT: Record<string, BookingSubject> = {
+  portraits: "senior",
+  automotive: "automotive",
+  athletics: "headshots",
+  events: "event",
+}
+
 export function BookingForm() {
   const searchParams = useSearchParams()
   const initialCreator = searchParams.get("shooter")
   const initialPackage = searchParams.get("tier")
+  const initialCategory = searchParams.get("category")
+  const configuratorTotal = searchParams.get("total")
 
   const [step, setStep] = useState(1)
   const [direction, setDirection] = useState<1 | -1>(1)
@@ -234,6 +243,8 @@ export function BookingForm() {
   const [submitted, setSubmitted] = useState(false)
   const [data, setData] = useState<BookingState>(() => ({
     ...initialState,
+    subject: (CATEGORY_TO_SUBJECT[initialCategory?.toLowerCase() ?? ""] ??
+      "") as BookingSubject | "",
     creator: (CREATORS.find((c) => c.value === initialCreator)?.value ??
       "") as BookingCreator | "",
     package: (PACKAGES.find((p) => p.value === initialPackage)?.value ??
@@ -349,6 +360,18 @@ export function BookingForm() {
   return (
     <div className="grid w-full gap-8 lg:grid-cols-[1fr_260px]">
       <div className="min-w-0">
+        {configuratorTotal ? (
+          <div className="mb-6 flex items-center justify-between gap-3 rounded-2xl border border-[#e829f1]/30 bg-[#e829f1]/10 px-4 py-3">
+            <span className="text-sm text-foreground">
+              Estimate from your Studio Configurator setup
+              {initialPackage ? <span className="text-zinc-400"> &middot; {initialPackage}</span> : null}
+            </span>
+            <span className="font-heading text-lg font-bold text-[#e829f1]">
+              ${configuratorTotal}
+            </span>
+          </div>
+        ) : null}
+
         {/* Progress bar */}
         <div className="mb-8">
           <div className="mb-2 flex items-center justify-between text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
