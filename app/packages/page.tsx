@@ -3,6 +3,8 @@ import type { Metadata } from "next"
 import { listActivePackages } from "@/app/actions/packages"
 import { StudioConfigurator } from "@/components/packages/studio-configurator"
 
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: "Packages | Purple Sector Visuals",
   description:

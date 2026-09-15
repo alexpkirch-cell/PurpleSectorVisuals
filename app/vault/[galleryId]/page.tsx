@@ -23,11 +23,26 @@ export default async function VaultGalleryPage({
   }
 
   const admin = createAdminClient()
-  const { data: photos } = await admin
+  const { data: rows } = await admin
     .from("gallery_photos")
     .select("id, file_name, storage_path, is_before_after, before_storage_path")
     .eq("gallery_id", galleryId)
     .order("created_at", { ascending: true })
+
+  const photos = await Promise.all(
+    (rows ?? []).map(async (row) => {
+      const { data: signed } = await admin.storage
+        .from("gallery-photos")
+        .createSignedUrl(row.storage_path, 3600)
+
+      return {
+        id: row.id as string,
+        file_name: row.file_name as string,
+        storage_path: row.storage_path as string,
+        url: signed?.signedUrl ?? null,
+      }
+    }),
+  )
 
   return (
     <main className="min-h-screen px-4 py-16 sm:px-8">

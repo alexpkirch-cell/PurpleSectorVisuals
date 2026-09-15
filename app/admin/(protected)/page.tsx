@@ -3,7 +3,9 @@ import type { Metadata } from "next"
 import { createClient } from "@/lib/supabase/server"
 import { StudioCalendar, type CalendarBlock } from "@/components/admin/studio-calendar"
 import { PipelineBoard } from "@/components/admin/pipeline-board"
+import { PrintFulfillmentQueue } from "@/components/admin/print-fulfillment-queue"
 import { listShoots } from "@/app/actions/shoots"
+import { listPendingPrintOrders } from "@/app/actions/print-orders"
 
 export const metadata: Metadata = {
   title: "Admin | Purple Sector Visuals",
@@ -18,7 +20,7 @@ export default async function AdminOverviewPage() {
   const windowEnd = new Date(today)
   windowEnd.setDate(windowEnd.getDate() + 30)
 
-  const [{ data: calendarBlocks }, shoots] = await Promise.all([
+  const [{ data: calendarBlocks }, shoots, pendingPrintOrders] = await Promise.all([
     supabase
       .from("calendar_blocks")
       .select("id, start_date, end_date, type, label")
@@ -26,6 +28,7 @@ export default async function AdminOverviewPage() {
       .gte("end_date", today.toISOString().slice(0, 10))
       .order("start_date", { ascending: true }),
     listShoots(),
+    listPendingPrintOrders(),
   ])
 
   return (
@@ -43,6 +46,11 @@ export default async function AdminOverviewPage() {
       <div className="flex flex-col gap-3">
         <h2 className="font-heading text-lg font-medium text-foreground">Shoot Pipeline</h2>
         <PipelineBoard initialShoots={shoots} />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <h2 className="font-heading text-lg font-medium text-foreground">Print Fulfillment Queue</h2>
+        <PrintFulfillmentQueue initialOrders={pendingPrintOrders} />
       </div>
     </div>
   )
