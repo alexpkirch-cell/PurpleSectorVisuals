@@ -33,6 +33,8 @@ export function Konami() {
     }
 
     function handleKeyDown(event: KeyboardEvent) {
+      if (!event.key) return
+
       const expected = SEQUENCE[progressRef.current]
       const pressed = event.key.length === 1 ? event.key.toLowerCase() : event.key
 
