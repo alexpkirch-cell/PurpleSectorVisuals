@@ -7,6 +7,9 @@ import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
+import { AfkScreensaver } from "@/components/system/afk-screensaver"
+import { Konami } from "@/components/system/konami"
+import { SpeedTrap } from "@/components/system/speed-trap"
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -62,6 +65,9 @@ export default function RootLayout({
           <main>{children}</main>
           <SiteFooter />
           <Toaster />
+          <AfkScreensaver />
+          <Konami />
+          <SpeedTrap />
         </ThemeProvider>
       </body>
     </html>
