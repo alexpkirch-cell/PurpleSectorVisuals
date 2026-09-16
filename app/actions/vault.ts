@@ -4,12 +4,9 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { createAdminClient } from "@/lib/supabase/server"
+import { vaultCookieName } from "@/lib/vault"
 
 const VAULT_COOKIE_MAX_AGE = 60 * 60 * 24 // 24 hours
-
-function vaultCookieName(galleryId: string) {
-  return `psv_vault_${galleryId}`
-}
 
 /** Validates a client-entered access key and, on success, cookie-scopes access to that gallery. */
 export async function validateVaultAccessKey(formData: FormData) {

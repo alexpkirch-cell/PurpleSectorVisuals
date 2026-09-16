@@ -1,21 +1,36 @@
 "use client"
 
 import { useState } from "react"
-import { Download, DownloadCloud } from "lucide-react"
+import { Check, Download, DownloadCloud, ImageIcon } from "lucide-react"
+import { toast } from "sonner"
 
-import { createClient } from "@/lib/supabase/client"
+import { submitPrintOrder } from "@/app/actions/print-orders"
 import { Button } from "@/components/ui/button"
-
-const GALLERY_PHOTOS_BUCKET = "gallery-photos"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 
 type Photo = {
   id: string
   file_name: string
   storage_path: string
+  url: string | null
 }
 
 export function VaultGallery({ galleryId, photos }: { galleryId: string; photos: Photo[] }) {
   const [isZipping, setIsZipping] = useState(false)
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [email, setEmail] = useState("")
+  const [submitting, setSubmitting] = useState(false)
 
   async function handleDownloadAll() {
     setIsZipping(true)
@@ -37,6 +52,37 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
     }
   }
 
+  function toggleSelected(storagePath: string) {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev)
+      if (next.has(storagePath)) {
+        next.delete(storagePath)
+      } else {
+        next.add(storagePath)
+      }
+      return next
+    })
+  }
+
+  async function handleSubmitPrintOrder() {
+    setSubmitting(true)
+    try {
+      await submitPrintOrder({
+        vaultId: galleryId,
+        clientEmail: email,
+        selectedImageUrls: Array.from(selectedPaths),
+      })
+      toast.success("Print selections submitted. We'll follow up by email.")
+      setSelectedPaths(new Set())
+      setEmail("")
+      setEmailDialogOpen(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to submit print selections")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   if (photos.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border px-4 py-12 text-center text-sm text-muted-foreground">
@@ -46,7 +92,7 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 pb-24">
       <div className="flex items-center justify-end">
         <Button onClick={handleDownloadAll} disabled={isZipping}>
           <DownloadCloud data-icon="inline-start" />
@@ -56,26 +102,77 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
 
       <div className="columns-2 gap-3 sm:columns-3 md:columns-4 [&>*]:mb-3">
         {photos.map((photo) => (
-          <PhotoTile key={photo.id} storagePath={photo.storage_path} fileName={photo.file_name} />
+          <PhotoTile
+            key={photo.id}
+            url={photo.url}
+            fileName={photo.file_name}
+            selected={selectedPaths.has(photo.storage_path)}
+            onToggleSelect={() => toggleSelected(photo.storage_path)}
+          />
         ))}
       </div>
+
+      {selectedPaths.size > 0 ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+            <div className="flex items-center gap-2 text-sm text-foreground">
+              <ImageIcon className="size-4 text-muted-foreground" />
+              <span>
+                Selected for Print: <span className="font-semibold">{selectedPaths.size}</span>{" "}
+                image{selectedPaths.size === 1 ? "" : "s"}
+              </span>
+            </div>
+            <Button onClick={() => setEmailDialogOpen(true)}>Submit Print Selections</Button>
+          </div>
+        </div>
+      ) : null}
+
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Submit Print Selections</DialogTitle>
+            <DialogDescription>
+              We&apos;ll send your {selectedPaths.size} selected image{selectedPaths.size === 1 ? "" : "s"} to
+              fulfillment. Enter your email so we can confirm the order.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Field>
+            <FieldLabel htmlFor="print-order-email">Email address</FieldLabel>
+            <Input
+              id="print-order-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+            />
+          </Field>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmitPrintOrder} disabled={submitting}>
+              {submitting ? "Submitting…" : "Submit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-function PhotoTile({ storagePath, fileName }: { storagePath: string; fileName: string }) {
-  const [url, setUrl] = useState<string | null>(null)
-
-  if (url === null) {
-    const supabase = createClient()
-    supabase.storage
-      .from(GALLERY_PHOTOS_BUCKET)
-      .createSignedUrl(storagePath, 3600)
-      .then(({ data }) => {
-        if (data?.signedUrl) setUrl(data.signedUrl)
-      })
-  }
-
+function PhotoTile({
+  url,
+  fileName,
+  selected,
+  onToggleSelect,
+}: {
+  url: string | null
+  fileName: string
+  selected: boolean
+  onToggleSelect: () => void
+}) {
   async function handleDownload() {
     if (!url) return
     const link = document.createElement("a")
@@ -87,13 +184,19 @@ function PhotoTile({ storagePath, fileName }: { storagePath: string; fileName: s
   }
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-muted">
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-lg border bg-muted transition-colors",
+        selected ? "border-primary ring-2 ring-primary" : "border-border",
+      )}
+    >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and not worth Next Image optimization
         <img src={url} alt={fileName} className="block w-full object-cover" crossOrigin="anonymous" />
       ) : (
         <div className="aspect-[4/5] w-full animate-pulse bg-muted" />
       )}
+
       <button
         type="button"
         onClick={handleDownload}
@@ -102,6 +205,28 @@ function PhotoTile({ storagePath, fileName }: { storagePath: string; fileName: s
         className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
       >
         <Download className="size-3.5" />
+      </button>
+
+      <button
+        type="button"
+        onClick={onToggleSelect}
+        aria-pressed={selected}
+        aria-label={selected ? `Remove ${fileName} from print selection` : `Select ${fileName} for print`}
+        className={cn(
+          "absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium backdrop-blur-sm transition-opacity",
+          selected
+            ? "bg-primary text-primary-foreground opacity-100"
+            : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
+        )}
+      >
+        {selected ? (
+          <>
+            <Check className="size-3.5" />
+            Selected
+          </>
+        ) : (
+          "Select for Print"
+        )}
       </button>
     </div>
   )

@@ -43,3 +43,60 @@ export const SITE_SLOT_DEFINITIONS: { key: string; label: string; group: string 
   { key: "gallery.g11", label: "Visor Up", group: "Portfolio" },
   { key: "gallery.g12", label: "Podium Spray", group: "Portfolio" },
 ]
+
+export type SiteTextOverrides = Record<string, string>
+
+export interface SiteTextDefinition {
+  key: string
+  label: string
+  group: string
+  multiline?: boolean
+  defaultValue: string
+}
+
+/**
+ * Editable copy blocks on the marketing site. Keep `defaultValue` in sync
+ * with the hardcoded fallback text in each page/component so a fresh
+ * install (no site_text_content rows yet) renders identically to before.
+ */
+export const SITE_TEXT_DEFINITIONS: SiteTextDefinition[] = [
+  {
+    key: "home.hero.eyebrow",
+    label: "Hero Eyebrow",
+    group: "Home",
+    defaultValue: "Purple Sector Visuals",
+  },
+  {
+    key: "home.hero.headline",
+    label: "Hero Headline",
+    group: "Home",
+    defaultValue: "Motion, captured with intent.",
+  },
+  {
+    key: "home.hero.body",
+    label: "Hero Body",
+    group: "Home",
+    multiline: true,
+    defaultValue:
+      "A two-creator studio built around speed, light, and the moments most people miss. We merge two distinct visual disciplines: a dark, cinematic edge built for high-speed action, and a vibrant, emotionally charged style for portraits and lifestyle.",
+  },
+  {
+    key: "contact.eyebrow",
+    label: "Contact Eyebrow",
+    group: "Contact",
+    defaultValue: "Book a Session",
+  },
+  {
+    key: "contact.headline",
+    label: "Contact Headline",
+    group: "Contact",
+    defaultValue: "Let's lock in your shoot.",
+  },
+  {
+    key: "contact.body",
+    label: "Contact Body",
+    group: "Contact",
+    multiline: true,
+    defaultValue: "Share the details below and we'll confirm availability within 24 hours.",
+  },
+]

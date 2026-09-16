@@ -128,6 +128,40 @@
     }
 }
 
+/* Konami-code easter egg: swaps electric purple for motorsport papaya orange. */
+.theme-papaya {
+  --background: #140d08;
+  --foreground: #fdf3e7;
+  --card: #1f140a;
+  --card-foreground: #fdf3e7;
+  --popover: #1f140a;
+  --popover-foreground: #fdf3e7;
+  --primary: #ff8000;
+  --primary-foreground: #140d08;
+  --secondary: #2b1c0e;
+  --secondary-foreground: #fdf3e7;
+  --muted: #1f140a;
+  --muted-foreground: #d9b48f;
+  --accent: #2b1c0e;
+  --accent-foreground: #fdf3e7;
+  --border: rgba(255, 128, 0, 0.25);
+  --input: rgba(255, 128, 0, 0.18);
+  --ring: #ff8000;
+  --chart-1: #ff8000;
+  --chart-2: #ffa733;
+  --chart-3: #d9b48f;
+  --chart-4: #8a5a2b;
+  --chart-5: #3a2712;
+  --sidebar: #1f140a;
+  --sidebar-foreground: #fdf3e7;
+  --sidebar-primary: #ff8000;
+  --sidebar-primary-foreground: #140d08;
+  --sidebar-accent: #2b1c0e;
+  --sidebar-accent-foreground: #fdf3e7;
+  --sidebar-border: rgba(255, 128, 0, 0.25);
+  --sidebar-ring: #ff8000;
+}
+
 .font-heading {
   letter-spacing: -0.01em;
 }
