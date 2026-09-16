@@ -2,7 +2,7 @@
 
 import { Pool } from "pg"
 
-import { stripe } from "@/lib/stripe"
+import { getStripeClient } from "@/lib/stripe"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -39,6 +39,7 @@ export async function startDepositCheckout(vaultId: string) {
 
     const clientName = [row.first_name, row.last_name].filter(Boolean).join(" ") || "Client"
 
+    const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded_page",
       redirect_on_completion: "never",
@@ -80,6 +81,7 @@ export async function checkDepositStatus(vaultId: string) {
     if (row.deposit_paid) return { depositPaid: true }
     if (!row.stripe_session_id) return { depositPaid: false }
 
+    const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.retrieve(row.stripe_session_id)
     if (session.payment_status === "paid") {
       await pool.query(`UPDATE vaults SET deposit_paid = true WHERE id = $1`, [vaultId])

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { Pool } from "pg"
 
-import { stripe } from "@/lib/stripe"
+import { getStripeClient } from "@/lib/stripe"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
   try {
     event =
       signature && webhookSecret
-        ? stripe.webhooks.constructEvent(body, signature, webhookSecret)
+        ? getStripeClient().webhooks.constructEvent(body, signature, webhookSecret)
         : JSON.parse(body)
   } catch (error) {
     console.error("[v0] Stripe webhook signature verification failed:", error)
