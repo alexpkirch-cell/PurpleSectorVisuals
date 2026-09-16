@@ -1,9 +1,9 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, ArrowRight, Check, PartyPopper } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Clock, PartyPopper } from "lucide-react"
 
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,10 @@ import {
   type BookingCreator,
   type BookingPackage,
   type BookingSubject,
+  type SelectedAddOn,
 } from "@/app/actions/booking"
+import { listActivePackages } from "@/app/actions/packages"
+import type { ServicePackage } from "@/lib/packages"
 
 const STEP_TITLES = [
   "The Basics",
@@ -229,6 +232,14 @@ const CATEGORY_TO_SUBJECT: Record<string, BookingSubject> = {
   events: "event",
 }
 
+const SUBJECT_TO_CATEGORY: Record<BookingSubject, string> = {
+  senior: "Portraits",
+  automotive: "Automotive",
+  headshots: "Athletics",
+  sports: "Athletics",
+  event: "Events",
+}
+
 export function BookingForm() {
   const searchParams = useSearchParams()
   const initialCreator = searchParams.get("shooter")
@@ -251,12 +262,47 @@ export function BookingForm() {
       "") as BookingPackage | "",
   }))
 
+  const [servicePackages, setServicePackages] = useState<ServicePackage[]>([])
+  const [servicePackageId, setServicePackageId] = useState<string>("")
+  const [selectedAddOns, setSelectedAddOns] = useState<SelectedAddOn[]>([])
+
+  useEffect(() => {
+    listActivePackages()
+      .then(setServicePackages)
+      .catch(() => setServicePackages([]))
+  }, [])
+
   const totalSteps = STEP_TITLES.length
 
   const availablePackages = useMemo(
     () => PACKAGES.filter((p) => !p.requiresDual || data.creator === "dual"),
     [data.creator]
   )
+
+  const matchingServicePackages = useMemo(() => {
+    if (!data.subject) return []
+    const category = SUBJECT_TO_CATEGORY[data.subject]
+    return servicePackages.filter((p) => p.category === category)
+  }, [servicePackages, data.subject])
+
+  const selectedServicePackage = useMemo(
+    () => matchingServicePackages.find((p) => p.id === servicePackageId) ?? null,
+    [matchingServicePackages, servicePackageId]
+  )
+
+  const estimatedTotal = useMemo(() => {
+    const base = selectedServicePackage ? Number(selectedServicePackage.base_price) : 0
+    const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0)
+    return base + addOnsTotal
+  }, [selectedServicePackage, selectedAddOns])
+
+  function toggleAddOn(addOn: SelectedAddOn) {
+    setSelectedAddOns((prev) => {
+      const exists = prev.some((a) => a.id === addOn.id)
+      if (exists) return prev.filter((a) => a.id !== addOn.id)
+      return [...prev, addOn]
+    })
+  }
 
   function update<K extends keyof BookingState>(key: K, value: BookingState[K]) {
     setData((prev) => {
@@ -288,7 +334,9 @@ export function BookingForm() {
       case 3:
         return Boolean(data.creator)
       case 4:
-        return Boolean(data.package)
+        return matchingServicePackages.length > 0
+          ? Boolean(servicePackageId)
+          : Boolean(data.package)
       default:
         return true
     }
@@ -324,6 +372,8 @@ export function BookingForm() {
       instagramHandle: data.instagramHandle,
       locationJump: data.locationJump,
       printPackage: data.printPackage,
+      packageId: servicePackageId || null,
+      selectedAddOns,
     })
 
     setSubmitting(false)
@@ -347,11 +397,12 @@ export function BookingForm() {
           <PartyPopper className="size-7" />
         </span>
         <h2 className="font-heading text-2xl font-bold text-foreground">
-          Booking Request Received
+          Booking Request Submitted
         </h2>
         <p className="max-w-md text-pretty text-sm leading-relaxed text-zinc-400">
-          You will be contacted within 3 business days to finalize your date,
-          location, and details.
+          Your request is now pending admin approval. You will receive a
+          confirmation email with your Client Vault PIN once it&apos;s
+          approved.
         </p>
       </div>
     )
@@ -509,21 +560,40 @@ export function BookingForm() {
 
               {step === 4 ? (
                 <div className="flex flex-col gap-3">
-                  {availablePackages.map((pkg) => (
-                    <OptionCard
-                      key={pkg.value}
-                      active={data.package === pkg.value}
-                      title={pkg.label}
-                      meta={pkg.price}
-                      info={pkg.info}
-                      description={pkg.info}
-                      onClick={() => update("package", pkg.value)}
-                    />
-                  ))}
-                  {data.creator !== "dual" ? (
-                    <p className="pl-1 text-xs leading-relaxed text-zinc-500">
-                      Select Dual Coverage in the previous step to unlock The
-                      Dual Creator Build.
+                  {matchingServicePackages.length > 0
+                    ? matchingServicePackages.map((pkg) => (
+                        <OptionCard
+                          key={pkg.id}
+                          active={servicePackageId === pkg.id}
+                          title={pkg.title}
+                          meta={`$${Number(pkg.base_price).toLocaleString()}`}
+                          info={pkg.deliverables.join(", ")}
+                          description={pkg.deliverables.join(" · ")}
+                          onClick={() => {
+                            setServicePackageId(pkg.id)
+                            setSelectedAddOns([])
+                            update(
+                              "package",
+                              (availablePackages[0]?.value ?? "standard") as BookingPackage
+                            )
+                          }}
+                        />
+                      ))
+                    : availablePackages.map((pkg) => (
+                        <OptionCard
+                          key={pkg.value}
+                          active={data.package === pkg.value}
+                          title={pkg.label}
+                          meta={pkg.price}
+                          info={pkg.info}
+                          description={pkg.info}
+                          onClick={() => update("package", pkg.value)}
+                        />
+                      ))}
+                  {selectedServicePackage ? (
+                    <p className="flex items-center gap-1.5 pl-1 text-xs leading-relaxed text-zinc-500">
+                      <Clock className="size-3.5" />
+                      {selectedServicePackage.duration}
                     </p>
                   ) : null}
                 </div>
@@ -570,29 +640,48 @@ export function BookingForm() {
                   <Field>
                     <FieldLabel className="gap-1.5">Add-Ons</FieldLabel>
                     <div className="flex flex-col gap-3 rounded-2xl border border-zinc-800 px-4 py-4">
-                      {ADD_ONS.map((addOn) => (
-                        <div key={addOn.key} className="flex items-center gap-2.5">
-                          <Checkbox
-                            id={addOn.key}
-                            checked={data[addOn.key]}
-                            onCheckedChange={(checked) =>
-                              update(addOn.key, checked === true)
-                            }
-                          />
-                          <Label
-                            htmlFor={addOn.key}
-                            className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-normal text-foreground"
-                          >
-                            <span className="flex items-center gap-1.5">
-                              {addOn.label}
-                              <InfoBubble>{addOn.info}</InfoBubble>
-                            </span>
-                            <span className="text-xs font-medium text-[#e829f1]">
-                              [Pricing TBD]
-                            </span>
-                          </Label>
-                        </div>
-                      ))}
+                      {selectedServicePackage && selectedServicePackage.add_ons.length > 0
+                        ? selectedServicePackage.add_ons.map((addOn) => (
+                            <div key={addOn.id} className="flex items-center gap-2.5">
+                              <Checkbox
+                                id={addOn.id}
+                                checked={selectedAddOns.some((a) => a.id === addOn.id)}
+                                onCheckedChange={() => toggleAddOn(addOn)}
+                              />
+                              <Label
+                                htmlFor={addOn.id}
+                                className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-normal text-foreground"
+                              >
+                                <span>{addOn.name}</span>
+                                <span className="text-xs font-medium text-[#e829f1]">
+                                  +${addOn.price}
+                                </span>
+                              </Label>
+                            </div>
+                          ))
+                        : ADD_ONS.map((addOn) => (
+                            <div key={addOn.key} className="flex items-center gap-2.5">
+                              <Checkbox
+                                id={addOn.key}
+                                checked={data[addOn.key]}
+                                onCheckedChange={(checked) =>
+                                  update(addOn.key, checked === true)
+                                }
+                              />
+                              <Label
+                                htmlFor={addOn.key}
+                                className="flex flex-1 cursor-pointer items-center justify-between gap-2 text-sm font-normal text-foreground"
+                              >
+                                <span className="flex items-center gap-1.5">
+                                  {addOn.label}
+                                  <InfoBubble>{addOn.info}</InfoBubble>
+                                </span>
+                                <span className="text-xs font-medium text-[#e829f1]">
+                                  [Pricing TBD]
+                                </span>
+                              </Label>
+                            </div>
+                          ))}
                     </div>
                   </Field>
                   {submitError ? (

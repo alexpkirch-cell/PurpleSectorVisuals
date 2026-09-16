@@ -7,6 +7,12 @@ export type BookingSubject = "automotive" | "sports" | "senior" | "headshots" | 
 export type BookingCreator = "match" | "alex" | "gabe" | "dual"
 export type BookingPackage = "standard" | "action" | "dual-build"
 
+export interface SelectedAddOn {
+  id: string
+  name: string
+  price: number
+}
+
 export interface BookingSubmission {
   firstName: string
   lastName: string
@@ -21,6 +27,8 @@ export interface BookingSubmission {
   instagramHandle: string
   locationJump: boolean
   printPackage: boolean
+  packageId?: string | null
+  selectedAddOns?: SelectedAddOn[]
 }
 
 export async function submitBooking(
@@ -40,6 +48,8 @@ export async function submitBooking(
     instagramHandle,
     locationJump,
     printPackage,
+    packageId,
+    selectedAddOns,
   } = submission
 
   if (
@@ -59,6 +69,11 @@ export async function submitBooking(
   const supabase = await createClient()
 
   // Keep the raw submission for reference alongside the pipeline record created below.
+  const parsedDate = new Date(preferredDate.trim())
+  const requestedDate = Number.isNaN(parsedDate.getTime())
+    ? null
+    : parsedDate.toISOString().slice(0, 10)
+
   const { error } = await supabase.from("booking_requests").insert({
     first_name: firstName.trim(),
     last_name: lastName.trim(),
@@ -73,6 +88,10 @@ export async function submitBooking(
     instagram_handle: instagramHandle.trim() || null,
     location_jump: locationJump,
     print_package: printPackage,
+    package_id: packageId || null,
+    selected_addons: selectedAddOns ?? [],
+    requested_date: requestedDate,
+    status: "Pending",
   })
 
   if (error) {
