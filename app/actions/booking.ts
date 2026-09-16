@@ -74,25 +74,29 @@ export async function submitBooking(
     ? null
     : parsedDate.toISOString().slice(0, 10)
 
-  const { error } = await supabase.from("booking_requests").insert({
-    first_name: firstName.trim(),
-    last_name: lastName.trim(),
-    email: email.trim(),
-    phone: phone.trim(),
-    preferred_date: preferredDate.trim(),
-    location: location.trim(),
-    subject,
-    creator,
-    package: pkg,
-    brief: brief.trim() || null,
-    instagram_handle: instagramHandle.trim() || null,
-    location_jump: locationJump,
-    print_package: printPackage,
-    package_id: packageId || null,
-    selected_addons: selectedAddOns ?? [],
-    requested_date: requestedDate,
-    status: "Pending",
-  })
+  const { data: inserted, error } = await supabase
+    .from("booking_requests")
+    .insert({
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      preferred_date: preferredDate.trim(),
+      location: location.trim(),
+      subject,
+      creator,
+      package: pkg,
+      brief: brief.trim() || null,
+      instagram_handle: instagramHandle.trim() || null,
+      location_jump: locationJump,
+      print_package: printPackage,
+      package_id: packageId || null,
+      selected_addons: selectedAddOns ?? [],
+      requested_date: requestedDate,
+      status: "Pending",
+    })
+    .select("id")
+    .single()
 
   if (error) {
     console.log("[v0] booking insert error", error.message)
@@ -113,7 +117,7 @@ export async function submitBooking(
   try {
     // Surface every new booking as a card in the New Inquiry column so nothing
     // submitted from the public Contact form is missed by the admin pipeline.
-    await createShootInquiry({
+    const { shootId } = await createShootInquiry({
       clientName: `${firstName.trim()} ${lastName.trim()}`,
       clientEmail: email.trim(),
       clientPhone: phone.trim(),
@@ -123,6 +127,12 @@ export async function submitBooking(
       preferredShooter: creator,
       notes: noteLines.join("\n"),
     })
+
+    // Link the pipeline card back to this request so approving it (dragging
+    // into "Vault Created") can generate the client's PIN vault.
+    if (inserted?.id) {
+      await supabase.from("booking_requests").update({ shoot_id: shootId }).eq("id", inserted.id)
+    }
   } catch (shootError) {
     console.log(
       "[v0] failed to create pipeline shoot from booking",
