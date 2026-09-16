@@ -6,6 +6,11 @@ export const disciplines: {
   aspect: string
 }[] = [
   {
+    name: "Portraits",
+    description: "Character studies with cinematic depth.",
+    aspect: "4:5 Portrait Slot",
+  },
+  {
     name: "Sports",
     description: "Peak action, frozen at the decisive moment.",
     aspect: "16:9 Slot",
@@ -14,11 +19,6 @@ export const disciplines: {
     name: "Automotive",
     description: "Steel, light, and motion rendered with intent.",
     aspect: "4:5 Slot",
-  },
-  {
-    name: "Portraits",
-    description: "Character studies with cinematic depth.",
-    aspect: "4:5 Portrait Slot",
   },
   {
     name: "Events",
