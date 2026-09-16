@@ -180,12 +180,6 @@ export function HeroCarousel3D() {
         </div>
       ))}
 
-      <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-        <h1 className="select-none text-balance px-6 text-center font-sans text-3xl font-light uppercase leading-[0.85] tracking-[0.25em] text-zinc-100 md:text-5xl">
-          Benchmark
-        </h1>
-      </div>
-
       <div className="pointer-events-none absolute inset-x-0 bottom-8 z-20 flex flex-col items-center gap-3 px-6 text-center">
         <div className="flex flex-col items-center gap-1.5">
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-500 sm:text-xs">

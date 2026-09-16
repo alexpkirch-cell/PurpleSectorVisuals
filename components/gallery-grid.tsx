@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils"
 
 const filters: (Discipline | "All")[] = [
   "All",
+  "Portraits",
   "Sports",
   "Automotive",
-  "Portraits",
   "Events",
 ]
 

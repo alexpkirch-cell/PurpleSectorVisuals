@@ -1,4 +1,5 @@
 import { Camera } from "lucide-react"
+import Link from "next/link"
 
 import { ImageSlot } from "@/components/image-slot"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
@@ -19,34 +20,26 @@ export function CoreIdentitySection({
               The Studio
             </p>
             <h2 className="mt-4 text-balance font-heading text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-              Two Visions. One Engine.
+              Two Shooters. One Standard.
             </h2>
             <p className="mt-6 text-pretty text-base leading-relaxed text-zinc-400">
-              Our lead shooters split the craft between them: one brings the
-              kinetic eye &mdash; high-speed burst tracking, sideline
-              instincts, and a reflex for the split-second moment that
-              separates a good shot from the one that gets shared. The other
-              brings the atmosphere &mdash; mood, light, and the patience to
-              wait for a frame instead of chasing it. Two very different
-              creative instincts, running on one shared engine of gear,
-              workflow, and delivery standards.
+              Purple Sector Visuals is built on a two-person team. One of us
+              specializes in fast-paced action and event coverage, while the
+              other focuses on lighting, portraits, and atmosphere.
             </p>
             <p className="mt-4 text-pretty text-base leading-relaxed text-zinc-400">
-              That&apos;s the whole pitch: hire Purple Sector Visuals and you
-              get both visions on tap &mdash; matched turnarounds, matched
-              quality, one crisp, high-energy signature no matter who was
-              behind the camera.
+              No matter who is behind the camera or what package you book,
+              the result is exactly the same: premium quality, fast delivery,
+              and zero hassle.
             </p>
 
-            <a
-              href="https://instagram.com/purplesectorvisuals"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href="/work"
               className="mt-8 inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/60 px-4 py-2 text-xs font-medium uppercase tracking-wider text-zinc-300 transition-all duration-500 ease-out hover:border-[#e829f1] hover:text-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             >
               <Camera className="size-3.5" />
-              Follow the Hustle
-            </a>
+              View Our Work
+            </Link>
 
             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-3">
               {BTS_CLIPS.map((clip) => (
