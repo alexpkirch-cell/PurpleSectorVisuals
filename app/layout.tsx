@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google"
+import { Analytics } from "@vercel/analytics/next"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -69,6 +70,7 @@ export default function RootLayout({
           <Konami />
           <SpeedTrap />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
