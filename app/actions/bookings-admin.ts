@@ -28,6 +28,7 @@ export interface BookingRequest {
   status: BookingStatus
   created_at: string
   shoot_id: string | null
+  final_quoted_fee: string | null
 }
 
 const PIN_LENGTH = 6
@@ -60,13 +61,17 @@ async function requireAdmin() {
 export async function listBookingRequests(): Promise<BookingRequest[]> {
   await requireAdmin()
 
-  const { rows } = await sql<BookingRequest>`
+  const { rows } = await sql<BookingRequest & { deposit_amount: string | null; balance_amount: string | null; balance_paid: boolean | null }>`
     SELECT
       br.*,
       p.title AS package_title,
-      p.base_price AS package_price
+      p.base_price AS package_price,
+      v.deposit_amount,
+      v.balance_amount,
+      v.balance_paid
     FROM booking_requests br
     LEFT JOIN packages p ON p.id = br.package_id
+    LEFT JOIN vaults v ON v.booking_id = br.id
     ORDER BY br.created_at DESC
   `
 
@@ -126,10 +131,11 @@ export async function approveBooking(id: string) {
   }
 
   const depositAmount = Math.round(packagePrice * 0.2 * 100) / 100
+  const balanceAmount = Math.round((packagePrice - depositAmount) * 100) / 100
 
   await sql`
-    INSERT INTO vaults (booking_id, shoot_id, pin_code, status, deposit_amount, shoot_date)
-    VALUES (${id}, ${shootId}, ${pinCode}, 'Onboarding', ${depositAmount}, ${shootDate})
+    INSERT INTO vaults (booking_id, shoot_id, pin_code, status, deposit_amount, balance_amount, shoot_date)
+    VALUES (${id}, ${shootId}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${shootDate})
   `
 
   await sql`
@@ -158,4 +164,29 @@ export async function completeBooking(id: string) {
   await sql`UPDATE booking_requests SET status = 'Completed' WHERE id = ${id}`
 
   revalidatePath("/admin/bookings")
+}
+
+/**
+ * Updates the final quoted fee for a booking (e.g. after add-ons or travel
+ * were settled) and recomputes the client's remaining vault balance against
+ * the deposit already collected.
+ */
+export async function setFinalQuotedFee(bookingId: string, finalQuotedFee: number) {
+  await requireAdmin()
+
+  if (!Number.isFinite(finalQuotedFee) || finalQuotedFee < 0) {
+    throw new Error("Invalid final quoted fee")
+  }
+
+  await sql`UPDATE booking_requests SET final_quoted_fee = ${finalQuotedFee} WHERE id = ${bookingId}`
+
+  await sql`
+    UPDATE vaults SET
+      final_quoted_fee = ${finalQuotedFee},
+      balance_amount = ${finalQuotedFee} - deposit_amount
+    WHERE booking_id = ${bookingId}
+  `
+
+  revalidatePath("/admin/bookings")
+  revalidatePath("/admin")
 }

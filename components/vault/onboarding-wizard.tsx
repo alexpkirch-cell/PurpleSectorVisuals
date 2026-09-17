@@ -7,9 +7,11 @@ import { activateVaultIfReady } from "@/app/actions/vault-pin"
 import { submitContract } from "@/app/actions/contract"
 import { checkDepositStatus } from "@/app/actions/stripe"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { DepositCheckout } from "@/components/vault/deposit-checkout"
-import { LIABILITY_RELEASE_TEXT } from "@/lib/contract-text"
+import { LIABILITY_RELEASE_TEXT, MINOR_ADDENDUM_TEXT } from "@/lib/contract-text"
 import { cn } from "@/lib/utils"
 
 const PREP_GUIDES: Record<string, { title: string; tips: string[] }> = {
@@ -68,6 +70,11 @@ export function OnboardingWizard({
   const initialStep = !contractSigned ? "contract" : !depositPaid ? "deposit" : "prep"
   const [step, setStep] = useState<Step>(initialStep)
   const [signature, setSignature] = useState("")
+  const [isMinor, setIsMinor] = useState(false)
+  const [guardianName, setGuardianName] = useState("")
+  const [guardianRelationship, setGuardianRelationship] = useState("")
+  const [guardianSignature, setGuardianSignature] = useState("")
+  const [portfolioOptOut, setPortfolioOptOut] = useState(false)
   const [signing, setSigning] = useState(false)
   const [signed, setSigned] = useState(contractSigned)
   const [paid, setPaid] = useState(depositPaid)
@@ -78,10 +85,20 @@ export function OnboardingWizard({
   const guide = useMemo(() => PREP_GUIDES[category ?? ""] ?? PREP_GUIDES.Portraits, [category])
   const currentIndex = steps.indexOf(step)
 
+  const canSign =
+    signature.trim().length >= 2 && (!isMinor || (guardianName.trim().length >= 2 && guardianSignature.trim().length >= 2))
+
   async function handleSign() {
     setError(null)
     setSigning(true)
-    const result = await submitContract(vaultId, signature)
+    const result = await submitContract(vaultId, {
+      signature,
+      isMinor,
+      guardianName,
+      guardianRelationship,
+      guardianSignature,
+      portfolioOptOut,
+    })
     setSigning(false)
     if (!result.success) {
       setError(result.error ?? "Something went wrong.")
@@ -140,11 +157,37 @@ export function OnboardingWizard({
           </div>
           <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
             {LIABILITY_RELEASE_TEXT}
+            {isMinor && (
+              <>
+                {"\n\n"}
+                {MINOR_ADDENDUM_TEXT}
+              </>
+            )}
           </div>
+
+          <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5">
+            <Checkbox id="isMinor" checked={isMinor} onCheckedChange={(checked) => setIsMinor(checked === true)} />
+            <Label htmlFor="isMinor" className="cursor-pointer text-sm">
+              The subject of this session is under 18 years of age
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
+            <Checkbox
+              id="portfolioOptOut"
+              checked={portfolioOptOut}
+              onCheckedChange={(checked) => setPortfolioOptOut(checked === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor="portfolioOptOut" className="cursor-pointer text-sm leading-snug">
+              Opt out of portfolio &amp; marketing usage — do not use my session images publicly
+            </Label>
+          </div>
+
           <div className="flex flex-col gap-2">
-            <label htmlFor="signature" className="text-sm text-muted-foreground">
+            <Label htmlFor="signature" className="text-sm text-muted-foreground">
               Type your full legal name to sign
-            </label>
+            </Label>
             <Input
               id="signature"
               value={signature}
@@ -153,8 +196,51 @@ export function OnboardingWizard({
               className="font-serif text-lg"
             />
           </div>
+
+          {isMinor && (
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Parent / Legal Guardian
+              </p>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianName" className="text-sm text-muted-foreground">
+                  Guardian full name
+                </Label>
+                <Input
+                  id="guardianName"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Alex Doe"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianRelationship" className="text-sm text-muted-foreground">
+                  Relationship to minor
+                </Label>
+                <Input
+                  id="guardianRelationship"
+                  value={guardianRelationship}
+                  onChange={(e) => setGuardianRelationship(e.target.value)}
+                  placeholder="Parent"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianSignature" className="text-sm text-muted-foreground">
+                  Type guardian's full legal name to countersign
+                </Label>
+                <Input
+                  id="guardianSignature"
+                  value={guardianSignature}
+                  onChange={(e) => setGuardianSignature(e.target.value)}
+                  placeholder="Alex Doe"
+                  className="font-serif text-lg"
+                />
+              </div>
+            </div>
+          )}
+
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button onClick={handleSign} disabled={signature.trim().length < 2 || signing} className="w-full">
+          <Button onClick={handleSign} disabled={!canSign || signing} className="w-full">
             {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign & Continue"}
           </Button>
         </div>

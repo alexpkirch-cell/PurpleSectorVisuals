@@ -142,16 +142,18 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="shootType">Shoot type / package</Label>
           <Select value={shootType} onValueChange={(value) => setShootType(value ?? "")}>
-            <SelectTrigger id="shootType">
-              <SelectValue placeholder="Select a package" />
+            <SelectTrigger id="shootType" className="w-full">
+              <SelectValue placeholder="Select a package" className="truncate" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={UNSURE_LABEL}>{UNSURE_LABEL}</SelectItem>
+            <SelectContent className="w-[--radix-select-trigger-width] min-w-full max-w-[95vw]">
+              <SelectItem value={UNSURE_LABEL} className="whitespace-normal break-words">
+                {UNSURE_LABEL}
+              </SelectItem>
               {groupedPackages.map((group) => (
                 <SelectGroup key={group.category}>
                   <SelectLabel>{group.category}</SelectLabel>
                   {group.items.map((pkg) => (
-                    <SelectItem key={pkg.id} value={pkg.title}>
+                    <SelectItem key={pkg.id} value={pkg.title} className="whitespace-normal break-words">
                       {pkg.title} — {formatCurrency(Number(pkg.base_price))}
                     </SelectItem>
                   ))}
@@ -179,8 +181,9 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <p className="text-xs leading-relaxed text-muted-foreground">
-        This is a booking inquiry, not a confirmed session. We&apos;ll follow up by email to confirm
-        your date, finalize pricing, and collect any deposit before your shoot is locked in.
+        This is a booking inquiry, not a confirmed session. Your shoot is only locked in once
+        we&apos;ve confirmed your date and you&apos;ve signed your digital contract and paid the 20%
+        retainer through your Client Vault.
       </p>
 
       <Button type="submit" disabled={isSubmitting}>
