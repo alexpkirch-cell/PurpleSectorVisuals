@@ -1,8 +1,6 @@
 import type { Metadata } from "next"
 
-import { AccessKeyForm } from "@/components/vault/access-key-form"
-import { PinEntryForm } from "@/components/vault/pin-entry-form"
-import { Separator } from "@/components/ui/separator"
+import { VaultLoginForm } from "@/components/vault/vault-login-form"
 
 export const metadata: Metadata = {
   title: "Client Vault | Purple Sector Visuals",
@@ -19,24 +17,10 @@ export default function VaultLandingPage() {
           </span>
           <h1 className="font-heading text-xl font-medium text-zinc-50">Client Vault</h1>
           <p className="text-sm text-zinc-400">
-            Have a booking PIN? Unlock your session vault to sign your agreement, secure your retainer, and
-            eventually view your gallery.
+            Enter your name and the access code from your booking confirmation to unlock your gallery.
           </p>
         </div>
-        <PinEntryForm />
-        <div className="my-6 flex items-center gap-3">
-          <Separator className="flex-1 bg-zinc-800" />
-          <span className="text-xs text-zinc-500">OR</span>
-          <Separator className="flex-1 bg-zinc-800" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <p className="text-sm text-zinc-400">
-            Have an access key from a delivered gallery instead? Enter it below.
-          </p>
-        </div>
-        <div className="mt-3">
-          <AccessKeyForm />
-        </div>
+        <VaultLoginForm />
       </div>
     </main>
   )

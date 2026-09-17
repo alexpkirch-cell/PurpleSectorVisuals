@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 
-import { BookingForm } from "@/components/booking-form"
+import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
+import { listActivePackages } from "@/app/actions/packages"
 import { getSiteText } from "@/lib/site-slots"
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
 }
 
 export default async function ContactPage() {
-  const text = await getSiteText()
+  const [text, packages] = await Promise.all([getSiteText(), listActivePackages()])
 
   return (
     <div className="mx-auto min-h-svh max-w-3xl px-6 pb-24 pt-36 sm:px-10">
@@ -25,9 +26,9 @@ export default async function ContactPage() {
         {text["contact.body"]}
       </p>
 
-      <div className="mt-12 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-6 sm:p-10">
+      <div className="mt-12">
         <Suspense fallback={null}>
-          <BookingForm />
+          <UnifiedBookingForm packages={packages} />
         </Suspense>
       </div>
     </div>
