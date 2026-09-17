@@ -29,9 +29,13 @@ export function PinEntryForm() {
         placeholder="6-digit PIN"
         value={pin}
         onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-        className="text-center font-mono text-lg tracking-[0.3em]"
+        className="border-zinc-800 bg-black text-center font-mono text-lg tracking-[0.3em] text-zinc-100 placeholder:text-zinc-600 focus-visible:border-[#9D00FF] focus-visible:ring-[#9D00FF]"
       />
-      <Button type="submit" disabled={pin.trim().length < 4 || submitting} className="w-full">
+      <Button
+        type="submit"
+        disabled={pin.trim().length < 4 || submitting}
+        className="w-full bg-[#9D00FF] font-mono text-xs uppercase tracking-[0.2em] text-white transition-all hover:bg-[#b32bff] hover:shadow-[0_0_20px_rgba(157,0,255,0.5)] disabled:opacity-50"
+      >
         {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Unlock with PIN"}
       </Button>
     </form>
