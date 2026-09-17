@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 function VaultShell({ children, heading }: { children: React.ReactNode; heading?: string }) {
   return (
-    <main className="min-h-screen px-4 py-16 sm:px-8">
+    <main className="min-h-screen px-4 pb-16 pt-32 sm:px-8 sm:pt-36">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <div>
           <span className="font-heading text-xs font-bold tracking-[0.18em] text-muted-foreground">

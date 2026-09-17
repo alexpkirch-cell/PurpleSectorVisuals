@@ -39,6 +39,14 @@ export interface Shoot {
   created_at: string
   final_amount: string | null
   settlement_items: SettlementItem[] | null
+  vault_pin: string | null
+  vault_status: "Onboarding" | "Active" | "Expired" | null
+  vault_contract_signed: boolean | null
+  vault_deposit_paid: boolean | null
+  vault_deposit_amount: string | null
+  vault_balance_paid: boolean | null
+  vault_balance_amount: string | null
+  vault_expires_at: string | null
 }
 
 export interface ShootPhoto {
@@ -123,7 +131,19 @@ export async function listShoots(): Promise<Shoot[]> {
   await requireAdmin()
 
   const { rows } = await sql<Shoot>`
-    SELECT * FROM shoots ORDER BY created_at DESC
+    SELECT
+      s.*,
+      v.pin_code AS vault_pin,
+      v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed,
+      v.deposit_paid AS vault_deposit_paid,
+      v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid,
+      v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at
+    FROM shoots s
+    LEFT JOIN vaults v ON v.shoot_id = s.id
+    ORDER BY s.created_at DESC
   `
 
   return rows

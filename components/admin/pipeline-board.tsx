@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Calendar, User } from "lucide-react"
+import { Calendar, KeyRound, User } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +22,12 @@ const COLUMNS: { status: ShootStatus; label: string }[] = [
 function formatDate(iso: string | null) {
   if (!iso) return null
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
+const VAULT_STATUS_STYLES: Record<string, string> = {
+  Onboarding: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  Active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  Expired: "border-muted-foreground/20 bg-muted text-muted-foreground",
 }
 
 export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
@@ -131,6 +137,19 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
                           <Calendar className="size-3 shrink-0" />
                           {formatDate(shoot.shoot_date)}
                         </span>
+                      )}
+
+                      {shoot.vault_status && (
+                        <Badge
+                          variant="outline"
+                          className={
+                            "w-fit gap-1 text-[0.6rem] " +
+                            (VAULT_STATUS_STYLES[shoot.vault_status] ?? "")
+                          }
+                        >
+                          <KeyRound className="size-2.5" />
+                          Vault: {shoot.vault_status}
+                        </Badge>
                       )}
 
                       <ShootPayoutBadge

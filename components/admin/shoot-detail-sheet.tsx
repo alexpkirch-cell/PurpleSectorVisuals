@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Check, Copy } from "lucide-react"
+import { Check, Copy, FileSignature, KeyRound, Wallet } from "lucide-react"
 import { toast } from "sonner"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -82,8 +83,11 @@ export function ShootDetailSheet({
     }
   }
 
-  const vaultLink =
+  const legacyVaultLink =
     typeof window !== "undefined" ? `${window.location.origin}/shoot-vault` : "/shoot-vault"
+  const vaultLink =
+    shoot &&
+    (typeof window !== "undefined" ? `${window.location.origin}/vault/${shoot.vault_pin}` : `/vault/${shoot.vault_pin}`)
 
   async function handleSave() {
     if (!shoot) return
@@ -133,37 +137,126 @@ export function ShootDetailSheet({
             </SheetHeader>
 
             <div className="flex flex-col gap-4 px-4">
-              <div className="flex flex-col gap-1.5">
-                <Label>Vault access code</Label>
-                <div className="flex items-center gap-2">
-                  <Input readOnly value={shoot.vault_access_code} className="font-mono" />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(shoot.vault_access_code, "code")}
-                    aria-label="Copy vault access code"
-                  >
-                    {copied === "code" ? <Check className="size-4" /> : <Copy className="size-4" />}
-                  </Button>
-                </div>
-              </div>
+              {shoot.vault_pin ? (
+                <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                      <KeyRound className="size-3.5" />
+                      Client vault
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className={
+                        shoot.vault_status === "Active"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : shoot.vault_status === "Expired"
+                            ? "border-muted-foreground/20 bg-muted text-muted-foreground"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      }
+                    >
+                      {shoot.vault_status}
+                    </Badge>
+                  </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label>Client vault link</Label>
-                <div className="flex items-center gap-2">
-                  <Input readOnly value={vaultLink} className="text-xs" />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => copyToClipboard(vaultLink, "link")}
-                    aria-label="Copy vault link"
-                  >
-                    {copied === "link" ? <Check className="size-4" /> : <Copy className="size-4" />}
-                  </Button>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Vault PIN</Label>
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={shoot.vault_pin} className="font-mono" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(shoot.vault_pin!, "code")}
+                        aria-label="Copy vault PIN"
+                      >
+                        {copied === "code" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Client vault link</Label>
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={vaultLink || ""} className="text-xs" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(vaultLink || "", "link")}
+                        aria-label="Copy vault link"
+                      >
+                        {copied === "link" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div
+                      className={
+                        "flex items-center gap-2 text-xs " +
+                        (shoot.vault_contract_signed ? "text-foreground" : "text-muted-foreground")
+                      }
+                    >
+                      <FileSignature className="size-3.5 shrink-0" />
+                      Service agreement {shoot.vault_contract_signed ? "signed" : "not yet signed"}
+                    </div>
+                    <div
+                      className={
+                        "flex items-center gap-2 text-xs " +
+                        (shoot.vault_deposit_paid ? "text-foreground" : "text-muted-foreground")
+                      }
+                    >
+                      <Wallet className="size-3.5 shrink-0" />
+                      Deposit ({shoot.vault_deposit_amount ? formatCurrency(Number(shoot.vault_deposit_amount)) : "—"}){" "}
+                      {shoot.vault_deposit_paid ? "paid" : "pending"}
+                    </div>
+                    <div
+                      className={
+                        "flex items-center gap-2 text-xs " +
+                        (shoot.vault_balance_paid ? "text-foreground" : "text-muted-foreground")
+                      }
+                    >
+                      <Wallet className="size-3.5 shrink-0" />
+                      Balance ({shoot.vault_balance_amount ? formatCurrency(Number(shoot.vault_balance_amount)) : "—"}){" "}
+                      {shoot.vault_balance_paid ? "paid" : "pending"}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Vault access code</Label>
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={shoot.vault_access_code} className="font-mono" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(shoot.vault_access_code, "code")}
+                        aria-label="Copy vault access code"
+                      >
+                        {copied === "code" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Client vault link</Label>
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={legacyVaultLink} className="text-xs" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyToClipboard(legacyVaultLink, "link")}
+                        aria-label="Copy vault link"
+                      >
+                        {copied === "link" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
