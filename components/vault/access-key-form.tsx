@@ -3,15 +3,13 @@
 import { useActionState } from "react"
 import { KeyRound } from "lucide-react"
 
-import { validateVaultAccessKey } from "@/app/actions/vault"
+import { authenticateVaultAccessKey, type VaultAuthState } from "@/app/vault/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-type FormState = { error?: string }
-
-async function submitAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const result = await validateVaultAccessKey(formData)
+async function submitAction(prevState: VaultAuthState, formData: FormData): Promise<VaultAuthState> {
+  const result = await authenticateVaultAccessKey(prevState, formData)
   return result ?? {}
 }
 
