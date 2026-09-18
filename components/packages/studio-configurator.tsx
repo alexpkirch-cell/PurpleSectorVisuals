@@ -23,13 +23,22 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
     [packages],
   )
 
-  const [activeCategory, setActiveCategory] = useState<PackageCategory | null>(
-    categoriesWithPackages[0] ?? null,
+  // The cheapest package across every category, so the configurator always
+  // opens on the lowest-priced option rather than just the first category.
+  const cheapestOverall = useMemo(
+    () =>
+      packages.reduce<ServicePackage | null>(
+        (cheapest, pkg) =>
+          !cheapest || Number(pkg.base_price) < Number(cheapest.base_price) ? pkg : cheapest,
+        null,
+      ),
+    [packages],
   )
-  const [activePackageId, setActivePackageId] = useState<string | null>(() => {
-    const first = packages.find((p) => p.category === (categoriesWithPackages[0] ?? null))
-    return first?.id ?? null
-  })
+
+  const [activeCategory, setActiveCategory] = useState<PackageCategory | null>(
+    cheapestOverall?.category ?? categoriesWithPackages[0] ?? null,
+  )
+  const [activePackageId, setActivePackageId] = useState<string | null>(cheapestOverall?.id ?? null)
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set())
 
   const categoryPackages = useMemo(
@@ -43,6 +52,16 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   const activePackage = useMemo(
     () => categoryPackages.find((p) => p.id === activePackageId) ?? categoryPackages[0] ?? null,
     [categoryPackages, activePackageId],
+  )
+
+  // Physical print products are handled at checkout, not as a configurator
+  // add-on, and add-ons always list cheapest first.
+  const visibleAddOns = useMemo(
+    () =>
+      (activePackage?.add_ons ?? [])
+        .filter((addOn) => !/print/i.test(addOn.name))
+        .sort((a, b) => a.price - b.price),
+    [activePackage],
   )
 
   function selectCategory(category: PackageCategory) {
@@ -70,11 +89,9 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   }
 
   const basePrice = activePackage ? Number(activePackage.base_price) : 0
-  const addOnsTotal = activePackage
-    ? activePackage.add_ons
-        .filter((addOn) => selectedAddOnIds.has(addOn.id))
-        .reduce((sum, addOn) => sum + addOn.price, 0)
-    : 0
+  const addOnsTotal = visibleAddOns
+    .filter((addOn) => selectedAddOnIds.has(addOn.id))
+    .reduce((sum, addOn) => sum + addOn.price, 0)
   const estimatedTotal = basePrice + addOnsTotal
 
   function handleBookSetup() {
@@ -197,11 +214,11 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Add-Ons for {activePackage.title}
             </p>
-            {activePackage.add_ons.length === 0 ? (
+            {visibleAddOns.length === 0 ? (
               <p className="text-sm text-zinc-500">No add-ons available for this package.</p>
             ) : (
               <div className="flex flex-col gap-4">
-                {activePackage.add_ons.map((addOn) => (
+                {visibleAddOns.map((addOn) => (
                   <div
                     key={addOn.id}
                     className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 px-4 py-3.5"

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Camera, Check, Copy, KeyRound } from "lucide-react"
 import Link from "next/link"
 
@@ -12,28 +13,50 @@ import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import { createShootInquiry } from "@/app/actions/shoots"
+import { PACKAGE_CATEGORIES, type ServicePackage } from "@/lib/packages"
 
-const SHOOT_TYPES = [
-  "Senior Portraits",
-  "Automotive Feature",
-  "Single-Athlete Spotlight",
-  "Team/Club Sports",
-  "Commercial Event",
-]
-const SHOOTERS = ["Alex", "Gabe", "No Preference"]
+const UNSURE_LABEL = "Not sure yet — let's chat!"
 
-export function ShootIntakeForm() {
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
+    value,
+  )
+}
+
+export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] }) {
+  const searchParams = useSearchParams()
+  const preselectedTier = searchParams.get("tier")
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<{ vaultAccessCode: string } | null>(null)
-  const [shootType, setShootType] = useState("")
-  const [preferredShooter, setPreferredShooter] = useState("")
+  const [shootType, setShootType] = useState(() => {
+    if (preselectedTier && packages.some((p) => p.title === preselectedTier)) {
+      return preselectedTier
+    }
+    return ""
+  })
   const [copied, setCopied] = useState(false)
+
+  // Always render categories in the fixed studio order, cheapest package
+  // first within each category.
+  const groupedPackages = useMemo(
+    () =>
+      PACKAGE_CATEGORIES.map((category) => ({
+        category,
+        items: packages
+          .filter((p) => p.category === category)
+          .sort((a, b) => Number(a.base_price) - Number(b.base_price)),
+      })).filter((group) => group.items.length > 0),
+    [packages],
+  )
 
   async function handleSubmit(formData: FormData) {
     setError(null)
@@ -43,10 +66,9 @@ export function ShootIntakeForm() {
         clientName: String(formData.get("clientName") ?? ""),
         clientEmail: String(formData.get("clientEmail") ?? ""),
         clientPhone: String(formData.get("clientPhone") ?? ""),
-        shootType,
+        shootType: shootType || UNSURE_LABEL,
         shootDate: String(formData.get("shootDate") ?? "") || undefined,
         location: String(formData.get("location") ?? ""),
-        preferredShooter,
         notes: String(formData.get("notes") ?? ""),
       })
       setResult(response)
@@ -118,16 +140,24 @@ export function ShootIntakeForm() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="shootType">Shoot type</Label>
-          <Select value={shootType} onValueChange={(value) => setShootType(value ?? "")} required>
-            <SelectTrigger id="shootType">
-              <SelectValue placeholder="Select a type" />
+          <Label htmlFor="shootType">Shoot type / package</Label>
+          <Select value={shootType} onValueChange={(value) => setShootType(value ?? "")}>
+            <SelectTrigger id="shootType" className="w-full">
+              <SelectValue placeholder="Select a package" className="truncate" />
             </SelectTrigger>
-            <SelectContent>
-              {SHOOT_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
-                </SelectItem>
+            <SelectContent className="w-[--radix-select-trigger-width] min-w-full max-w-[95vw]">
+              <SelectItem value={UNSURE_LABEL} className="whitespace-normal break-words">
+                {UNSURE_LABEL}
+              </SelectItem>
+              {groupedPackages.map((group) => (
+                <SelectGroup key={group.category}>
+                  <SelectLabel>{group.category}</SelectLabel>
+                  {group.items.map((pkg) => (
+                    <SelectItem key={pkg.id} value={pkg.title} className="whitespace-normal break-words">
+                      {pkg.title} — {formatCurrency(Number(pkg.base_price))}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
@@ -144,29 +174,19 @@ export function ShootIntakeForm() {
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="preferredShooter">Preferred shooter</Label>
-        <Select value={preferredShooter} onValueChange={(value) => setPreferredShooter(value ?? "")}>
-          <SelectTrigger id="preferredShooter">
-            <SelectValue placeholder="No preference" />
-          </SelectTrigger>
-          <SelectContent>
-            {SHOOTERS.map((shooter) => (
-              <SelectItem key={shooter} value={shooter}>
-                {shooter}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="notes">Mileage / travel notes</Label>
+        <Label htmlFor="notes">Notes</Label>
         <Textarea id="notes" name="notes" rows={3} placeholder="Anything else we should know?" />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button type="submit" disabled={isSubmitting || !shootType}>
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        This is a booking inquiry, not a confirmed session. Your shoot is only locked in once
+        we&apos;ve confirmed your date and you&apos;ve signed your digital contract and paid the 20%
+        retainer through your Client Vault.
+      </p>
+
+      <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? "Submitting…" : "Submit inquiry"}
       </Button>
     </form>

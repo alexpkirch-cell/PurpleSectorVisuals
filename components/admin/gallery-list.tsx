@@ -48,7 +48,7 @@ export function GalleryList({ galleries }: { galleries: Gallery[] }) {
               <p className="font-medium text-foreground">{gallery.title}</p>
               <p className="text-sm text-muted-foreground">
                 {gallery.client_name ? `${gallery.client_name} · ` : ""}
-                {new Date(gallery.created_at).toLocaleDateString()}
+                {new Date(gallery.created_at).toLocaleDateString("en-US", { timeZone: "UTC" })}
               </p>
             </Link>
             <Button

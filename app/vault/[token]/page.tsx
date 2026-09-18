@@ -6,6 +6,7 @@ import { Clock, KeyRound } from "lucide-react"
 import { getVaultGallery } from "@/app/actions/vault"
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
 import { BlooperReel } from "@/components/vault/blooper-reel"
+import { LockedGallery } from "@/components/vault/locked-gallery"
 import { OnboardingWizard } from "@/components/vault/onboarding-wizard"
 import { VaultGallery } from "@/components/vault/vault-gallery"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 
 function VaultShell({ children, heading }: { children: React.ReactNode; heading?: string }) {
   return (
-    <main className="min-h-screen px-4 py-16 sm:px-8">
+    <main className="min-h-screen px-4 pb-16 pt-32 sm:px-8 sm:pt-36">
       <div className="mx-auto flex max-w-5xl flex-col gap-8">
         <div>
           <span className="font-heading text-xs font-bold tracking-[0.18em] text-muted-foreground">
@@ -99,13 +100,13 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
   }
 
   // Active vault — reuse the existing gallery viewer, keyed by gallery_id.
-  let photos: { id: string; file_name: string; storage_path: string; url: string | null }[] = []
+  let photos: { id: string; file_name: string; storage_path: string; url: string | null; isFavorited: boolean }[] = []
 
   if (vault.galleryId) {
     const admin = createAdminClient()
     const { data: rows } = await admin
       .from("gallery_photos")
-      .select("id, file_name, storage_path")
+      .select("id, file_name, storage_path, is_favorited")
       .eq("gallery_id", vault.galleryId)
       .order("created_at", { ascending: true })
 
@@ -119,15 +120,24 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
           file_name: row.file_name as string,
           storage_path: row.storage_path as string,
           url: signed?.signedUrl ?? null,
+          isFavorited: Boolean(row.is_favorited),
         }
       })
     )
   }
 
+  // Balance owed but not yet paid — the gallery is fully delivered but stays
+  // locked behind a blurred preview until settlement clears.
+  const balanceOwed = vault.balanceAmount && vault.balanceAmount > 0 && !vault.balancePaid
+
   return (
     <VaultShell heading={`${vault.clientName}'s Gallery`}>
       {photos.length > 0 ? (
-        <VaultGallery galleryId={vault.galleryId as string} photos={photos} />
+        balanceOwed ? (
+          <LockedGallery vaultId={vault.id} photoCount={photos.length} balanceAmount={vault.balanceAmount as number} />
+        ) : (
+          <VaultGallery galleryId={vault.galleryId as string} photos={photos} expiresAt={vault.expiresAt} />
+        )
       ) : (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-8 text-center">
           <p className="text-sm text-muted-foreground">
@@ -149,7 +159,7 @@ async function LegacyGalleryView({ galleryId }: { galleryId: string }) {
   const admin = createAdminClient()
   const { data: rows } = await admin
     .from("gallery_photos")
-    .select("id, file_name, storage_path, is_before_after, before_storage_path")
+    .select("id, file_name, storage_path, is_before_after, before_storage_path, is_favorited")
     .eq("gallery_id", galleryId)
     .order("created_at", { ascending: true })
 
@@ -164,15 +174,14 @@ async function LegacyGalleryView({ galleryId }: { galleryId: string }) {
         file_name: row.file_name as string,
         storage_path: row.storage_path as string,
         url: signed?.signedUrl ?? null,
+        isFavorited: Boolean(row.is_favorited),
       }
     })
   )
 
   return (
     <VaultShell heading={gallery.title}>
-      {gallery.client_name && (
-        <p className="-mt-6 text-sm text-muted-foreground">Delivered to {gallery.client_name}</p>
-      )}
+      {gallery.client_name && <p className="-mt-6 text-sm text-muted-foreground">Delivered to {gallery.client_name}</p>}
       <VaultGallery galleryId={galleryId} photos={photos ?? []} />
     </VaultShell>
   )

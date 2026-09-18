@@ -1,13 +1,17 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 
-import { ShootIntakeForm } from "@/components/book/shoot-intake-form"
+import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
+import { listActivePackages } from "@/app/actions/packages"
 
 export const metadata: Metadata = {
   title: "Book a Shoot | Purple Sector Visuals",
   description: "Request a shoot with Purple Sector Visuals and get your client vault access code.",
 }
 
-export default function BookPage() {
+export default async function BookPage() {
+  const packages = await listActivePackages()
+
   return (
     <main className="flex min-h-screen flex-col items-center px-4 py-20 sm:py-28">
       <div className="w-full max-w-lg">
@@ -20,7 +24,9 @@ export default function BookPage() {
             Tell us about your shoot and we&apos;ll follow up to confirm the details.
           </p>
         </div>
-        <ShootIntakeForm />
+        <Suspense fallback={null}>
+          <UnifiedBookingForm packages={packages} />
+        </Suspense>
       </div>
     </main>
   )

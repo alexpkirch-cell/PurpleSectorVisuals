@@ -31,15 +31,24 @@ export async function submitPrintOrder(input: {
 
   const admin = createAdminClient()
 
-  const { data: gallery, error: galleryError } = await admin
+  const { data: gallery } = await admin
     .from("galleries")
     .select("id")
     .eq("id", input.vaultId)
     .eq("access_key", cookieKey)
     .single()
 
-  if (galleryError || !gallery) {
-    throw new Error("Not authorized for this vault")
+  if (!gallery) {
+    const { data: vault } = await admin
+      .from("vaults")
+      .select("id")
+      .eq("gallery_id", input.vaultId)
+      .eq("pin_code", cookieKey)
+      .single()
+
+    if (!vault) {
+      throw new Error("Not authorized for this vault")
+    }
   }
 
   const { error } = await admin.from("print_orders").insert({

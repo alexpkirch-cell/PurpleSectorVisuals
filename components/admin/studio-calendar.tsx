@@ -49,9 +49,11 @@ export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const today = useMemo(() => {
+    // Anchor to the UTC calendar date (not the browser's local date) so the
+    // server-rendered grid and the client-hydrated grid always agree, even
+    // when the server and the visitor's browser are in different time zones.
     const now = new Date()
-    now.setHours(0, 0, 0, 0)
-    return now
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   }, [])
 
   const days = useMemo(() => {

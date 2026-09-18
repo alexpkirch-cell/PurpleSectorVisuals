@@ -68,7 +68,7 @@ export function GalleryGrid({
           <div
             key={item.id}
             className={cn(
-              "group relative overflow-hidden rounded-2xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
+              "group relative overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
               i % 5 === 0
                 ? "col-span-2 aspect-[16/10] sm:aspect-[4/3]"
                 : "aspect-[3/4]"
@@ -78,17 +78,19 @@ export function GalleryGrid({
               aspect={item.aspect}
               label=""
               className="border-none"
+              imageClassName="transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
               slotKey={`gallery.${item.id}`}
               overrides={overrides}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#09090b]/85 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-            <div className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-              <p className="text-sm font-medium text-foreground">
-                {item.title}
-              </p>
-              <p className="text-xs text-zinc-500">
-                {item.category} &middot; {item.creator}
-              </p>
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+              <div className="px-4 text-center">
+                <p className="text-sm font-medium text-foreground">
+                  {item.title}
+                </p>
+                <p className="text-xs text-zinc-300">
+                  {item.category} &middot; {item.creator}
+                </p>
+              </div>
             </div>
           </div>
         ))}

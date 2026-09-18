@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Check, Download, DownloadCloud, ImageIcon } from "lucide-react"
+import { Calendar, Check, Download, DownloadCloud, ImageIcon, Star } from "lucide-react"
 import { toast } from "sonner"
 
+import { toggleFavorite } from "@/app/actions/favorites"
 import { submitPrintOrder } from "@/app/actions/print-orders"
 import { Button } from "@/components/ui/button"
 import {
@@ -23,14 +24,52 @@ type Photo = {
   file_name: string
   storage_path: string
   url: string | null
+  isFavorited?: boolean
 }
 
-export function VaultGallery({ galleryId, photos }: { galleryId: string; photos: Photo[] }) {
+function daysUntil(iso: string) {
+  const diff = new Date(iso).getTime() - Date.now()
+  return Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000)))
+}
+
+export function VaultGallery({
+  galleryId,
+  photos,
+  expiresAt,
+}: {
+  galleryId: string
+  photos: Photo[]
+  expiresAt?: string | null
+}) {
   const [isZipping, setIsZipping] = useState(false)
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [emailDialogOpen, setEmailDialogOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [favorited, setFavorited] = useState<Set<string>>(
+    new Set(photos.filter((p) => p.isFavorited).map((p) => p.id))
+  )
+
+  async function handleToggleFavorite(photoId: string) {
+    const nextValue = !favorited.has(photoId)
+    setFavorited((prev) => {
+      const next = new Set(prev)
+      if (nextValue) next.add(photoId)
+      else next.delete(photoId)
+      return next
+    })
+    try {
+      await toggleFavorite(galleryId, photoId, nextValue)
+    } catch (error) {
+      setFavorited((prev) => {
+        const next = new Set(prev)
+        if (nextValue) next.delete(photoId)
+        else next.add(photoId)
+        return next
+      })
+      toast.error(error instanceof Error ? error.message : "Failed to update favorite")
+    }
+  }
 
   async function handleDownloadAll() {
     setIsZipping(true)
@@ -93,6 +132,16 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
 
   return (
     <div className="flex flex-col gap-6 pb-24">
+      {expiresAt && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-accent/20 px-4 py-2.5 text-sm text-muted-foreground">
+          <Calendar className="size-4 shrink-0" />
+          <span>
+            Your gallery is available for <span className="font-medium text-foreground">{daysUntil(expiresAt)} more days</span> — download
+            your favorites before it expires.
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center justify-end">
         <Button onClick={handleDownloadAll} disabled={isZipping}>
           <DownloadCloud data-icon="inline-start" />
@@ -108,6 +157,8 @@ export function VaultGallery({ galleryId, photos }: { galleryId: string; photos:
             fileName={photo.file_name}
             selected={selectedPaths.has(photo.storage_path)}
             onToggleSelect={() => toggleSelected(photo.storage_path)}
+            favorited={favorited.has(photo.id)}
+            onToggleFavorite={() => handleToggleFavorite(photo.id)}
           />
         ))}
       </div>
@@ -167,11 +218,15 @@ function PhotoTile({
   fileName,
   selected,
   onToggleSelect,
+  favorited,
+  onToggleFavorite,
 }: {
   url: string | null
   fileName: string
   selected: boolean
   onToggleSelect: () => void
+  favorited: boolean
+  onToggleFavorite: () => void
 }) {
   async function handleDownload() {
     if (!url) return
@@ -192,42 +247,62 @@ function PhotoTile({
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and not worth Next Image optimization
-        <img src={url} alt={fileName} className="block w-full object-cover" crossOrigin="anonymous" />
+        <img
+          src={url}
+          alt={fileName}
+          className="block w-full object-cover transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
+          crossOrigin="anonymous"
+        />
       ) : (
         <div className="aspect-[4/5] w-full animate-pulse bg-muted" />
       )}
 
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={!url}
-        aria-label={`Download ${fileName}`}
-        className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
-      >
-        <Download className="size-3.5" />
-      </button>
+      {selected && (
+        <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[0.65rem] font-medium text-primary-foreground">
+          <Check className="size-3" />
+          Selected
+        </div>
+      )}
 
-      <button
-        type="button"
-        onClick={onToggleSelect}
-        aria-pressed={selected}
-        aria-label={selected ? `Remove ${fileName} from print selection` : `Select ${fileName} for print`}
-        className={cn(
-          "absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium backdrop-blur-sm transition-opacity",
-          selected
-            ? "bg-primary text-primary-foreground opacity-100"
-            : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-        )}
-      >
-        {selected ? (
-          <>
-            <Check className="size-3.5" />
-            Selected
-          </>
-        ) : (
-          "Select for Print"
-        )}
-      </button>
+      <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100">
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-pressed={favorited}
+          aria-label={favorited ? `Remove ${fileName} from favorites` : `Favorite ${fileName}`}
+          className={cn(
+            "flex size-9 items-center justify-center rounded-full backdrop-blur-sm transition-colors",
+            favorited ? "bg-primary text-primary-foreground" : "bg-background/90 text-foreground hover:bg-background"
+          )}
+        >
+          <Star className={cn("size-4", favorited && "fill-current")} />
+        </button>
+
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={!url}
+          aria-label={`Download ${fileName}`}
+          className="flex size-9 items-center justify-center rounded-full bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background"
+        >
+          <Download className="size-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-pressed={selected}
+          aria-label={selected ? `Remove ${fileName} from print selection` : `Select ${fileName} for print`}
+          className={cn(
+            "flex size-9 items-center justify-center rounded-full backdrop-blur-sm transition-colors",
+            selected
+              ? "bg-primary text-primary-foreground"
+              : "bg-background/90 text-foreground hover:bg-background"
+          )}
+        >
+          {selected ? <Check className="size-4" /> : <ImageIcon className="size-4" />}
+        </button>
+      </div>
     </div>
   )
 }
