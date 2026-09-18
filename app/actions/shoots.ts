@@ -47,6 +47,11 @@ export interface Shoot {
   vault_balance_paid: boolean | null
   vault_balance_amount: string | null
   vault_expires_at: string | null
+  vault_is_minor: boolean | null
+  vault_guardian_name: string | null
+  vault_guardian_relationship: string | null
+  vault_guardian_phone: string | null
+  vault_guardian_email: string | null
 }
 
 export interface ShootPhoto {
@@ -140,7 +145,12 @@ export async function listShoots(): Promise<Shoot[]> {
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at
+      v.expires_at AS vault_expires_at,
+      v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name,
+      v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone,
+      v.guardian_email AS vault_guardian_email
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     ORDER BY s.created_at DESC
@@ -278,7 +288,12 @@ export async function generateVaultAndAdvance(id: string, input: { totalQuote: n
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at
+      v.expires_at AS vault_expires_at,
+      v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name,
+      v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone,
+      v.guardian_email AS vault_guardian_email
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     WHERE s.id = ${id}

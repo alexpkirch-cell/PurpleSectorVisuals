@@ -11,6 +11,7 @@ import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { SettlementModal } from "@/components/admin/settlement-modal"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
+import { createMockTestLead, isMockShoot } from "@/lib/mock-lead"
 
 const COLUMNS: { status: ShootStatus; label: string }[] = [
   { status: "new_inquiry", label: "New Inquiries" },
@@ -33,7 +34,7 @@ const VAULT_STATUS_STYLES: Record<string, string> = {
 }
 
 export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
-  const [shoots, setShoots] = useState(initialShoots)
+  const [shoots, setShoots] = useState(() => [...initialShoots, createMockTestLead()])
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null)
@@ -43,6 +44,7 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
   async function moveCard(id: string, status: ShootStatus) {
     const previous = shoots
     setShoots((current) => current.map((s) => (s.id === id ? { ...s, status } : s)))
+    if (isMockShoot(id)) return
     try {
       await moveShootStage(id, status)
     } catch (error) {
@@ -56,6 +58,11 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
     const shoot = shoots.find((s) => s.id === draggingId)
     setDraggingId(null)
     if (!shoot) return
+
+    if (isMockShoot(shoot.id) && (status === "awaiting_retainer" || status === "fulfilled")) {
+      toast.info("Open the test lead and use \u201cConfirm Lead & Generate Vault\u201d to preview the CRM flow.")
+      return
+    }
 
     if (status === "fulfilled") {
       setSettlingShoot(shoot)
