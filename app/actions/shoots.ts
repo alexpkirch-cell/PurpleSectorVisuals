@@ -8,11 +8,11 @@ import { generateLedgerForShoot } from "@/app/actions/ledger"
 
 export type ShootStatus =
   | "new_inquiry"
-  | "contacted"
-  | "shoot_scheduled"
-  | "editing"
-  | "vault_created"
-  | "sent_finished"
+  | "quoted"
+  | "awaiting_retainer"
+  | "booked_scheduled"
+  | "pending_balance"
+  | "fulfilled"
 
 export interface SettlementItem {
   label: string
@@ -179,15 +179,111 @@ export async function updateShoot(
 export async function moveShootStage(id: string, status: ShootStatus) {
   await requireAdmin()
 
-  if (status === "sent_finished") {
-    throw new Error("Moving to Sent/Finished requires finalizing a settlement")
+  if (status === "awaiting_retainer") {
+    throw new Error("Moving to Awaiting Retainer requires confirming the total quote and generating the vault")
+  }
+
+  if (status === "fulfilled") {
+    throw new Error("Moving to Fulfilled requires finalizing a settlement")
   }
 
   await sql`
     UPDATE shoots SET status = ${status} WHERE id = ${id}
   `
 
+  // Booked & Scheduled shoots should immediately reflect on the Studio Calendar
+  // so shooters/editors see the confirmed date without a manual calendar entry.
+  if (status === "booked_scheduled") {
+    const { rows } = await sql<{ client_name: string; shoot_date: string | null }>`
+      SELECT client_name, shoot_date FROM shoots WHERE id = ${id}
+    `
+    const shoot = rows[0]
+    if (shoot?.shoot_date) {
+      const day = new Date(shoot.shoot_date).toISOString().slice(0, 10)
+      await sql`
+        INSERT INTO calendar_blocks (start_date, end_date, type, label)
+        SELECT ${day}, ${day}, 'booking', ${shoot.client_name}
+        WHERE NOT EXISTS (
+          SELECT 1 FROM calendar_blocks WHERE start_date = ${day} AND type = 'booking' AND label = ${shoot.client_name}
+        )
+      `
+    }
+  }
+
   revalidatePath("/admin")
+}
+
+/**
+ * Confirms the final total quote for a shoot in the Quoted column, generates
+ * (or updates) its client vault with a 20% deposit / 80% balance split, and
+ * advances the shoot into Awaiting Retainer.
+ */
+export async function generateVaultAndAdvance(id: string, input: { totalQuote: number }): Promise<Shoot> {
+  await requireAdmin()
+
+  if (!Number.isFinite(input.totalQuote) || input.totalQuote <= 0) {
+    throw new Error("Enter a valid total quote before generating the vault")
+  }
+
+  const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
+  const shoot = shootRows[0]
+  if (!shoot) {
+    throw new Error("Shoot not found")
+  }
+
+  const depositAmount = Math.round(input.totalQuote * 0.2 * 100) / 100
+  const balanceAmount = Math.round((input.totalQuote - depositAmount) * 100) / 100
+
+  const { rows: existingVaultRows } = await sql<{ id: string }>`
+    SELECT id FROM vaults WHERE shoot_id = ${id}
+  `
+
+  if (existingVaultRows.length > 0) {
+    await sql`
+      UPDATE vaults SET
+        deposit_amount = ${depositAmount},
+        balance_amount = ${balanceAmount},
+        final_quoted_fee = ${input.totalQuote},
+        shoot_date = COALESCE(shoot_date, ${shoot.shoot_date})
+      WHERE shoot_id = ${id}
+    `
+  } else {
+    let pinCode = ""
+    for (let attempt = 0; attempt < 5; attempt++) {
+      pinCode = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join("")
+      const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pinCode}`
+      if (rows.length === 0) break
+    }
+
+    await sql`
+      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
+      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${input.totalQuote}, ${shoot.shoot_date})
+    `
+  }
+
+  await sql`
+    UPDATE shoots SET status = 'awaiting_retainer', base_price = ${input.totalQuote}, travel_fee = 0
+    WHERE id = ${id}
+  `
+
+  revalidatePath("/admin")
+
+  const { rows } = await sql<Shoot>`
+    SELECT
+      s.*,
+      v.pin_code AS vault_pin,
+      v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed,
+      v.deposit_paid AS vault_deposit_paid,
+      v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid,
+      v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at
+    FROM shoots s
+    LEFT JOIN vaults v ON v.shoot_id = s.id
+    WHERE s.id = ${id}
+  `
+  return rows[0]
 }
 
 /**
@@ -214,7 +310,7 @@ export async function finalizeSettlement(
 
   await sql`
     UPDATE shoots SET
-      status = 'sent_finished',
+      status = 'fulfilled',
       is_paid = true,
       base_price = ${settledBasePrice},
       travel_fee = ${settledTravelFee},

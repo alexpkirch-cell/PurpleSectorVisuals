@@ -4,19 +4,21 @@ import { useState } from "react"
 import { Calendar, KeyRound, User } from "lucide-react"
 import { toast } from "sonner"
 
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { moveShootStage, type Shoot, type ShootStatus } from "@/app/actions/shoots"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { SettlementModal } from "@/components/admin/settlement-modal"
+import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 
 const COLUMNS: { status: ShootStatus; label: string }[] = [
-  { status: "new_inquiry", label: "New Inquiry" },
-  { status: "contacted", label: "Contacted" },
-  { status: "shoot_scheduled", label: "Shoot Scheduled" },
-  { status: "editing", label: "Editing" },
-  { status: "vault_created", label: "Vault Created" },
-  { status: "sent_finished", label: "Sent / Finished" },
+  { status: "new_inquiry", label: "New Inquiries" },
+  { status: "quoted", label: "Quoted" },
+  { status: "awaiting_retainer", label: "Awaiting Retainer" },
+  { status: "booked_scheduled", label: "Booked & Scheduled" },
+  { status: "pending_balance", label: "Pending Balance" },
+  { status: "fulfilled", label: "Fulfilled" },
 ]
 
 function formatDate(iso: string | null) {
@@ -36,6 +38,7 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
   const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null)
   const [settlingShoot, setSettlingShoot] = useState<Shoot | null>(null)
+  const [generatingVaultShoot, setGeneratingVaultShoot] = useState<Shoot | null>(null)
 
   async function moveCard(id: string, status: ShootStatus) {
     const previous = shoots
@@ -54,8 +57,13 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
     setDraggingId(null)
     if (!shoot) return
 
-    if (status === "sent_finished") {
+    if (status === "fulfilled") {
       setSettlingShoot(shoot)
+      return
+    }
+
+    if (status === "awaiting_retainer") {
+      setGeneratingVaultShoot(shoot)
       return
     }
 
@@ -70,6 +78,11 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
   function handleSettlementFinalized(updated: Shoot) {
     setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
     setSettlingShoot(null)
+  }
+
+  function handleVaultGenerated(updated: Shoot) {
+    setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
+    setGeneratingVaultShoot(null)
   }
 
   return (
@@ -106,13 +119,17 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
               ) : (
                 <div className="flex flex-col gap-2">
                   {columnShoots.map((shoot) => (
-                    <button
+                    <div
                       key={shoot.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       draggable
                       onDragStart={() => setDraggingId(shoot.id)}
                       onDragEnd={() => setDraggingId(null)}
                       onClick={() => setSelectedShoot(shoot)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") setSelectedShoot(shoot)
+                      }}
                       className={
                         "group flex cursor-grab flex-col gap-1.5 rounded-md border border-border bg-card p-2.5 text-left shadow-sm active:cursor-grabbing " +
                         (draggingId === shoot.id ? "opacity-50" : "")
@@ -156,7 +173,22 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
                         basePrice={Number(shoot.base_price)}
                         travelFee={Number(shoot.travel_fee)}
                       />
-                    </button>
+
+                      {column.status === "quoted" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="mt-1 h-7 w-full text-[0.7rem]"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setGeneratingVaultShoot(shoot)
+                          }}
+                        >
+                          Generate Vault & Send Link
+                        </Button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -175,6 +207,12 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
         shoot={settlingShoot}
         onOpenChange={(open) => !open && setSettlingShoot(null)}
         onFinalized={handleSettlementFinalized}
+      />
+
+      <GenerateVaultModal
+        shoot={generatingVaultShoot}
+        onOpenChange={(open) => !open && setGeneratingVaultShoot(null)}
+        onGenerated={handleVaultGenerated}
       />
     </>
   )

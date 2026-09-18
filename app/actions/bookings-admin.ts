@@ -117,7 +117,7 @@ export async function approveBooking(id: string) {
     )
     VALUES (
       ${clientName}, ${booking.email}, ${booking.phone}, ${booking.subject ?? booking.package ?? "Shoot"},
-      ${shootDate}, ${booking.location}, ${booking.brief}, ${vaultAccessCode}, 'shoot_scheduled', ${packagePrice}
+      ${shootDate}, ${booking.location}, ${booking.brief}, ${vaultAccessCode}, 'booked_scheduled', ${packagePrice}
     )
     RETURNING id
   `
