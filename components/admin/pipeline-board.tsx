@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Calendar, KeyRound, User } from "lucide-react"
 import { toast } from "sonner"
 
@@ -34,12 +34,19 @@ const VAULT_STATUS_STYLES: Record<string, string> = {
 }
 
 export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
-  const [shoots, setShoots] = useState(() => [...initialShoots, createMockTestLead()])
+  const [shoots, setShoots] = useState<Shoot[]>(initialShoots)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
   const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null)
   const [settlingShoot, setSettlingShoot] = useState<Shoot | null>(null)
   const [generatingVaultShoot, setGeneratingVaultShoot] = useState<Shoot | null>(null)
+
+  // Add the demo lead only after mount so the server-rendered markup and the
+  // initial client render match exactly (its date is computed from `new Date()`,
+  // which would otherwise differ between the SSR pass and hydration).
+  useEffect(() => {
+    setShoots((current) => (current.some((s) => isMockShoot(s.id)) ? current : [...current, createMockTestLead()]))
+  }, [])
 
   async function moveCard(id: string, status: ShootStatus) {
     const previous = shoots
