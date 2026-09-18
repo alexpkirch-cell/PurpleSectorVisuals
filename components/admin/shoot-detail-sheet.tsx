@@ -1,7 +1,19 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Baby, Check, Copy, FileSignature, KeyRound, Mail, Phone, Wallet } from "lucide-react"
+import {
+  Baby,
+  Check,
+  Copy,
+  FileSignature,
+  KeyRound,
+  Mail,
+  MoreVertical,
+  Phone,
+  Trash2,
+  Wallet,
+  XCircle,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +30,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { moveShootStage, updateShoot, type Shoot } from "@/app/actions/shoots"
 import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
@@ -78,10 +96,14 @@ export function ShootDetailSheet({
   shoot,
   onOpenChange,
   onUpdated,
+  onDeclined,
+  onDeleteRequested,
 }: {
   shoot: Shoot | null
   onOpenChange: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
+  onDeclined?: (shoot: Shoot) => void
+  onDeleteRequested?: (shoot: Shoot) => void
 }) {
   const [basePrice, setBasePrice] = useState("0")
   const [travelFee, setTravelFee] = useState("0")
@@ -197,11 +219,42 @@ export function ShootDetailSheet({
       <SheetContent className="flex w-full flex-col gap-6 overflow-y-auto sm:max-w-lg">
         {shoot && (
           <>
-            <SheetHeader>
-              <SheetTitle>{shoot.client_name}</SheetTitle>
-              <SheetDescription>
-                {shoot.shoot_type} &middot; {shoot.client_email}
-              </SheetDescription>
+            <SheetHeader className="flex-row items-start justify-between gap-2 pr-10">
+              <div>
+                <SheetTitle>{shoot.client_name}</SheetTitle>
+                <SheetDescription>
+                  {shoot.shoot_type} &middot; {shoot.client_email}
+                </SheetDescription>
+              </div>
+              {(onDeclined || onDeleteRequested) && shoot.status !== "declined" && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label={`Actions for ${shoot.client_name}`}
+                        className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      />
+                    }
+                  >
+                    <MoreVertical className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {onDeclined && (
+                      <DropdownMenuItem onSelect={() => onDeclined(shoot)}>
+                        <XCircle className="size-3.5" />
+                        Decline
+                      </DropdownMenuItem>
+                    )}
+                    {onDeleteRequested && (
+                      <DropdownMenuItem variant="destructive" onSelect={() => onDeleteRequested(shoot)}>
+                        <Trash2 className="size-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </SheetHeader>
 
             {isNewInquiry ? (

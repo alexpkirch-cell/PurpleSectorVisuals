@@ -13,6 +13,7 @@ export type ShootStatus =
   | "booked_scheduled"
   | "pending_balance"
   | "fulfilled"
+  | "declined"
 
 export interface SettlementItem {
   label: string
@@ -348,6 +349,35 @@ export async function finalizeSettlement(
 
   const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
   return rows[0]
+}
+
+/**
+ * Declines a lead/shoot. Moves it to the hidden "declined" state, which has
+ * no column on the pipeline board, so it disappears from the active CRM view
+ * without deleting any history.
+ */
+export async function declineShoot(id: string) {
+  await requireAdmin()
+
+  await sql`UPDATE shoots SET status = 'declined' WHERE id = ${id}`
+
+  revalidatePath("/admin")
+}
+
+/**
+ * Permanently deletes a shoot and its dependent records. `vaults` and
+ * `booking_requests` don't cascade on `shoots` deletion, so their references
+ * are cleared first (vault + contracts are removed, the originating booking
+ * request is detached but kept for history).
+ */
+export async function deleteShoot(id: string) {
+  await requireAdmin()
+
+  await sql`UPDATE booking_requests SET shoot_id = NULL WHERE shoot_id = ${id}`
+  await sql`DELETE FROM vaults WHERE shoot_id = ${id}`
+  await sql`DELETE FROM shoots WHERE id = ${id}`
+
+  revalidatePath("/admin")
 }
 
 export async function addShootPhoto(shootId: string, url: string, isSneakPeek: boolean) {

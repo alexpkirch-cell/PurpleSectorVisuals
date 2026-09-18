@@ -247,57 +247,62 @@ function PhotoTile({
     >
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and not worth Next Image optimization
-        <img src={url} alt={fileName} className="block w-full object-cover" crossOrigin="anonymous" />
+        <img
+          src={url}
+          alt={fileName}
+          className="block w-full object-cover transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
+          crossOrigin="anonymous"
+        />
       ) : (
         <div className="aspect-[4/5] w-full animate-pulse bg-muted" />
       )}
 
-      <button
-        type="button"
-        onClick={onToggleFavorite}
-        aria-pressed={favorited}
-        aria-label={favorited ? `Remove ${fileName} from favorites` : `Favorite ${fileName}`}
-        className={cn(
-          "absolute top-1.5 left-1.5 flex size-7 items-center justify-center rounded-full backdrop-blur-sm transition-opacity",
-          favorited
-            ? "bg-primary text-primary-foreground opacity-100"
-            : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100"
-        )}
-      >
-        <Star className={cn("size-3.5", favorited && "fill-current")} />
-      </button>
+      {selected && (
+        <div className="absolute top-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-primary px-2 py-1 text-[0.65rem] font-medium text-primary-foreground">
+          <Check className="size-3" />
+          Selected
+        </div>
+      )}
 
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={!url}
-        aria-label={`Download ${fileName}`}
-        className="absolute top-1.5 right-1.5 flex size-7 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
-      >
-        <Download className="size-3.5" />
-      </button>
+      <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-focus-within:opacity-100">
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          aria-pressed={favorited}
+          aria-label={favorited ? `Remove ${fileName} from favorites` : `Favorite ${fileName}`}
+          className={cn(
+            "flex size-9 items-center justify-center rounded-full backdrop-blur-sm transition-colors",
+            favorited ? "bg-primary text-primary-foreground" : "bg-background/90 text-foreground hover:bg-background"
+          )}
+        >
+          <Star className={cn("size-4", favorited && "fill-current")} />
+        </button>
 
-      <button
-        type="button"
-        onClick={onToggleSelect}
-        aria-pressed={selected}
-        aria-label={selected ? `Remove ${fileName} from print selection` : `Select ${fileName} for print`}
-        className={cn(
-          "absolute inset-x-1.5 bottom-1.5 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium backdrop-blur-sm transition-opacity",
-          selected
-            ? "bg-primary text-primary-foreground opacity-100"
-            : "bg-background/80 text-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
-        )}
-      >
-        {selected ? (
-          <>
-            <Check className="size-3.5" />
-            Selected
-          </>
-        ) : (
-          "Select for Print"
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={!url}
+          aria-label={`Download ${fileName}`}
+          className="flex size-9 items-center justify-center rounded-full bg-background/90 text-foreground backdrop-blur-sm transition-colors hover:bg-background"
+        >
+          <Download className="size-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          aria-pressed={selected}
+          aria-label={selected ? `Remove ${fileName} from print selection` : `Select ${fileName} for print`}
+          className={cn(
+            "flex size-9 items-center justify-center rounded-full backdrop-blur-sm transition-colors",
+            selected
+              ? "bg-primary text-primary-foreground"
+              : "bg-background/90 text-foreground hover:bg-background"
+          )}
+        >
+          {selected ? <Check className="size-4" /> : <ImageIcon className="size-4" />}
+        </button>
+      </div>
     </div>
   )
 }

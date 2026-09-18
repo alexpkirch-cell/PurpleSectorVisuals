@@ -10,6 +10,8 @@ interface ImageSlotProps {
   glow?: boolean
   compact?: boolean
   className?: string
+  /** Extra classes applied directly to the underlying next/image tag (e.g. hover transitions). */
+  imageClassName?: string
   /** Registry key this slot is bound to. Enables the admin asset override. */
   slotKey?: string
   /** Full overrides map (slot_key -> public URL), fetched once per page. */
@@ -25,6 +27,7 @@ export function ImageSlot({
   glow = false,
   compact = false,
   className,
+  imageClassName,
   slotKey,
   overrides,
   imageUrl,
@@ -41,7 +44,7 @@ export function ImageSlot({
           alt={imageAlt ?? label ?? "Site asset"}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
-          className="object-cover"
+          className={cn("object-cover", imageClassName)}
         />
       </div>
     )
