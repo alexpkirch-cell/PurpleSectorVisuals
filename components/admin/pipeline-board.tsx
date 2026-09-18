@@ -24,7 +24,7 @@ const COLUMNS: { status: ShootStatus; label: string }[] = [
 
 function formatDate(iso: string | null) {
   if (!iso) return null
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
 }
 
 const VAULT_STATUS_STYLES: Record<string, string> = {

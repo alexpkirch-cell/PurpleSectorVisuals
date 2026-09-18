@@ -42,7 +42,7 @@ export default async function AdminGalleryDetailPage({
           <h1 className="font-heading text-2xl font-medium text-foreground">{gallery.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {gallery.client_name ? `${gallery.client_name} · ` : ""}
-            Created {new Date(gallery.created_at).toLocaleDateString()}
+            Created {new Date(gallery.created_at).toLocaleDateString("en-US", { timeZone: "UTC" })}
           </p>
         </div>
         <UsbStatusSelect galleryId={gallery.id} status={gallery.usb_status as UsbStatus} />

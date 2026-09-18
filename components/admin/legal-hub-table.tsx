@@ -7,7 +7,14 @@ function formatDate(value: string | null) {
   if (!value) return "Unsigned"
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+  })
 }
 
 export function LegalHubTable({ contracts }: { contracts: SignedContract[] }) {

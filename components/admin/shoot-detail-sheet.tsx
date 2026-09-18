@@ -29,7 +29,7 @@ function formatCurrency(value: number) {
 
 function formatDate(iso: string | null) {
   if (!iso) return "Not set"
-  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
 }
 
 const ROLE_LABELS: Record<LedgerEntry["role"], string> = {
