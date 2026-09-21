@@ -1,35 +1,17 @@
 import Image from "next/image"
 import { Aperture, Camera } from "lucide-react"
 
-interface TeamMember {
-  key: "alex" | "gabe"
-  name: string
-  title: string
-  bio: string
-  photo: string
-  icon: typeof Camera
-}
+import { getPublicTeamMembers } from "@/app/actions/team"
 
-const team: TeamMember[] = [
-  {
-    key: "alex",
-    name: "Alex",
-    title: "Founder / Lead Sports Photographer",
-    bio: "High-reach telephoto specialist chasing the decisive moment — AF-C burst tracking for sports, motorsport, and kinetic action across every discipline PSV shoots.",
-    photo: "/images/alex-portrait.png",
-    icon: Camera,
-  },
-  {
-    key: "gabe",
-    name: "Gabe",
-    title: "Founder / Lead Portrait & Atmosphere Photographer",
-    bio: "Wide-aperture storyteller working in low light — portraits, street, and paddock atmosphere rendered with tonal depth and a documentary eye.",
-    photo: "/images/gabe-portrait.png",
-    icon: Aperture,
-  },
-]
+const ICONS = [Camera, Aperture]
 
-export function MeetTheTeam() {
+export async function MeetTheTeam() {
+  const team = await getPublicTeamMembers()
+
+  if (team.length === 0) {
+    return null
+  }
+
   return (
     <section className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:px-10">
@@ -43,16 +25,16 @@ export function MeetTheTeam() {
         </div>
 
         <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {team.map((member) => {
-            const Icon = member.icon
+          {team.map((member, index) => {
+            const Icon = ICONS[index % ICONS.length]
             return (
               <div
-                key={member.key}
+                key={member.id}
                 className="group relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 backdrop-blur-md transition-all duration-500 ease-out hover:border-primary hover:shadow-[0_0_32px_rgba(232,41,241,0.22)]"
               >
                 <div className="relative aspect-4/5 w-full overflow-hidden sm:aspect-16/10">
                   <Image
-                    src={member.photo || "/placeholder.svg"}
+                    src={member.photo_url || "/placeholder.svg"}
                     alt={`Portrait of ${member.name}, ${member.title}`}
                     fill
                     sizes="(max-width: 768px) 100vw, 50vw"
