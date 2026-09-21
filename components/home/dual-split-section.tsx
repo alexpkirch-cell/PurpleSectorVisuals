@@ -43,7 +43,7 @@ export function DualSplitSection({
   const [hovered, setHovered] = useState<Side>(null)
 
   return (
-    <section className="w-full bg-[#09090b]">
+    <section id="team" className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 pb-6 pt-24 sm:px-10">
         <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
           Two Perspectives, One Studio

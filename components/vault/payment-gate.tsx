@@ -4,9 +4,11 @@ import { useState } from "react"
 import Image from "next/image"
 import { CreditCard, Loader2 } from "lucide-react"
 
+import { createCheckoutSession } from "@/app/actions/stripe"
+
 interface PaymentGateProps {
+  shootId: string
   balanceAmount: number
-  onCheckout?: () => void | Promise<void>
   backgroundImageSrc?: string
 }
 
@@ -14,14 +16,23 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
 }
 
-export function PaymentGate({ balanceAmount, onCheckout, backgroundImageSrc = "/placeholders/2.jpg" }: PaymentGateProps) {
+export function PaymentGate({ shootId, balanceAmount, backgroundImageSrc = "/placeholders/2.jpg" }: PaymentGateProps) {
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function handleCheckout() {
+    setError(null)
     setIsRedirecting(true)
     try {
-      await onCheckout?.()
-    } finally {
+      const result = await createCheckoutSession(shootId, "final_balance")
+      if (!result.success) {
+        setError(result.error)
+        setIsRedirecting(false)
+        return
+      }
+      window.location.href = result.url
+    } catch {
+      setError("Could not start checkout. Please try again.")
       setIsRedirecting(false)
     }
   }
@@ -65,6 +76,8 @@ export function PaymentGate({ balanceAmount, onCheckout, backgroundImageSrc = "/
             )}
             {isRedirecting ? "Redirecting…" : "Complete Payment & Unlock Gallery"}
           </button>
+
+          {error && <p className="mt-4 text-center text-sm text-red-400">{error}</p>}
         </div>
       </div>
     </div>
