@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { Mail, Phone } from "lucide-react"
+import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,40 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+interface ActivityEntry {
+  label: string
+  timestamp: string | null
+}
+
+function formatTimestamp(iso: string | null) {
+  if (!iso) return "Pending"
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
+function buildActivityFeed(shoot: Shoot): ActivityEntry[] {
+  const entries: ActivityEntry[] = [{ label: "Inquiry received", timestamp: shoot.created_at }]
+
+  if (shoot.status !== "new_inquiry") {
+    entries.push({ label: "Retainer link sent", timestamp: shoot.created_at })
+  }
+  if (shoot.vault_contract_signed) {
+    entries.push({ label: "Contract signed", timestamp: shoot.created_at })
+  }
+  if (shoot.vault_deposit_paid) {
+    entries.push({ label: `Retainer paid (${shoot.vault_deposit_amount ? formatCurrency(Number(shoot.vault_deposit_amount)) : ""})`, timestamp: shoot.created_at })
+  }
+  if (shoot.vault_balance_paid) {
+    entries.push({ label: "Final balance paid", timestamp: shoot.created_at })
+  }
+  if (shoot.status === "fulfilled") {
+    entries.push({ label: "Shoot fulfilled", timestamp: shoot.created_at })
+  }
+
+  return entries
+}
+
+const SLA_ITEMS = ["RAWs Backed Up", "Culled", "Color Graded", "Uploaded to Vault"] as const
+
 export function ClientDetailSheet({
   shoot,
   onOpenChange,
@@ -47,6 +81,7 @@ export function ClientDetailSheet({
   const [shooters, setShooters] = useState<string[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [isFinalizing, setIsFinalizing] = useState(false)
+  const [slaProgress, setSlaProgress] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     if (shoot) {
@@ -86,6 +121,14 @@ export function ClientDetailSheet({
 
   function toggleTeamMember(list: string[], setList: (v: string[]) => void, name: string) {
     setList(list.includes(name) ? list.filter((n) => n !== name) : [...list, name])
+  }
+
+  function toggleSlaItem(item: string) {
+    setSlaProgress((current) => {
+      const next = { ...current, [item]: !current[item] }
+      console.log("[v0] post-production SLA updated", next)
+      return next
+    })
   }
 
   async function handleFinalize() {
@@ -170,6 +213,24 @@ export function ClientDetailSheet({
                     {shoot.notes || "No message left with the inquiry."}
                   </p>
                 </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-zinc-500">Activity feed</span>
+                  <ul className="flex flex-col gap-1.5 rounded-md bg-white/5 p-2">
+                    {buildActivityFeed(shoot).map((entry, index) => (
+                      <li key={`${entry.label}-${index}`} className="flex items-center gap-2 text-xs text-zinc-400">
+                        {index === buildActivityFeed(shoot).length - 1 ? (
+                          <Send className="size-3 shrink-0 text-[#9D00FF]" />
+                        ) : (
+                          <CheckCircle2 className="size-3 shrink-0 text-zinc-600" />
+                        )}
+                        <span className="text-zinc-300">{entry.label}</span>
+                        <span className="ml-auto text-zinc-600">{formatTimestamp(entry.timestamp)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="adminNotes" className="text-zinc-300">
                     Admin communication notes
@@ -325,7 +386,23 @@ export function ClientDetailSheet({
                 </div>
               </div>
 
-              {/* Section 4: Finalize */}
+              {/* Section 4: Post-production SLA */}
+              <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3">
+                <span className="text-xs font-medium text-zinc-300">Post-production SLA</span>
+                <div className="flex flex-col gap-2">
+                  {SLA_ITEMS.map((item) => (
+                    <label
+                      key={item}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-zinc-300"
+                    >
+                      <Checkbox checked={!!slaProgress[item]} onCheckedChange={() => toggleSlaItem(item)} />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Section 5: Finalize */}
               <Button
                 type="button"
                 onClick={handleFinalize}
