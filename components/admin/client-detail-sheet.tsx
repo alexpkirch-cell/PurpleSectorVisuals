@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react"
 import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+ import { Badge } from "@/components/ui/badge"
+ import { Button } from "@/components/ui/button"
+ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -120,6 +121,8 @@ export function ClientDetailSheet({
       setTotalPrice(String(calculatedTotal))
     }
   }, [calculatedTotal, priceTouched])
+
+  const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
 
   function toggleAddon(id: string) {
     setAddonIds((current) => (current.includes(id) ? current.filter((a) => a !== id) : [...current, id]))
@@ -340,9 +343,16 @@ export function ClientDetailSheet({
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="totalPrice" className="text-zinc-300">
-                    Total price
-                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="totalPrice" className="text-zinc-300">
+                      Total price
+                    </Label>
+                    {isPriceOverridden && (
+                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-400">
+                        Override active
+                      </Badge>
+                    )}
+                  </div>
                   <Input
                     id="totalPrice"
                     type="number"
@@ -355,9 +365,23 @@ export function ClientDetailSheet({
                     }}
                     className="border-white/10 bg-black/40 font-medium text-zinc-100"
                   />
-                  <p className="text-[0.65rem] text-zinc-500">
-                    Auto-calculated from package + add-ons. Edit directly to apply a custom discount or charge.
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[0.65rem] text-zinc-500">
+                      Auto-calculated from package + add-ons. Edit directly to apply a custom discount or charge.
+                    </p>
+                    {isPriceOverridden && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPriceTouched(false)
+                          setTotalPrice(String(calculatedTotal))
+                        }}
+                        className="shrink-0 text-[0.65rem] font-medium text-primary hover:underline"
+                      >
+                        Reset to calculated
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
