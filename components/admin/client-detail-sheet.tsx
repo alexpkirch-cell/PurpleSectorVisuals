@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { finalizeBooking, type Shoot } from "@/app/actions/shoots"
 import { isMockShoot } from "@/lib/mock-lead"
-import { ADDON_OPTIONS, PACKAGE_PRICES, STUDIO_EDITORS, STUDIO_SHOOTERS, type PackageTier } from "@/lib/booking-config"
+import { STUDIO_EDITORS, STUDIO_SHOOTERS } from "@/lib/booking-config"
+import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -63,10 +64,14 @@ const SLA_ITEMS = ["RAWs Backed Up", "Culled", "Color Graded", "Uploaded to Vaul
 
 export function ClientDetailSheet({
   shoot,
+  bookingTiers,
+  bookingAddons,
   onOpenChange,
   onFinalized,
 }: {
   shoot: Shoot | null
+  bookingTiers: BookingTier[]
+  bookingAddons: BookingAddon[]
   onOpenChange: (open: boolean) => void
   onFinalized: (shoot: Shoot) => void
 }) {
@@ -89,7 +94,7 @@ export function ClientDetailSheet({
       setPackageTier((shoot.package_tier as PackageTier) || "Base")
       setAddonIds(
         (shoot.selected_addons ?? [])
-          .map((item) => ADDON_OPTIONS.find((a) => a.label === item.label)?.id)
+          .map((item) => bookingAddons.find((a) => a.name === item.label)?.id)
           .filter((id): id is string => !!id),
       )
       setConfirmedDate(shoot.shoot_date ? shoot.shoot_date.slice(0, 10) : "")
@@ -103,11 +108,12 @@ export function ClientDetailSheet({
 
   const calculatedTotal = useMemo(() => {
     const addonsTotal = addonIds.reduce((sum, id) => {
-      const addon = ADDON_OPTIONS.find((a) => a.id === id)
-      return sum + (addon?.amount ?? 0)
+      const addon = bookingAddons.find((a) => a.id === id)
+      return sum + (addon?.price ?? 0)
     }, 0)
-    return PACKAGE_PRICES[packageTier] + addonsTotal
-  }, [packageTier, addonIds])
+    const tierPrice = bookingTiers.find((t) => t.tier_key === packageTier)?.price ?? 0
+    return tierPrice + addonsTotal
+  }, [packageTier, addonIds, bookingTiers, bookingAddons])
 
   useEffect(() => {
     if (!priceTouched) {
@@ -136,8 +142,8 @@ export function ClientDetailSheet({
     setIsFinalizing(true)
     try {
       const selectedAddons = addonIds.map((id) => {
-        const addon = ADDON_OPTIONS.find((a) => a.id === id)!
-        return { label: addon.label, amount: addon.amount }
+        const addon = bookingAddons.find((a) => a.id === id)!
+        return { label: addon.name, amount: addon.price }
       })
 
       if (isMockShoot(shoot.id)) {
@@ -253,20 +259,20 @@ export function ClientDetailSheet({
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-zinc-300">Package</Label>
                   <div className="grid grid-cols-2 gap-2">
-                    {(Object.keys(PACKAGE_PRICES) as PackageTier[]).map((tier) => (
+                    {bookingTiers.map((tier) => (
                       <button
-                        key={tier}
+                        key={tier.tier_key}
                         type="button"
-                        onClick={() => setPackageTier(tier)}
+                        onClick={() => setPackageTier(tier.tier_key as PackageTier)}
                         className={
                           "rounded-md border px-3 py-2 text-left text-sm transition-colors " +
-                          (packageTier === tier
+                          (packageTier === tier.tier_key
                             ? "border-[#9D00FF] bg-[#9D00FF]/10 text-zinc-50"
                             : "border-white/10 text-zinc-400 hover:bg-white/5")
                         }
                       >
-                        <span className="block font-medium">{tier}</span>
-                        <span className="text-xs text-zinc-500">{formatCurrency(PACKAGE_PRICES[tier])}</span>
+                        <span className="block font-medium">{tier.tier_key}</span>
+                        <span className="text-xs text-zinc-500">{formatCurrency(tier.price)}</span>
                       </button>
                     ))}
                   </div>
@@ -275,7 +281,7 @@ export function ClientDetailSheet({
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-zinc-300">Add-ons</Label>
                   <div className="flex flex-col gap-2">
-                    {ADDON_OPTIONS.map((addon) => (
+                    {bookingAddons.map((addon) => (
                       <label
                         key={addon.id}
                         className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-zinc-300"
@@ -285,9 +291,9 @@ export function ClientDetailSheet({
                             checked={addonIds.includes(addon.id)}
                             onCheckedChange={() => toggleAddon(addon.id)}
                           />
-                          {addon.label}
+                          {addon.name}
                         </span>
-                        <span className="text-xs text-zinc-500">+{formatCurrency(addon.amount)}</span>
+                        <span className="text-xs text-zinc-500">+{formatCurrency(addon.price)}</span>
                       </label>
                     ))}
                   </div>

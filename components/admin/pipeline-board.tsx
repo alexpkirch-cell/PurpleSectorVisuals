@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { declineShoot, deleteShoot, moveShootStage, type Shoot, type ShootStatus } from "@/app/actions/shoots"
+import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
@@ -52,7 +53,15 @@ const VAULT_STATUS_STYLES: Record<string, string> = {
   Expired: "border-muted-foreground/20 bg-muted text-muted-foreground",
 }
 
-export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
+export function PipelineBoard({
+  initialShoots,
+  bookingTiers,
+  bookingAddons,
+}: {
+  initialShoots: Shoot[]
+  bookingTiers: BookingTier[]
+  bookingAddons: BookingAddon[]
+}) {
   const [shoots, setShoots] = useState<Shoot[]>(initialShoots)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
@@ -300,6 +309,8 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
 
       <ClientDetailSheet
         shoot={selectedShoot?.status === "new_inquiry" ? selectedShoot : null}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
         onOpenChange={(open) => !open && setSelectedShoot(null)}
         onFinalized={handleBookingFinalized}
       />

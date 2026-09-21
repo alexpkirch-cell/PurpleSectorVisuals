@@ -95,6 +95,17 @@ export async function updatePortfolioItem(
   revalidatePath("/")
 }
 
+/** Persists a full drag-and-drop reorder in one pass. `orderedIds` is the new top-to-bottom order. */
+export async function reorderPortfolioItems(orderedIds: string[]): Promise<void> {
+  await requireAdmin()
+
+  await Promise.all(orderedIds.map((id, index) => sql`UPDATE portfolio_items SET sort_order = ${index} WHERE id = ${id}`))
+
+  revalidatePath("/admin/portfolio")
+  revalidatePath("/work")
+  revalidatePath("/")
+}
+
 export async function deletePortfolioItem(id: string, storagePath: string | null): Promise<void> {
   await requireAdmin()
 
