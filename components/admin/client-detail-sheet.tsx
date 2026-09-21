@@ -98,8 +98,14 @@ export function ClientDetailSheet({
           .map((item) => bookingAddons.find((a) => a.name === item.label)?.id)
           .filter((id): id is string => !!id),
       )
-      setConfirmedDate(shoot.shoot_date ? shoot.shoot_date.slice(0, 10) : "")
-      setConfirmedTime(shoot.shoot_date ? shoot.shoot_date.slice(11, 16) : "")
+      const rawShootDate: unknown = shoot.shoot_date
+      const shootDateIso = rawShootDate
+        ? rawShootDate instanceof Date
+          ? rawShootDate.toISOString()
+          : String(rawShootDate)
+        : ""
+      setConfirmedDate(shootDateIso ? shootDateIso.slice(0, 10) : "")
+      setConfirmedTime(shootDateIso ? shootDateIso.slice(11, 16) : "")
       setConfirmedLocation(shoot.location ?? "")
       setShooters(shoot.assigned_shooter ? shoot.assigned_shooter.split(",").map((s) => s.trim()) : [])
       setEditors(shoot.assigned_editor ? shoot.assigned_editor.split(",").map((s) => s.trim()) : [])
