@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { finalizeBooking, type Shoot } from "@/app/actions/shoots"
+import { type Shoot } from "@/app/actions/shoots"
+import { generateVaultAndSendLink } from "@/app/actions/pipeline"
 import { isMockShoot } from "@/lib/mock-lead"
 import { STUDIO_EDITORS, STUDIO_SHOOTERS } from "@/lib/booking-config"
 import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
@@ -146,7 +147,7 @@ export function ClientDetailSheet({
     })
   }
 
-  async function handleFinalize() {
+  async function handleGenerateVaultAndSendLink() {
     if (!shoot) return
     setIsFinalizing(true)
     try {
@@ -160,7 +161,7 @@ export function ClientDetailSheet({
         return
       }
 
-      const updated = await finalizeBooking(shoot.id, {
+      const { shoot: updated, pinCode } = await generateVaultAndSendLink(shoot.id, {
         adminNotes: adminNotes || null,
         packageTier,
         selectedAddons,
@@ -171,10 +172,10 @@ export function ClientDetailSheet({
         assignedShooters: shooters,
         assignedEditors: editors,
       })
-      toast.success(`${shoot.client_name} booked — vault generated and retainer request sent`)
+      toast.success(`${shoot.client_name} moved to Awaiting Retainer — vault PIN ${pinCode} sent`)
       onFinalized(updated)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to finalize booking")
+      toast.error(error instanceof Error ? error.message : "Failed to generate vault")
     } finally {
       setIsFinalizing(false)
     }
@@ -441,11 +442,11 @@ export function ClientDetailSheet({
               {/* Section 5: Finalize */}
               <Button
                 type="button"
-                onClick={handleFinalize}
+                onClick={handleGenerateVaultAndSendLink}
                 disabled={isFinalizing}
                 className="bg-[#9D00FF] text-zinc-50 hover:bg-[#9D00FF]/90"
               >
-                {isFinalizing ? "Finalizing…" : "Finalize Booking & Generate Vault"}
+                {isFinalizing ? "Generating…" : "Generate Vault & Send Link"}
               </Button>
             </div>
           </>

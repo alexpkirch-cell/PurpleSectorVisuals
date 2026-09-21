@@ -3,7 +3,6 @@
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  Boxes,
   CalendarCheck,
   FileSignature,
   GalleryVerticalEnd,
@@ -22,13 +21,11 @@ const links = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/admin/galleries", label: "Vaults", icon: Images },
-  { href: "/admin/portfolio", label: "Portfolio", icon: GalleryVerticalEnd },
+  { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/financials", label: "Financials & Ledger", icon: Wallet },
   { href: "/admin/legal", label: "Legal Hub", icon: FileSignature },
   { href: "/admin/team", label: "Team Profiles", icon: Users },
-  { href: "/admin/gear", label: "Asset Manager", icon: Boxes },
-  { href: "/admin/assets", label: "Site Assets", icon: LayoutGrid },
 ]
 
 export function AdminSidebar({ displayName }: { displayName: string }) {
