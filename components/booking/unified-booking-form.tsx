@@ -2,11 +2,9 @@
 
 import { useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Camera, Check, Copy, KeyRound } from "lucide-react"
-import Link from "next/link"
+import { Camera } from "lucide-react"
 
-import { Button, buttonVariants } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -36,14 +34,13 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<{ vaultAccessCode: string } | null>(null)
+  const [submitted, setSubmitted] = useState(false)
   const [shootType, setShootType] = useState(() => {
     if (preselectedTier && packages.some((p) => p.title === preselectedTier)) {
       return preselectedTier
     }
     return ""
   })
-  const [copied, setCopied] = useState(false)
 
   // Always render categories in the fixed studio order, cheapest package
   // first within each category.
@@ -62,7 +59,7 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
     setError(null)
     setIsSubmitting(true)
     try {
-      const response = await createShootInquiry({
+      await createShootInquiry({
         clientName: String(formData.get("clientName") ?? ""),
         clientEmail: String(formData.get("clientEmail") ?? ""),
         clientPhone: String(formData.get("clientPhone") ?? ""),
@@ -71,7 +68,7 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
         location: String(formData.get("location") ?? ""),
         notes: String(formData.get("notes") ?? ""),
       })
-      setResult(response)
+      setSubmitted(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.")
     } finally {
@@ -79,40 +76,19 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
     }
   }
 
-  async function copyCode() {
-    if (!result) return
-    await navigator.clipboard.writeText(result.vaultAccessCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-
-  if (result) {
+  if (submitted) {
     return (
       <div className="flex flex-col items-center gap-6 rounded-xl border border-border bg-card p-8 text-center">
-        <div className="flex size-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <div className="flex size-14 items-center justify-center rounded-full bg-[#9D00FF]/10 text-[#9D00FF]">
           <Camera className="size-6" />
         </div>
         <div className="flex flex-col gap-2">
           <h2 className="font-heading text-xl font-semibold text-foreground">Inquiry received</h2>
-          <p className="text-sm text-muted-foreground">
-            We&apos;ll follow up shortly to confirm details. Save your vault access code below &mdash;
-            you&apos;ll use it with your email to check on your shoot and download photos later.
+          <p className="max-w-sm text-sm text-muted-foreground">
+            We are reviewing your details and will reach out shortly to finalize your package and send your
+            Vault Access Code.
           </p>
         </div>
-
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-accent/30 px-4 py-3">
-          <span className="font-mono text-lg font-semibold tracking-wider text-foreground">
-            {result.vaultAccessCode}
-          </span>
-          <Button type="button" variant="ghost" size="icon" onClick={copyCode} aria-label="Copy vault code">
-            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
-          </Button>
-        </div>
-
-        <Link href="/shoot-vault" className={cn(buttonVariants(), "w-full")}>
-          <KeyRound data-icon="inline-start" />
-          Go to your vault
-        </Link>
       </div>
     )
   }

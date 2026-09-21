@@ -36,6 +36,9 @@ export interface Shoot {
   travel_fee: string
   is_paid: boolean
   notes: string | null
+  admin_notes: string | null
+  package_tier: string | null
+  selected_addons: SettlementItem[] | null
   vault_access_code: string
   created_at: string
   final_amount: string | null
@@ -348,6 +351,123 @@ export async function finalizeSettlement(
   revalidatePath("/admin/financials")
 
   const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
+  return rows[0]
+}
+
+/**
+ * Finalizes the Admin Client Detail Sheet's intake form for a "New Inquiry"
+ * lead: persists the CRM fields (admin notes, package/add-on selection,
+ * confirmed logistics, team assignment, and any manual price override),
+ * generates the client vault with a 20%/80% deposit split, and advances the
+ * shoot to Awaiting Retainer. Sending the retainer email + Stripe link is
+ * stubbed to a console log until email/Stripe delivery is wired up.
+ */
+export async function finalizeBooking(
+  id: string,
+  input: {
+    adminNotes: string | null
+    packageTier: "Base" | "Standard"
+    selectedAddons: SettlementItem[]
+    confirmedDate: string | null
+    confirmedTime: string | null
+    confirmedLocation: string | null
+    totalPrice: number
+    assignedShooters: string[]
+    assignedEditors: string[]
+  },
+): Promise<Shoot> {
+  await requireAdmin()
+
+  if (!Number.isFinite(input.totalPrice) || input.totalPrice <= 0) {
+    throw new Error("Enter a valid total price before finalizing the booking")
+  }
+
+  const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
+  const shoot = shootRows[0]
+  if (!shoot) {
+    throw new Error("Shoot not found")
+  }
+
+  const shootDate =
+    input.confirmedDate ? `${input.confirmedDate}T${input.confirmedTime || "00:00"}:00` : shoot.shoot_date
+
+  await sql`
+    UPDATE shoots SET
+      admin_notes = ${input.adminNotes},
+      package_tier = ${input.packageTier},
+      selected_addons = ${JSON.stringify(input.selectedAddons)},
+      location = COALESCE(${input.confirmedLocation}, location),
+      shoot_date = ${shootDate},
+      base_price = ${input.totalPrice},
+      travel_fee = 0,
+      assigned_shooter = ${input.assignedShooters.join(", ") || null},
+      assigned_editor = ${input.assignedEditors.join(", ") || null},
+      status = 'awaiting_retainer'
+    WHERE id = ${id}
+  `
+
+  const depositAmount = Math.round(input.totalPrice * 0.2 * 100) / 100
+  const balanceAmount = Math.round((input.totalPrice - depositAmount) * 100) / 100
+
+  const { rows: existingVaultRows } = await sql<{ id: string }>`
+    SELECT id FROM vaults WHERE shoot_id = ${id}
+  `
+
+  let pinCode = ""
+  if (existingVaultRows.length > 0) {
+    await sql`
+      UPDATE vaults SET
+        deposit_amount = ${depositAmount},
+        balance_amount = ${balanceAmount},
+        final_quoted_fee = ${input.totalPrice},
+        shoot_date = COALESCE(${shootDate}, shoot_date)
+      WHERE shoot_id = ${id}
+    `
+    const { rows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
+    pinCode = rows[0].pin_code
+  } else {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      pinCode = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join("")
+      const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pinCode}`
+      if (rows.length === 0) break
+    }
+
+    await sql`
+      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
+      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${input.totalPrice}, ${shootDate})
+    `
+  }
+
+  // TODO: wire up real delivery once email + Stripe are connected.
+  console.log("[v0] Sending confirmation email to", shoot.client_email, {
+    vaultAccessCode: shoot.vault_access_code,
+    vaultPin: pinCode,
+    depositAmount,
+    stripeRetainerLink: `https://checkout.stripe.com/pay/retainer_${id}`,
+  })
+
+  revalidatePath("/admin")
+
+  const { rows } = await sql<Shoot>`
+    SELECT
+      s.*,
+      v.pin_code AS vault_pin,
+      v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed,
+      v.deposit_paid AS vault_deposit_paid,
+      v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid,
+      v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at,
+      v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name,
+      v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone,
+      v.guardian_email AS vault_guardian_email
+    FROM shoots s
+    LEFT JOIN vaults v ON v.shoot_id = s.id
+    WHERE s.id = ${id}
+  `
   return rows[0]
 }
 

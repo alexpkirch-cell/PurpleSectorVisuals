@@ -25,6 +25,7 @@ import {
 import { declineShoot, deleteShoot, moveShootStage, type Shoot, type ShootStatus } from "@/app/actions/shoots"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
+import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
 import { SettlementModal } from "@/components/admin/settlement-modal"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 import { createMockTestLead, isMockShoot } from "@/lib/mock-lead"
@@ -105,6 +106,11 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
   function handleShootUpdated(updated: Shoot) {
     setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
     setSelectedShoot(updated)
+  }
+
+  function handleBookingFinalized(updated: Shoot) {
+    setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
+    setSelectedShoot(null)
   }
 
   function handleSettlementFinalized(updated: Shoot) {
@@ -290,8 +296,14 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
         })}
       </div>
 
+      <ClientDetailSheet
+        shoot={selectedShoot?.status === "new_inquiry" ? selectedShoot : null}
+        onOpenChange={(open) => !open && setSelectedShoot(null)}
+        onFinalized={handleBookingFinalized}
+      />
+
       <ShootDetailSheet
-        shoot={selectedShoot}
+        shoot={selectedShoot?.status === "new_inquiry" ? null : selectedShoot}
         onOpenChange={(open) => !open && setSelectedShoot(null)}
         onUpdated={handleShootUpdated}
         onDeclined={handleDecline}
