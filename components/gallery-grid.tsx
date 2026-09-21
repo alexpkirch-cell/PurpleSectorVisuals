@@ -3,34 +3,31 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { useMemo } from "react"
 
-import { ImageSlot } from "@/components/image-slot"
-import { galleryItems, type Discipline } from "@/lib/site-data"
-import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
+import type { PortfolioCategory, PortfolioItem } from "@/app/actions/portfolio"
 import { cn } from "@/lib/utils"
 
-const filters: (Discipline | "All")[] = [
-  "All",
-  "Portraits",
-  "Sports",
-  "Automotive",
-  "Events",
-]
+type Discipline = "Portraits" | "Sports" | "Automotive" | "Events"
 
-export function GalleryGrid({
-  overrides,
-}: {
-  overrides?: SiteSlotOverrides
-}) {
+const CATEGORY_TO_DISCIPLINE: Record<PortfolioCategory, Discipline> = {
+  portraits: "Portraits",
+  athletics: "Sports",
+  automotive: "Automotive",
+  events: "Events",
+}
+
+const filters: (Discipline | "All")[] = ["All", "Portraits", "Sports", "Automotive", "Events"]
+
+export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
 
   const active = (searchParams.get("category") as Discipline | null) ?? "All"
 
-  const items = useMemo(() => {
-    if (active === "All") return galleryItems
-    return galleryItems.filter((item) => item.category === active)
-  }, [active])
+  const filtered = useMemo(() => {
+    if (active === "All") return items
+    return items.filter((item) => CATEGORY_TO_DISCIPLINE[item.category] === active)
+  }, [items, active])
 
   function setFilter(value: Discipline | "All") {
     const params = new URLSearchParams(searchParams.toString())
@@ -64,7 +61,7 @@ export function GalleryGrid({
       </div>
 
       <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {items.map((item, i) => (
+        {filtered.map((item, i) => (
           <div
             key={item.id}
             className={cn(
@@ -74,32 +71,25 @@ export function GalleryGrid({
                 : "aspect-[3/4]"
             )}
           >
-            <ImageSlot
-              aspect={item.aspect}
-              label=""
-              className="border-none"
-              imageClassName="transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
-              slotKey={`gallery.${item.id}`}
-              overrides={overrides}
+            {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are served from the public portfolio-images bucket */}
+            <img
+              src={item.image_url || "/placeholder.svg"}
+              alt={item.title}
+              crossOrigin="anonymous"
+              className="size-full object-cover transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
               <div className="px-4 text-center">
-                <p className="text-sm font-medium text-foreground">
-                  {item.title}
-                </p>
-                <p className="text-xs text-zinc-300">
-                  {item.category} &middot; {item.creator}
-                </p>
+                <p className="text-sm font-medium text-foreground">{item.title}</p>
+                <p className="text-xs text-zinc-300">{CATEGORY_TO_DISCIPLINE[item.category]}</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {items.length === 0 ? (
-        <p className="mt-16 text-center text-sm text-zinc-500">
-          No work in this category yet.
-        </p>
+      {filtered.length === 0 ? (
+        <p className="mt-16 text-center text-sm text-zinc-500">No work in this category yet.</p>
       ) : null}
     </div>
   )

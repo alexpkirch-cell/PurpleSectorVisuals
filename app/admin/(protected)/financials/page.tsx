@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
-import { getFinancialsSummary, getRevenueByPackage, listLedgerSummary } from "@/app/actions/ledger"
+import { getFinancialsSummary, getFundBuckets, getRevenueByPackage, listExpenses, listLedgerSummary } from "@/app/actions/ledger"
+import { FinancialLedger } from "@/components/admin/financial-ledger"
 import { LedgerTable } from "@/components/admin/ledger-table"
 import { RevenueChart } from "@/components/admin/revenue-chart"
 
@@ -14,10 +15,12 @@ function formatCurrency(value: number) {
 }
 
 export default async function FinancialsPage() {
-  const [summary, revenueByPackage, ledgerRows] = await Promise.all([
+  const [summary, revenueByPackage, ledgerRows, buckets, expenses] = await Promise.all([
     getFinancialsSummary(),
     getRevenueByPackage(),
     listLedgerSummary(),
+    getFundBuckets(),
+    listExpenses(),
   ])
 
   const cards = [
@@ -55,6 +58,14 @@ export default async function FinancialsPage() {
       <div>
         <h2 className="mb-3 font-heading text-sm font-medium text-foreground">Settlement Ledger</h2>
         <LedgerTable initialEntries={ledgerRows} />
+      </div>
+
+      <div>
+        <h2 className="mb-3 font-heading text-sm font-medium text-foreground">Business Expenses</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Log spend against the 60/30/10 split&apos;s three funds and see what&apos;s still available in each.
+        </p>
+        <FinancialLedger buckets={buckets} initialExpenses={expenses} />
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
-import { listSignedContracts } from "@/app/actions/legal"
+import { listLegalDocuments, listSignedContracts } from "@/app/actions/legal"
+import { LegalDocuments } from "@/components/admin/legal-documents"
 import { LegalHubTable } from "@/components/admin/legal-hub-table"
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminLegalPage() {
-  const contracts = await listSignedContracts()
+  const [contracts, documents] = await Promise.all([listSignedContracts(), listLegalDocuments()])
 
   return (
     <div className="flex flex-col gap-8">
@@ -21,6 +22,14 @@ export default async function AdminLegalPage() {
       </div>
 
       <LegalHubTable contracts={contracts} />
+
+      <div>
+        <h2 className="mb-1 font-heading text-sm font-medium text-foreground">Business Documents</h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Corporate filings, model releases, and contractor W-9s in one secure vault.
+        </p>
+        <LegalDocuments initialDocuments={documents} />
+      </div>
     </div>
   )
 }

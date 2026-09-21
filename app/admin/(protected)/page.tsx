@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server"
 import { StudioCalendar, type CalendarBlock } from "@/components/admin/studio-calendar"
 import { PipelineBoard } from "@/components/admin/pipeline-board"
 import { PrintFulfillmentQueue } from "@/components/admin/print-fulfillment-queue"
+import { ExecutiveDashboard } from "@/components/admin/executive-dashboard"
 import { listShoots } from "@/app/actions/shoots"
 import { listPendingPrintOrders } from "@/app/actions/print-orders"
+import { getExecutiveMetrics } from "@/app/actions/dashboard"
 
 export const metadata: Metadata = {
   title: "Admin | Purple Sector Visuals",
@@ -20,7 +22,7 @@ export default async function AdminOverviewPage() {
   const windowEnd = new Date(today)
   windowEnd.setDate(windowEnd.getDate() + 30)
 
-  const [{ data: calendarBlocks }, shoots, pendingPrintOrders] = await Promise.all([
+  const [{ data: calendarBlocks }, shoots, pendingPrintOrders, metrics] = await Promise.all([
     supabase
       .from("calendar_blocks")
       .select("id, start_date, end_date, type, label")
@@ -29,6 +31,7 @@ export default async function AdminOverviewPage() {
       .order("start_date", { ascending: true }),
     listShoots(),
     listPendingPrintOrders(),
+    getExecutiveMetrics(),
   ])
 
   return (
@@ -40,6 +43,8 @@ export default async function AdminOverviewPage() {
           settlement.
         </p>
       </div>
+
+      <ExecutiveDashboard metrics={metrics} />
 
       <StudioCalendar blocks={(calendarBlocks ?? []) as CalendarBlock[]} />
 
