@@ -11,6 +11,8 @@ export type ShootStatus =
   | "quoted"
   | "awaiting_retainer"
   | "booked_scheduled"
+  | "in_post_production"
+  | "vault_locked"
   | "pending_balance"
   | "fulfilled"
   | "declined"

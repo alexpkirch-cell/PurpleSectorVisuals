@@ -35,6 +35,8 @@ const COLUMNS: { status: ShootStatus; label: string }[] = [
   { status: "quoted", label: "Quoted" },
   { status: "awaiting_retainer", label: "Awaiting Retainer" },
   { status: "booked_scheduled", label: "Booked & Scheduled" },
+  { status: "in_post_production", label: "In Post-Production" },
+  { status: "vault_locked", label: "Vault Locked" },
   { status: "pending_balance", label: "Pending Balance" },
   { status: "fulfilled", label: "Fulfilled" },
 ]

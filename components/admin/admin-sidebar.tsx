@@ -2,7 +2,17 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { CalendarCheck, FileSignature, Images, LayoutGrid, LogOut, Package, Wallet } from "lucide-react"
+import {
+  Boxes,
+  CalendarCheck,
+  FileSignature,
+  Images,
+  LayoutGrid,
+  LogOut,
+  Package,
+  Users,
+  Wallet,
+} from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -14,6 +24,8 @@ const links = [
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/financials", label: "Financials & Ledger", icon: Wallet },
   { href: "/admin/legal", label: "Legal Hub", icon: FileSignature },
+  { href: "/admin/team", label: "Team Profiles", icon: Users },
+  { href: "/admin/gear", label: "Asset Manager", icon: Boxes },
   { href: "/admin/assets", label: "Site Assets", icon: LayoutGrid },
 ]
 
