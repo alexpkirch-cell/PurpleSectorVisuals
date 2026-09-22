@@ -105,11 +105,9 @@ export function ShootDetailSheet({
   onDeclined?: (shoot: Shoot) => void
   onDeleteRequested?: (shoot: Shoot) => void
 }) {
-  const [basePrice, setBasePrice] = useState("0")
-  const [travelFee, setTravelFee] = useState("0")
+  const [totalPrice, setTotalPrice] = useState("0")
   const [assignedShooter, setAssignedShooter] = useState("")
   const [assignedEditor, setAssignedEditor] = useState("")
-  const [isPaid, setIsPaid] = useState(false)
   const [notes, setNotes] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
@@ -119,11 +117,10 @@ export function ShootDetailSheet({
 
   useEffect(() => {
     if (shoot) {
-      setBasePrice(shoot.base_price)
-      setTravelFee(shoot.travel_fee)
+      const contractPrice = Number(shoot.base_price) + Number(shoot.travel_fee)
+      setTotalPrice(contractPrice > 0 ? String(contractPrice) : "0")
       setAssignedShooter(shoot.assigned_shooter ?? "")
       setAssignedEditor(shoot.assigned_editor ?? "")
-      setIsPaid(shoot.is_paid)
       setNotes(shoot.notes ?? "")
       if (shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)) {
         setIsLoadingLedger(true)
@@ -164,21 +161,19 @@ export function ShootDetailSheet({
     try {
       if (!isMockShoot(shoot.id)) {
         await updateShoot(shoot.id, {
-          basePrice: Number(basePrice) || 0,
-          travelFee: Number(travelFee) || 0,
+          basePrice: Number(totalPrice) || 0,
+          travelFee: 0,
           assignedShooter: assignedShooter || null,
           assignedEditor: assignedEditor || null,
-          isPaid,
           notes: notes || null,
         })
       }
       onUpdated({
         ...shoot,
-        base_price: basePrice,
-        travel_fee: travelFee,
+        base_price: totalPrice,
+        travel_fee: "0",
         assigned_shooter: assignedShooter || null,
         assigned_editor: assignedEditor || null,
-        is_paid: isPaid,
         notes: notes || null,
       })
       toast.success("Shoot updated")
@@ -372,36 +367,19 @@ export function ShootDetailSheet({
                 </TabsContent>
 
                 <TabsContent value="finances" className="flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="basePrice">Base price</Label>
-                      <Input
-                        id="basePrice"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={basePrice}
-                        onChange={(e) => setBasePrice(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="travelFee">Travel fee</Label>
-                      <Input
-                        id="travelFee"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={travelFee}
-                        onChange={(e) => setTravelFee(e.target.value)}
-                      />
-                    </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="totalPrice">Total Contract Price</Label>
+                    <Input
+                      id="totalPrice"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={totalPrice}
+                      onChange={(e) => setTotalPrice(e.target.value)}
+                    />
                   </div>
 
-                  <ShootPayoutBadge
-                    basePrice={Number(basePrice) || 0}
-                    travelFee={Number(travelFee) || 0}
-                    defaultOpen
-                  />
+                  <ShootPayoutBadge basePrice={Number(totalPrice) || 0} travelFee={0} defaultOpen />
 
                   {shoot.vault_pin && (
                     <div className="grid grid-cols-2 gap-2">
@@ -415,15 +393,6 @@ export function ShootDetailSheet({
                         paid={!!shoot.vault_balance_paid}
                         amount={shoot.vault_balance_amount}
                       />
-                    </div>
-                  )}
-
-                  {!shoot.vault_pin && (
-                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                      <Label htmlFor="isPaid" className="cursor-pointer">
-                        Payment received (legacy)
-                      </Label>
-                      <Switch id="isPaid" checked={isPaid} onCheckedChange={setIsPaid} />
                     </div>
                   )}
 

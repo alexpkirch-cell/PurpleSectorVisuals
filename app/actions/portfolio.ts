@@ -116,6 +116,7 @@ export async function deletePortfolioItem(id: string, storagePath: string | null
     await supabase.storage.from(PORTFOLIO_IMAGES_BUCKET).remove([storagePath])
   }
 
+  revalidatePath("/admin")
   revalidatePath("/admin/portfolio")
   revalidatePath("/work")
   revalidatePath("/")
