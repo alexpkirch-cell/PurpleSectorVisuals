@@ -423,9 +423,9 @@ export function ClientDetailSheet({
                 </div>
               </div>
 
-              {/* Section 4: Post-production SLA */}
+              {/* Section 4: Post-production checklist */}
               <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3">
-                <span className="text-xs font-medium text-zinc-300">Post-production SLA</span>
+                <span className="text-xs font-medium text-zinc-300">Post-Production Checklist</span>
                 <div className="flex flex-col gap-2">
                   {SLA_ITEMS.map((item) => (
                     <label

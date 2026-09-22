@@ -317,6 +317,8 @@ export function PipelineBoard({
 
       <ShootDetailSheet
         shoot={selectedShoot?.status === "new_inquiry" ? null : selectedShoot}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
         onOpenChange={(open) => !open && setSelectedShoot(null)}
         onUpdated={handleShootUpdated}
         onDeclined={handleDecline}
