@@ -16,6 +16,13 @@ import { generateVaultAndSendLink } from "@/app/actions/pipeline"
 import { isMockShoot } from "@/lib/mock-lead"
 import { STUDIO_EDITORS, STUDIO_SHOOTERS } from "@/lib/booking-config"
 import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
+import {
+  calculateFourBucketSplit,
+  type EditingScenario,
+  type LeadSource,
+  type Photographer,
+  type ShootingScenario,
+} from "@/lib/revenue-split"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -89,6 +96,12 @@ export function ClientDetailSheet({
   const [editors, setEditors] = useState<string[]>([])
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [slaProgress, setSlaProgress] = useState<Record<string, boolean>>({})
+  const [leadSource, setLeadSource] = useState<LeadSource>("psv_house")
+  const [shootingScenario, setShootingScenario] = useState<ShootingScenario>("solo")
+  const [soloShooter, setSoloShooter] = useState<Photographer>("Alex")
+  const [leadShooter, setLeadShooter] = useState<Photographer>("Alex")
+  const [editingScenario, setEditingScenario] = useState<EditingScenario>("single")
+  const [singleEditor, setSingleEditor] = useState<Photographer>("Alex")
 
   useEffect(() => {
     if (shoot) {
@@ -130,6 +143,20 @@ export function ClientDetailSheet({
   }, [calculatedTotal, priceTouched])
 
   const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
+
+  const revenueSplit = useMemo(
+    () =>
+      calculateFourBucketSplit({
+        grossTotal: Number(totalPrice) || 0,
+        leadSource,
+        shootingScenario,
+        soloShooter,
+        leadShooter,
+        editingScenario,
+        singleEditor,
+      }),
+    [totalPrice, leadSource, shootingScenario, soloShooter, leadShooter, editingScenario, singleEditor],
+  )
 
   function toggleAddon(id: string) {
     setAddonIds((current) => (current.includes(id) ? current.filter((a) => a !== id) : [...current, id]))
@@ -390,6 +417,110 @@ export function ClientDetailSheet({
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Section 2b: 4-bucket revenue split calculator */}
+              <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3">
+                <span className="text-xs font-medium text-zinc-300">Revenue split</span>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-zinc-300">Lead source</Label>
+                    <select
+                      value={leadSource}
+                      onChange={(e) => setLeadSource(e.target.value as LeadSource)}
+                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                    >
+                      <option value="psv_house">PSV House Inbound</option>
+                      <option value="personal_alex">Personal Lead — Alex</option>
+                      <option value="personal_gabe">Personal Lead — Gabe</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-zinc-300">Crew scenario</Label>
+                    <select
+                      value={shootingScenario}
+                      onChange={(e) => setShootingScenario(e.target.value as ShootingScenario)}
+                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                    >
+                      <option value="solo">Solo Shooter (40%)</option>
+                      <option value="lead_second">Lead + 2nd Shooter (25% / 15%)</option>
+                      <option value="two_equal">2 Equal Shooters (20% / 20%)</option>
+                    </select>
+                  </div>
+
+                  {shootingScenario === "solo" && (
+                    <div className="col-span-2 flex flex-col gap-1.5">
+                      <Label className="text-zinc-300">Solo shooter</Label>
+                      <select
+                        value={soloShooter}
+                        onChange={(e) => setSoloShooter(e.target.value as Photographer)}
+                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                      >
+                        <option value="Alex">Alex</option>
+                        <option value="Gabe">Gabe</option>
+                      </select>
+                    </div>
+                  )}
+                  {shootingScenario === "lead_second" && (
+                    <div className="col-span-2 flex flex-col gap-1.5">
+                      <Label className="text-zinc-300">Lead shooter</Label>
+                      <select
+                        value={leadShooter}
+                        onChange={(e) => setLeadShooter(e.target.value as Photographer)}
+                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                      >
+                        <option value="Alex">Alex</option>
+                        <option value="Gabe">Gabe</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-zinc-300">Post-production</Label>
+                    <select
+                      value={editingScenario}
+                      onChange={(e) => setEditingScenario(e.target.value as EditingScenario)}
+                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                    >
+                      <option value="single">Single Editor (20%)</option>
+                      <option value="split">Split Edit (10% / 10%)</option>
+                    </select>
+                  </div>
+                  {editingScenario === "single" && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-zinc-300">Editor</Label>
+                      <select
+                        value={singleEditor}
+                        onChange={(e) => setSingleEditor(e.target.value as Photographer)}
+                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                      >
+                        <option value="Alex">Alex</option>
+                        <option value="Gabe">Gabe</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-1.5 rounded-md bg-white/5 p-2">
+                  {[
+                    ...revenueSplit.shootingPool,
+                    ...revenueSplit.postProductionPool,
+                    ...revenueSplit.leadOrigination,
+                    ...revenueSplit.houseReserve,
+                  ].map((line, index) => (
+                    <div key={`${line.label}-${index}`} className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-400">
+                        {line.label} <span className="text-zinc-600">&middot; {line.recipient}</span>
+                      </span>
+                      <span className="font-medium text-zinc-200">{formatCurrency(line.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[0.65rem] text-zinc-500">
+                  Net Print Profit Split: 75% PSV House / 25% Photographer Passive Royalty
+                </p>
               </div>
 
               {/* Section 3: Team assignment */}

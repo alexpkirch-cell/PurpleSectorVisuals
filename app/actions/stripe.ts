@@ -14,7 +14,7 @@ export async function startDepositCheckout(vaultId: string) {
   const pool = getPool()
   try {
     const result = await pool.query(
-      `SELECT v.id, v.deposit_amount, v.deposit_paid, b.first_name, b.last_name, p.title as package_title
+      `SELECT v.id, v.deposit_amount, v.deposit_paid, b.first_name, b.last_name, p.title as package_title, p.category as service_category
        FROM vaults v
        LEFT JOIN booking_requests b ON b.id = v.booking_id
        LEFT JOIN packages p ON p.id = b.package_id
@@ -57,7 +57,7 @@ export async function startDepositCheckout(vaultId: string) {
           quantity: 1,
         },
       ],
-      metadata: { vaultId },
+      metadata: { vaultId, kind: "deposit", service_category: row.service_category ?? "" },
     })
 
     await pool.query(`UPDATE vaults SET stripe_session_id = $1 WHERE id = $2`, [session.id, vaultId])
@@ -100,7 +100,7 @@ export async function startBalanceCheckout(vaultId: string) {
   const pool = getPool()
   try {
     const result = await pool.query(
-      `SELECT v.id, v.balance_amount, v.balance_paid, b.first_name, b.last_name, p.title as package_title
+      `SELECT v.id, v.balance_amount, v.balance_paid, b.first_name, b.last_name, p.title as package_title, p.category as service_category
        FROM vaults v
        LEFT JOIN booking_requests b ON b.id = v.booking_id
        LEFT JOIN packages p ON p.id = b.package_id
@@ -143,7 +143,7 @@ export async function startBalanceCheckout(vaultId: string) {
           quantity: 1,
         },
       ],
-      metadata: { vaultId, kind: "balance" },
+      metadata: { vaultId, kind: "balance", service_category: row.service_category ?? "" },
     })
 
     await pool.query(`UPDATE vaults SET balance_stripe_session_id = $1 WHERE id = $2`, [session.id, vaultId])
