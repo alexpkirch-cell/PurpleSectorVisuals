@@ -89,10 +89,17 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   }
 
   const basePrice = activePackage ? Number(activePackage.base_price) : 0
-  const addOnsTotal = visibleAddOns
-    .filter((addOn) => selectedAddOnIds.has(addOn.id))
+  const selectedAddOns = visibleAddOns.filter((addOn) => selectedAddOnIds.has(addOn.id))
+  const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0)
+  // The "Monthly Retainer Agreement" add-on is a 15% discount off the whole order rather
+  // than a flat surcharge, so it's excluded from addOnsTotal and applied separately below.
+  const retainerAddOn = selectedAddOns.find((addOn) => /retainer agreement/i.test(addOn.name))
+  const surchargeAddOnsTotal = selectedAddOns
+    .filter((addOn) => addOn !== retainerAddOn)
     .reduce((sum, addOn) => sum + addOn.price, 0)
-  const estimatedTotal = basePrice + addOnsTotal
+  const preDiscountTotal = basePrice + surchargeAddOnsTotal
+  const retainerDiscount = retainerAddOn ? preDiscountTotal * 0.15 : 0
+  const estimatedTotal = preDiscountTotal - retainerDiscount
 
   function handleBookSetup() {
     if (!activePackage || !activeCategory) return
@@ -129,7 +136,7 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
       </p>
 
       {/* Category tabs */}
-      <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {categoriesWithPackages.map((category) => {
           const active = category === activeCategory
           return (
@@ -227,7 +234,7 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                       {addOn.name}
                     </Label>
                     <span className="text-sm font-medium text-[#e829f1]">
-                      +{formatCurrency(addOn.price)}
+                      {/retainer agreement/i.test(addOn.name) ? "-15% total" : `+${formatCurrency(addOn.price)}`}
                     </span>
                     <Switch
                       id={`addon-${addOn.id}`}
@@ -253,6 +260,11 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
               <p className="font-heading text-2xl font-bold text-foreground">
                 {formatCurrency(estimatedTotal)}
               </p>
+              {retainerAddOn ? (
+                <p className="mt-0.5 text-xs font-medium text-[#e829f1]">
+                  Includes 15% retainer discount (-{formatCurrency(retainerDiscount)})
+                </p>
+              ) : null}
             </div>
             <button
               type="button"
