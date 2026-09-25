@@ -290,10 +290,12 @@ export function OnboardingWizard({
       {step === "unlock" && (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-6 text-center">
           <PartyPopper className="h-8 w-8 text-primary" />
-          <h2 className="font-serif text-lg text-foreground">You're All Set</h2>
+          <h2 className="font-serif text-lg text-foreground">Welcome to The Vault</h2>
           <p className="text-sm text-muted-foreground">
-            Your contract is signed and your retainer is secured. Unlock your vault to view session details and,
-            once photos are delivered, your private gallery.
+            Your entire project lives in one secure digital hub. Use The Vault to review and sign your production
+            agreement, lock in your calendar date with a 20% retainer, and preview your finished collection. Once
+            your final 80% balance is completed, your high-resolution digital archive unlocks instantly—complete
+            with a built-in custom print studio delivering archival wall art and prints straight to your door.
           </p>
           <Button onClick={handleUnlock} disabled={activating} className="w-full">
             {activating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Unlock My Vault"}

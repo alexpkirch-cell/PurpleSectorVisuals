@@ -23,8 +23,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { declineShoot, deleteShoot, moveShootStage, type Shoot, type ShootStatus } from "@/app/actions/shoots"
+import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
+import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
 import { SettlementModal } from "@/components/admin/settlement-modal"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 import { createMockTestLead, isMockShoot } from "@/lib/mock-lead"
@@ -34,6 +36,8 @@ const COLUMNS: { status: ShootStatus; label: string }[] = [
   { status: "quoted", label: "Quoted" },
   { status: "awaiting_retainer", label: "Awaiting Retainer" },
   { status: "booked_scheduled", label: "Booked & Scheduled" },
+  { status: "in_post_production", label: "In Post-Production" },
+  { status: "vault_locked", label: "Vault Locked" },
   { status: "pending_balance", label: "Pending Balance" },
   { status: "fulfilled", label: "Fulfilled" },
 ]
@@ -49,7 +53,15 @@ const VAULT_STATUS_STYLES: Record<string, string> = {
   Expired: "border-muted-foreground/20 bg-muted text-muted-foreground",
 }
 
-export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
+export function PipelineBoard({
+  initialShoots,
+  bookingTiers,
+  bookingAddons,
+}: {
+  initialShoots: Shoot[]
+  bookingTiers: BookingTier[]
+  bookingAddons: BookingAddon[]
+}) {
   const [shoots, setShoots] = useState<Shoot[]>(initialShoots)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<ShootStatus | null>(null)
@@ -105,6 +117,11 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
   function handleShootUpdated(updated: Shoot) {
     setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
     setSelectedShoot(updated)
+  }
+
+  function handleBookingFinalized(updated: Shoot) {
+    setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
+    setSelectedShoot(null)
   }
 
   function handleSettlementFinalized(updated: Shoot) {
@@ -290,8 +307,18 @@ export function PipelineBoard({ initialShoots }: { initialShoots: Shoot[] }) {
         })}
       </div>
 
+      <ClientDetailSheet
+        shoot={selectedShoot?.status === "new_inquiry" ? selectedShoot : null}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
+        onOpenChange={(open) => !open && setSelectedShoot(null)}
+        onFinalized={handleBookingFinalized}
+      />
+
       <ShootDetailSheet
-        shoot={selectedShoot}
+        shoot={selectedShoot?.status === "new_inquiry" ? null : selectedShoot}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
         onOpenChange={(open) => !open && setSelectedShoot(null)}
         onUpdated={handleShootUpdated}
         onDeclined={handleDecline}

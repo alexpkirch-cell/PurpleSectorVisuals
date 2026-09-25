@@ -1,7 +1,10 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
+
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
+import { BUSINESS_DOCUMENTS_BUCKET } from "@/lib/storage-buckets"
 
 export interface SignedContract {
   id: string
@@ -31,6 +34,73 @@ async function requireAdmin() {
   if (profile?.role !== "admin") {
     throw new Error("Not authorized")
   }
+}
+
+export type LegalDocumentCategory = "corporate" | "waiver" | "contractor"
+
+export interface LegalDocument {
+  id: string
+  title: string
+  category: LegalDocumentCategory
+  file_url: string
+  uploaded_at: string
+  updated_at: string
+}
+
+export interface LegalDocumentWithSignedUrl extends LegalDocument {
+  signedUrl: string | null
+}
+
+/** Every business document (corporate filings, model releases, contractor W-9s) with a fresh signed download link. */
+export async function listLegalDocuments(): Promise<LegalDocumentWithSignedUrl[]> {
+  await requireAdmin()
+
+  const { rows } = await sql<LegalDocument>`
+    SELECT * FROM legal_documents ORDER BY category ASC, uploaded_at DESC
+  `
+
+  const supabase = await createClient()
+
+  const withUrls = await Promise.all(
+    rows.map(async (doc) => {
+      const { data } = await supabase.storage
+        .from(BUSINESS_DOCUMENTS_BUCKET)
+        .createSignedUrl(doc.file_url, 60 * 60)
+      return { ...doc, signedUrl: data?.signedUrl ?? null }
+    }),
+  )
+
+  return withUrls
+}
+
+export async function createLegalDocument(input: {
+  title: string
+  category: LegalDocumentCategory
+  storagePath: string
+}): Promise<void> {
+  await requireAdmin()
+
+  await sql`
+    INSERT INTO legal_documents (title, category, file_url)
+    VALUES (${input.title}, ${input.category}, ${input.storagePath})
+  `
+
+  revalidatePath("/admin/legal")
+}
+
+export async function deleteLegalDocument(id: string): Promise<void> {
+  await requireAdmin()
+
+  const { rows } = await sql<LegalDocument>`SELECT * FROM legal_documents WHERE id = ${id}`
+  const doc = rows[0]
+  if (!doc) return
+
+  await sql`DELETE FROM legal_documents WHERE id = ${id}`
+
+  const supabase = await createClient()
+  await supabase.storage.from(BUSINESS_DOCUMENTS_BUCKET).remove([doc.file_url])
+
+  revalidatePath("/admin/legal")
 }
 
 /** Every signed liability release, joined back to the vault, booking, and package it belongs to. */

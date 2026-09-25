@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Baby,
   Check,
@@ -10,6 +10,7 @@ import {
   Mail,
   MoreVertical,
   Phone,
+  RotateCcw,
   Trash2,
   Wallet,
   XCircle,
@@ -39,6 +40,7 @@ import {
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
 import { moveShootStage, updateShoot, type Shoot } from "@/app/actions/shoots"
 import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
+import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import { isMockShoot } from "@/lib/mock-lead"
 
 function formatCurrency(value: number) {
@@ -94,22 +96,25 @@ function PaymentStatusPill({
 
 export function ShootDetailSheet({
   shoot,
+  bookingTiers,
+  bookingAddons,
   onOpenChange,
   onUpdated,
   onDeclined,
   onDeleteRequested,
 }: {
   shoot: Shoot | null
+  bookingTiers: BookingTier[]
+  bookingAddons: BookingAddon[]
   onOpenChange: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
   onDeclined?: (shoot: Shoot) => void
   onDeleteRequested?: (shoot: Shoot) => void
 }) {
-  const [basePrice, setBasePrice] = useState("0")
-  const [travelFee, setTravelFee] = useState("0")
+  const [totalPrice, setTotalPrice] = useState("0")
+  const [priceTouched, setPriceTouched] = useState(false)
   const [assignedShooter, setAssignedShooter] = useState("")
   const [assignedEditor, setAssignedEditor] = useState("")
-  const [isPaid, setIsPaid] = useState(false)
   const [notes, setNotes] = useState("")
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
@@ -117,13 +122,20 @@ export function ShootDetailSheet({
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
   const [isLoadingLedger, setIsLoadingLedger] = useState(false)
 
+  const calculatedTotal = useMemo(() => {
+    if (!shoot) return 0
+    const tierPrice = bookingTiers.find((t) => t.tier_key === shoot.package_tier)?.price ?? 0
+    const addonsTotal = (shoot.selected_addons ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
+    const packageTotal = tierPrice + addonsTotal
+    return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
+  }, [shoot, bookingTiers])
+
   useEffect(() => {
     if (shoot) {
-      setBasePrice(shoot.base_price)
-      setTravelFee(shoot.travel_fee)
+      setTotalPrice(String(calculatedTotal))
+      setPriceTouched(false)
       setAssignedShooter(shoot.assigned_shooter ?? "")
       setAssignedEditor(shoot.assigned_editor ?? "")
-      setIsPaid(shoot.is_paid)
       setNotes(shoot.notes ?? "")
       if (shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)) {
         setIsLoadingLedger(true)
@@ -137,7 +149,10 @@ export function ShootDetailSheet({
     } else {
       setLedgerEntries([])
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- calculatedTotal intentionally excluded; only reset when the selected shoot changes
   }, [shoot])
+
+  const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
 
   async function handleTogglePaid(entry: LedgerEntry, paid: boolean) {
     const previous = ledgerEntries
@@ -164,21 +179,19 @@ export function ShootDetailSheet({
     try {
       if (!isMockShoot(shoot.id)) {
         await updateShoot(shoot.id, {
-          basePrice: Number(basePrice) || 0,
-          travelFee: Number(travelFee) || 0,
+          basePrice: Number(totalPrice) || 0,
+          travelFee: 0,
           assignedShooter: assignedShooter || null,
           assignedEditor: assignedEditor || null,
-          isPaid,
           notes: notes || null,
         })
       }
       onUpdated({
         ...shoot,
-        base_price: basePrice,
-        travel_fee: travelFee,
+        base_price: totalPrice,
+        travel_fee: "0",
         assigned_shooter: assignedShooter || null,
         assigned_editor: assignedEditor || null,
-        is_paid: isPaid,
         notes: notes || null,
       })
       toast.success("Shoot updated")
@@ -372,36 +385,49 @@ export function ShootDetailSheet({
                 </TabsContent>
 
                 <TabsContent value="finances" className="flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="basePrice">Base price</Label>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="totalPrice">Total Contract Price</Label>
+                      {isPriceOverridden && (
+                        <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                          Override active
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
                       <Input
-                        id="basePrice"
+                        id="totalPrice"
                         type="number"
                         min="0"
                         step="0.01"
-                        value={basePrice}
-                        onChange={(e) => setBasePrice(e.target.value)}
+                        value={totalPrice}
+                        onChange={(e) => {
+                          setPriceTouched(true)
+                          setTotalPrice(e.target.value)
+                        }}
                       />
+                      {isPriceOverridden && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setPriceTouched(false)
+                            setTotalPrice(String(calculatedTotal))
+                          }}
+                          aria-label="Reset to default package price"
+                          className="shrink-0"
+                        >
+                          <RotateCcw className="size-3.5" />
+                        </Button>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="travelFee">Travel fee</Label>
-                      <Input
-                        id="travelFee"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={travelFee}
-                        onChange={(e) => setTravelFee(e.target.value)}
-                      />
-                    </div>
+                    <p className="text-[0.65rem] text-muted-foreground">
+                      Auto-calculated from the base package + add-ons. Edit directly to apply a custom discount or charge.
+                    </p>
                   </div>
 
-                  <ShootPayoutBadge
-                    basePrice={Number(basePrice) || 0}
-                    travelFee={Number(travelFee) || 0}
-                    defaultOpen
-                  />
+                  <ShootPayoutBadge basePrice={Number(totalPrice) || 0} travelFee={0} defaultOpen />
 
                   {shoot.vault_pin && (
                     <div className="grid grid-cols-2 gap-2">
@@ -415,15 +441,6 @@ export function ShootDetailSheet({
                         paid={!!shoot.vault_balance_paid}
                         amount={shoot.vault_balance_amount}
                       />
-                    </div>
-                  )}
-
-                  {!shoot.vault_pin && (
-                    <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                      <Label htmlFor="isPaid" className="cursor-pointer">
-                        Payment received (legacy)
-                      </Label>
-                      <Switch id="isPaid" checked={isPaid} onCheckedChange={setIsPaid} />
                     </div>
                   )}
 

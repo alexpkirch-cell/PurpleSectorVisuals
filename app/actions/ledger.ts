@@ -182,6 +182,101 @@ export async function getRevenueByPackage(): Promise<RevenueByPackage[]> {
   return rows.map((r) => ({ package: r.shoot_type, revenue: Number(r.revenue) }))
 }
 
+export type ExpenseCategory = "payout" | "marketing" | "opex"
+
+export interface Expense {
+  id: string
+  expense_date: string
+  description: string
+  amount: string
+  category: ExpenseCategory
+  receipt_url: string | null
+  created_at: string
+}
+
+/** Every logged expense, newest first, for the Financial Ledger's expense log. */
+export async function listExpenses(): Promise<Expense[]> {
+  await requireAdmin()
+
+  const { rows } = await sql<Expense>`
+    SELECT * FROM expenses ORDER BY expense_date DESC, created_at DESC
+  `
+
+  return rows
+}
+
+export async function createExpense(input: {
+  expenseDate: string
+  description: string
+  amount: number
+  category: ExpenseCategory
+  receiptUrl: string | null
+}): Promise<void> {
+  await requireAdmin()
+
+  await sql`
+    INSERT INTO expenses (expense_date, description, amount, category, receipt_url)
+    VALUES (${input.expenseDate}, ${input.description}, ${input.amount}, ${input.category}, ${input.receiptUrl})
+  `
+
+  revalidatePath("/admin/financials")
+}
+
+export async function deleteExpense(id: string): Promise<void> {
+  await requireAdmin()
+
+  await sql`DELETE FROM expenses WHERE id = ${id}`
+
+  revalidatePath("/admin/financials")
+}
+
+export interface FundBucket {
+  label: string
+  allocated: number
+  spent: number
+  available: number
+}
+
+/**
+ * The 60/30/10 split's three funds as spendable balances: every dollar the
+ * ledger has ever allocated to that role, minus every expense logged against
+ * its matching category. Mirrors calculateSplits()'s labor/house/team_pool roles.
+ */
+export async function getFundBuckets(): Promise<{
+  creatorPayouts: FundBucket
+  opex: FundBucket
+  marketing: FundBucket
+}> {
+  await requireAdmin()
+
+  const [{ rows: allocatedRows }, { rows: spentRows }] = await Promise.all([
+    sql<{ role: LedgerRole; total: string }>`
+      SELECT role, COALESCE(SUM(amount), 0) AS total FROM ledger_entries GROUP BY role
+    `,
+    sql<{ category: ExpenseCategory; total: string }>`
+      SELECT category, COALESCE(SUM(amount), 0) AS total FROM expenses GROUP BY category
+    `,
+  ])
+
+  const allocated: Record<string, number> = {}
+  for (const row of allocatedRows) allocated[row.role] = Number(row.total)
+
+  const spent: Record<string, number> = {}
+  for (const row of spentRows) spent[row.category] = Number(row.total)
+
+  function bucket(label: string, roleKey: LedgerRole, categoryKey: ExpenseCategory): FundBucket {
+    const total = allocated[roleKey] ?? 0
+    const used = spent[categoryKey] ?? 0
+    return { label, allocated: total, spent: used, available: total - used }
+  }
+
+  return {
+    creatorPayouts: bucket("Creator Payouts (60%)", "labor", "payout"),
+    opex: bucket("OpEx & Business (30%)", "house", "opex"),
+    marketing: bucket("Marketing Fund (10%)", "team_pool", "marketing"),
+  }
+}
+
 export interface LedgerSummaryRow {
   shootId: string
   date: string

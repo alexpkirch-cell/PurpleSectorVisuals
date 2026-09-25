@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { GalleryGrid } from "@/components/gallery-grid"
-import { getSiteSlots } from "@/lib/site-slots"
+import { listPortfolioItems } from "@/app/actions/portfolio"
 
 export const metadata: Metadata = {
   title: "Work | Purple Sector Visuals",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 }
 
 export default async function WorkPage() {
-  const overrides = await getSiteSlots()
+  const items = await listPortfolioItems()
 
   return (
     <div className="mx-auto min-h-svh max-w-6xl px-6 pb-24 pt-36 sm:px-10">
@@ -28,7 +28,7 @@ export default async function WorkPage() {
 
       <div className="mt-4">
         <Suspense fallback={null}>
-          <GalleryGrid overrides={overrides} />
+          <GalleryGrid items={items} />
         </Suspense>
       </div>
     </div>
