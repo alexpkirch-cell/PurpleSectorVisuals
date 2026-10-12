@@ -28,7 +28,13 @@ function formatCurrency(value: number) {
   )
 }
 
-export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] }) {
+export function UnifiedBookingForm({
+  packages,
+  requestedShooter = null,
+}: {
+  packages: ServicePackage[]
+  requestedShooter?: { id: string; name: string } | null
+}) {
   const searchParams = useSearchParams()
   const preselectedTier = searchParams.get("tier")
 
@@ -66,7 +72,13 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
         shootType: shootType || UNSURE_LABEL,
         shootDate: String(formData.get("shootDate") ?? "") || undefined,
         location: String(formData.get("location") ?? ""),
-        notes: String(formData.get("notes") ?? ""),
+        notes: [
+          requestedShooter ? `Requested shooter: ${requestedShooter.name} (${requestedShooter.id})` : null,
+          String(formData.get("notes") ?? ""),
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        preferredShooter: requestedShooter?.name,
       })
       setSubmitted(true)
     } catch (err) {

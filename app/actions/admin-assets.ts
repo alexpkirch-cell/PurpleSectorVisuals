@@ -88,12 +88,15 @@ export async function clearSiteSlot(slotKey: string) {
 export async function setSiteText(key: string, value: string) {
   const { supabase, user } = await requireAdmin()
 
-  const { error } = await supabase.from("site_text_content").upsert({
-    key,
-    value,
-    updated_by: user.id,
-    updated_at: new Date().toISOString(),
-  })
+  const { error } = await supabase.from("site_content").upsert(
+    {
+      section_key: key,
+      text_value: value,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "section_key" },
+  )
 
   if (error) {
     throw new Error(error.message)
