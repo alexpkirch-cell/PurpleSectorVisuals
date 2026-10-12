@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import { splitTotal } from "@/lib/payment-terms"
 import { createClient } from "@/lib/supabase/server"
 import { generateLedgerForShoot } from "@/app/actions/ledger"
 
@@ -247,8 +248,7 @@ export async function generateVaultAndAdvance(id: string, input: { totalQuote: n
     throw new Error("Shoot not found")
   }
 
-  const depositAmount = Math.round(input.totalQuote * 0.2 * 100) / 100
-  const balanceAmount = Math.round((input.totalQuote - depositAmount) * 100) / 100
+  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(input.totalQuote)
 
   const { rows: existingVaultRows } = await sql<{ id: string }>`
     SELECT id FROM vaults WHERE shoot_id = ${id}
@@ -408,8 +408,7 @@ export async function finalizeBooking(
     WHERE id = ${id}
   `
 
-  const depositAmount = Math.round(input.totalPrice * 0.2 * 100) / 100
-  const balanceAmount = Math.round((input.totalPrice - depositAmount) * 100) / 100
+  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(input.totalPrice)
 
   const { rows: existingVaultRows } = await sql<{ id: string }>`
     SELECT id FROM vaults WHERE shoot_id = ${id}

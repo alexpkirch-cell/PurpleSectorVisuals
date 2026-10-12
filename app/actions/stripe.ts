@@ -3,6 +3,7 @@
 import { Pool } from "pg"
 
 import { getStripeClient } from "@/lib/stripe"
+import { recordDepositPayment } from "@/lib/vault-payments"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -14,9 +15,13 @@ export async function startDepositCheckout(vaultId: string) {
   const pool = getPool()
   try {
     const result = await pool.query(
-      `SELECT v.id, v.deposit_amount, v.deposit_paid, b.first_name, b.last_name, p.title as package_title, p.category as service_category
+      `SELECT v.id, v.deposit_amount, v.deposit_paid, v.stripe_customer_id,
+              COALESCE(b.first_name, s.client_name) as first_name, b.last_name,
+              COALESCE(b.email, s.client_email) as email,
+              p.title as package_title, p.category as service_category
        FROM vaults v
        LEFT JOIN booking_requests b ON b.id = v.booking_id
+       LEFT JOIN shoots s ON s.id = v.shoot_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.id = $1`,
       [vaultId]
@@ -40,23 +45,38 @@ export async function startDepositCheckout(vaultId: string) {
     const clientName = [row.first_name, row.last_name].filter(Boolean).join(" ") || "Client"
 
     const stripe = getStripeClient()
+
+    // A Customer is required for setup_future_usage so the card can be reused.
+    let customerId: string | null = row.stripe_customer_id ?? null
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        name: clientName,
+        email: row.email ?? undefined,
+        metadata: { vaultId },
+      })
+      customerId = customer.id
+      await pool.query(`UPDATE vaults SET stripe_customer_id = $1 WHERE id = $2`, [customerId, vaultId])
+    }
+
     const session = await stripe.checkout.sessions.create({
       ui_mode: "embedded_page",
       redirect_on_completion: "never",
       mode: "payment",
+      customer: customerId,
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
               name: `Shoot Deposit — ${row.package_title ?? "Session"}`,
-              description: `20% retainer for ${clientName}`,
+              description: `50% retainer for ${clientName}`,
             },
             unit_amount: amountInCents,
           },
           quantity: 1,
         },
       ],
+      payment_intent_data: { setup_future_usage: "off_session" },
       metadata: { vaultId, kind: "deposit", service_category: row.service_category ?? "" },
     })
 
@@ -84,7 +104,7 @@ export async function checkDepositStatus(vaultId: string) {
     const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.retrieve(row.stripe_session_id)
     if (session.payment_status === "paid") {
-      await pool.query(`UPDATE vaults SET deposit_paid = true WHERE id = $1`, [vaultId])
+      await recordDepositPayment(vaultId, session)
       return { depositPaid: true }
     }
     return { depositPaid: false }

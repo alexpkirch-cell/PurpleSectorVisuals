@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import { splitTotal } from "@/lib/payment-terms"
 import { createClient } from "@/lib/supabase/server"
 import { generateLedgerForShoot } from "@/app/actions/ledger"
 
@@ -130,8 +131,7 @@ export async function approveBooking(id: string) {
     pinCode = generatePin()
   }
 
-  const depositAmount = Math.round(packagePrice * 0.2 * 100) / 100
-  const balanceAmount = Math.round((packagePrice - depositAmount) * 100) / 100
+  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(packagePrice)
 
   await sql`
     INSERT INTO vaults (booking_id, shoot_id, pin_code, status, deposit_amount, balance_amount, shoot_date)

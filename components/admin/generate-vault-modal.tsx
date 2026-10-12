@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { generateVaultAndAdvance, type Shoot } from "@/app/actions/shoots"
+import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL, splitTotal } from "@/lib/payment-terms"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -40,8 +41,7 @@ export function GenerateVaultModal({
   }, [shoot])
 
   const total = Number(totalQuote) || 0
-  const depositAmount = Math.round(total * 0.2 * 100) / 100
-  const balanceAmount = Math.round((total - depositAmount) * 100) / 100
+  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(total)
 
   async function handleConfirm() {
     if (!shoot) return
@@ -66,7 +66,7 @@ export function GenerateVaultModal({
               <DialogTitle>Generate Vault — {shoot.client_name}</DialogTitle>
               <DialogDescription>
                 Confirm the final total quote to create the client vault and send the retainer request.
-                This splits the total into a 20% deposit and 80% balance.
+                This splits the total into a {DEPOSIT_PERCENT_LABEL} deposit and {BALANCE_PERCENT_LABEL} balance.
               </DialogDescription>
             </DialogHeader>
 
@@ -85,11 +85,11 @@ export function GenerateVaultModal({
 
               <div className="flex flex-col gap-2 rounded-md border border-border p-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Deposit due now (20%)</span>
+                  <span className="text-muted-foreground">Deposit due now ({DEPOSIT_PERCENT_LABEL})</span>
                   <span className="font-medium text-foreground">{formatCurrency(depositAmount)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Balance due later (80%)</span>
+                  <span className="text-muted-foreground">Balance due later ({BALANCE_PERCENT_LABEL})</span>
                   <span className="font-medium text-foreground">{formatCurrency(balanceAmount)}</span>
                 </div>
               </div>

@@ -158,7 +158,7 @@ export function UnifiedBookingForm({ packages }: { packages: ServicePackage[] })
 
       <p className="text-xs leading-relaxed text-muted-foreground">
         This is a booking inquiry, not a confirmed session. Your shoot is only locked in once
-        we&apos;ve confirmed your date and you&apos;ve signed your digital contract and paid the 20%
+        we&apos;ve confirmed your date and you&apos;ve signed your digital contract and paid the 50%
         retainer through your Client Vault.
       </p>
 

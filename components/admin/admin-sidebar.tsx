@@ -7,6 +7,7 @@ import {
   FileSignature,
   GalleryVerticalEnd,
   Images,
+  Kanban,
   LayoutGrid,
   LogOut,
   Package,
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils"
 
 const links = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
+  { href: "/admin/command-center", label: "Command Center", icon: Kanban },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/admin/galleries", label: "Vaults", icon: Images },
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },

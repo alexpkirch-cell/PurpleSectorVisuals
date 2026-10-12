@@ -9,7 +9,7 @@ const BENEFITS = [
   },
   {
     title: "Zero Chasing Checks",
-    body: "Our 20% deposit / 80% gallery paywall system guarantees clients pay before downloads unlock.",
+    body: "Our 50% retainer / 50% gallery paywall system guarantees clients pay before downloads unlock.",
   },
   {
     title: "Full Back-Office & Gear Support",
