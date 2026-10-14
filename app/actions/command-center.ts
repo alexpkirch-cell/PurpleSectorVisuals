@@ -5,12 +5,9 @@ import { revalidatePath } from "next/cache"
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
 import { chargeBalanceOffSession } from "@/lib/vault-payments"
+import { PROJECT_STATUSES, SERVICE_TIERS, type ProjectStatus, type ServiceTier } from "@/lib/command-center-constants"
 
-export const PROJECT_STATUSES = ["Lead", "Retainer_Paid", "Staging", "Delivered"] as const
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number]
-
-export const SERVICE_TIERS = ["Portraits", "Athletics", "Automotive", "Events", "Commercial"] as const
-export type ServiceTier = (typeof SERVICE_TIERS)[number]
+export type { ProjectStatus, ServiceTier }
 
 export type SplitTier = "50_50" | "70_30"
 
