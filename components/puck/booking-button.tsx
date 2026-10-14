@@ -27,7 +27,8 @@ export function BookingButton({
       href={href}
       className={cn(
         buttonVariants({ variant, size }),
-        "h-11 px-6 font-heading text-sm tracking-wide",
+        "h-12 px-8 font-heading text-sm font-bold tracking-[0.18em] uppercase transition-shadow",
+        variant === "default" && "shadow-[0_0_28px_-6px_var(--primary)] hover:shadow-[0_0_40px_-4px_var(--primary)]",
         className
       )}
     >

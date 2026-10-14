@@ -88,32 +88,35 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         ctaLabel: "Book a shoot",
       },
       render: ({ eyebrow, heading, subheading, backgroundImage, align, ctaLabel }) => (
-        <section className="relative isolate flex min-h-[28rem] items-center overflow-hidden border-b border-border bg-card">
+        <section className="relative isolate flex min-h-[32rem] items-end overflow-hidden border-b border-border bg-background md:min-h-[40rem]">
           {backgroundImage ? (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={backgroundImage} alt="" className="absolute inset-0 -z-10 size-full object-cover" />
-              <div className="absolute inset-0 -z-10 bg-background/70" />
-            </>
-          ) : null}
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={backgroundImage} alt="" className="absolute inset-0 -z-20 size-full object-cover" />
+          ) : (
+            <div className="absolute inset-0 -z-20 bg-card" />
+          )}
+          <div className="absolute inset-0 -z-10 bg-gradient-to-t from-background via-background/70 to-background/20" />
           <div
             className={cn(
-              "mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-24",
+              "mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 pt-32 pb-16 md:pb-24",
               align === "center" ? "items-center text-center" : "items-start text-left"
             )}
           >
             {eyebrow ? (
-              <span className="font-heading text-xs font-bold tracking-[0.2em] text-muted-foreground uppercase">
+              <span className="flex items-center gap-3 font-heading text-xs font-bold tracking-[0.3em] text-foreground uppercase">
+                <span aria-hidden="true" className="h-0.5 w-10 bg-primary shadow-[0_0_12px_var(--primary)]" />
                 {eyebrow}
               </span>
             ) : null}
-            <h1 className="max-w-3xl font-heading text-4xl font-semibold text-balance text-foreground md:text-6xl">
+            <h1 className="max-w-4xl font-heading text-5xl leading-[0.95] font-bold tracking-tight text-balance text-foreground uppercase md:text-7xl lg:text-8xl">
               {heading}
             </h1>
             {subheading ? (
-              <p className="max-w-2xl text-lg leading-relaxed text-pretty text-muted-foreground">{subheading}</p>
+              <p className="max-w-xl text-base leading-relaxed text-pretty text-muted-foreground md:text-lg">
+                {subheading}
+              </p>
             ) : null}
-            {ctaLabel ? <BookingButton label={ctaLabel} /> : null}
+            {ctaLabel ? <BookingButton label={ctaLabel} className="mt-2" /> : null}
           </div>
         </section>
       ),
@@ -141,24 +144,27 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         width: "narrow",
       },
       render: ({ heading, body, align, width }) => (
-        <section className="px-6 py-16">
+        <section className="bg-background px-6 py-20">
           <div
             className={cn(
-              "mx-auto flex flex-col gap-4",
+              "mx-auto flex flex-col gap-5",
               width === "wide" ? "max-w-5xl" : "max-w-2xl",
-              align === "center" ? "text-center" : "text-left"
+              align === "center" ? "items-center text-center" : "items-start text-left"
             )}
           >
             {heading ? (
-              <h2 className="font-heading text-2xl font-semibold text-balance text-foreground md:text-3xl">
-                {heading}
-              </h2>
+              <div className={cn("flex flex-col gap-4", align === "center" ? "items-center" : "items-start")}>
+                <span aria-hidden="true" className="h-0.5 w-10 bg-primary shadow-[0_0_12px_var(--primary)]" />
+                <h2 className="font-heading text-3xl font-bold tracking-tight text-balance text-foreground uppercase md:text-4xl">
+                  {heading}
+                </h2>
+              </div>
             ) : null}
             {body
               .split(/\n{2,}/)
               .filter(Boolean)
               .map((paragraph, index) => (
-                <p key={index} className="leading-relaxed text-pretty text-muted-foreground">
+                <p key={index} className="text-base leading-relaxed text-pretty text-muted-foreground md:text-lg">
                   {paragraph}
                 </p>
               ))}
@@ -189,25 +195,32 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       },
       defaultProps: { src: "", alt: "", caption: "", aspect: "video" },
       render: ({ src, alt, caption, aspect }) => (
-        <figure className="mx-auto flex max-w-5xl flex-col gap-2 px-6 py-8">
+        <figure className="mx-auto flex max-w-6xl flex-col gap-3 bg-background px-6 py-10">
           {src ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={src}
               alt={alt}
-              className={cn("w-full rounded-lg border border-border object-cover", aspectClass[aspect])}
+              className={cn(
+                "w-full rounded-xl border border-border object-cover shadow-2xl shadow-black/60",
+                aspectClass[aspect]
+              )}
             />
           ) : (
             <div
               className={cn(
-                "flex w-full items-center justify-center rounded-lg border border-dashed border-border bg-card text-sm text-muted-foreground",
+                "flex w-full items-center justify-center rounded-xl border border-dashed border-border bg-card text-sm text-muted-foreground",
                 aspectClass[aspect]
               )}
             >
               Choose an image
             </div>
           )}
-          {caption ? <figcaption className="text-sm text-muted-foreground">{caption}</figcaption> : null}
+          {caption ? (
+            <figcaption className="font-heading text-xs tracking-[0.2em] text-muted-foreground uppercase">
+              {caption}
+            </figcaption>
+          ) : null}
         </figure>
       ),
     },
@@ -230,7 +243,12 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       },
       defaultProps: { label: "Book a shoot", shooterId: "", variant: "default", align: "left" },
       render: ({ label, shooterId, variant, align }) => (
-        <div className={cn("mx-auto flex max-w-5xl px-6 py-6", align === "center" ? "justify-center" : "justify-start")}>
+        <div
+          className={cn(
+            "mx-auto flex max-w-6xl bg-background px-6 py-10",
+            align === "center" ? "justify-center" : "justify-start"
+          )}
+        >
           <BookingButton label={label} shooterId={shooterId || undefined} variant={variant} />
         </div>
       ),

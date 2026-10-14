@@ -1,10 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Puck, type Data } from "@measured/puck"
-import "@measured/puck/puck.css"
+import { Puck, type Data, type Overrides } from "@measured/puck"
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
@@ -18,6 +17,19 @@ type PuckPageEditorProps = {
   paths: string[]
   initialData: Data
 }
+
+// The canvas renders in an iframe; mirror the host's theme classes so Tailwind tokens and next/font variables resolve inside it.
+function PreviewFrame({ children, document: frameDocument }: { children: ReactNode; document?: Document }) {
+  useEffect(() => {
+    if (!frameDocument) return
+    frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
+    frameDocument.body.className = "min-h-svh bg-background text-foreground"
+  }, [frameDocument])
+
+  return <>{children}</>
+}
+
+const overrides: Partial<Overrides> = { iframe: PreviewFrame }
 
 export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps) {
   const router = useRouter()
@@ -52,10 +64,11 @@ export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-background">
+    <div className="psv-puck fixed inset-0 z-50 bg-background">
       <Puck
         key={path}
         config={puckConfig}
+        overrides={overrides}
         data={initialData}
         onPublish={handlePublish}
         headerPath={path}
