@@ -3,14 +3,23 @@ import { Suspense } from "react"
 
 import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
 import { listActivePackages } from "@/app/actions/packages"
+import { getPublicContractor } from "@/app/actions/roster"
 
 export const metadata: Metadata = {
   title: "Book a Shoot | Purple Sector Visuals",
   description: "Request a shoot with Purple Sector Visuals and get your client vault access code.",
 }
 
-export default async function BookPage() {
-  const packages = await listActivePackages()
+export default async function BookPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ shooter?: string }>
+}) {
+  const { shooter: shooterId } = await searchParams
+  const [packages, shooter] = await Promise.all([
+    listActivePackages(),
+    shooterId ? getPublicContractor(shooterId) : Promise.resolve(null),
+  ])
 
   return (
     <main className="flex min-h-screen flex-col items-center px-4 py-20 sm:py-28">
@@ -25,7 +34,10 @@ export default async function BookPage() {
           </p>
         </div>
         <Suspense fallback={null}>
-          <UnifiedBookingForm packages={packages} />
+          <UnifiedBookingForm
+            packages={packages}
+            requestedShooter={shooter ? { id: shooter.id, name: shooter.name } : null}
+          />
         </Suspense>
       </div>
     </main>

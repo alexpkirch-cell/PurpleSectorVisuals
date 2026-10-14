@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
+import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
 import { moveShootStage, updateShoot, type Shoot } from "@/app/actions/shoots"
 import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
@@ -432,12 +433,12 @@ export function ShootDetailSheet({
                   {shoot.vault_pin && (
                     <div className="grid grid-cols-2 gap-2">
                       <PaymentStatusPill
-                        label="Retainer (20%)"
+                        label={`Retainer (${DEPOSIT_PERCENT_LABEL})`}
                         paid={!!shoot.vault_deposit_paid}
                         amount={shoot.vault_deposit_amount}
                       />
                       <PaymentStatusPill
-                        label="Balance (80%)"
+                        label={`Balance (${BALANCE_PERCENT_LABEL})`}
                         paid={!!shoot.vault_balance_paid}
                         amount={shoot.vault_balance_amount}
                       />

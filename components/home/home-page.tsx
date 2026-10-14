@@ -6,7 +6,7 @@ import { DisciplinesSection } from "@/components/home/disciplines-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { getSiteSlots, getSiteText } from "@/lib/site-slots"
 
-export default async function Page() {
+export async function HomePage() {
   const [overrides, text] = await Promise.all([getSiteSlots(), getSiteText()])
 
   return (

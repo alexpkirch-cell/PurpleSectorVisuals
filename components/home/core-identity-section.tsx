@@ -6,10 +6,19 @@ import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
 const BTS_CLIPS = Array.from({ length: 6 }, (_, i) => `BTS Clip ${i + 1}`)
 
+export type CoreIdentityImages = {
+  reel?: string
+  sports?: string
+  portrait?: string
+  bts?: (string | undefined)[]
+}
+
 export function CoreIdentitySection({
   overrides,
+  images,
 }: {
   overrides?: SiteSlotOverrides
+  images?: CoreIdentityImages
 }) {
   return (
     <section className="w-full bg-[#09090b]">
@@ -42,9 +51,9 @@ export function CoreIdentitySection({
             </Link>
 
             <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-3">
-              {BTS_CLIPS.map((clip) => (
+              {BTS_CLIPS.map((clip, i) => (
                 <div key={clip} className="aspect-square w-full">
-                  <ImageSlot aspect="1:1 Slot" label={clip} compact />
+                  <ImageSlot aspect="1:1 Slot" label={clip} compact imageUrl={images?.bts?.[i] || undefined} />
                 </div>
               ))}
             </div>
@@ -57,13 +66,14 @@ export function CoreIdentitySection({
                 glow
                 slotKey="home.core-identity"
                 overrides={overrides}
+                imageUrl={images?.reel || undefined}
               />
             </div>
             <div className="aspect-square w-full">
-              <ImageSlot aspect="1:1 Slot" label="Sports Action Slot" />
+              <ImageSlot aspect="1:1 Slot" label="Sports Action Slot" imageUrl={images?.sports || undefined} />
             </div>
             <div className="aspect-square w-full">
-              <ImageSlot aspect="1:1 Slot" label="Portrait Slot" />
+              <ImageSlot aspect="1:1 Slot" label="Portrait Slot" imageUrl={images?.portrait || undefined} />
             </div>
           </div>
         </div>

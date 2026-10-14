@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import type Stripe from "stripe"
-import { Pool } from "pg"
 
 import { getStripeClient } from "@/lib/stripe"
+import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
 
 interface ShippingDetails {
   name?: string | null
@@ -19,12 +19,6 @@ async function submitToPrintful(shippingDetails: ShippingDetails | null) {
   // TODO: call the Printful Orders API here using process.env.PRINTFUL_API_KEY
 }
 
-function getPool() {
-  const url = new URL(process.env.POSTGRES_URL as string)
-  url.searchParams.delete("sslmode")
-  return new Pool({ connectionString: url.toString(), ssl: { rejectUnauthorized: false } })
-}
-
 /**
  * Server-authoritative confirmation for vault deposit/balance checkouts.
  * The onboarding wizard and locked gallery also poll `checkout.session.retrieve`
@@ -35,18 +29,14 @@ async function confirmVaultPayment(session: Stripe.Checkout.Session) {
   const vaultId = session.metadata?.vaultId
   if (!vaultId || session.payment_status !== "paid") return
 
-  const isBalance = session.metadata?.kind === "balance"
-  const pool = getPool()
   try {
-    if (isBalance) {
-      await pool.query(`UPDATE vaults SET balance_paid = true WHERE id = $1`, [vaultId])
+    if (session.metadata?.kind === "balance") {
+      await recordBalancePayment(vaultId)
     } else {
-      await pool.query(`UPDATE vaults SET deposit_paid = true WHERE id = $1`, [vaultId])
+      await recordDepositPayment(vaultId, session)
     }
   } catch (error) {
     console.error("[v0] confirmVaultPayment failed:", error)
-  } finally {
-    await pool.end()
   }
 }
 
@@ -78,6 +68,18 @@ export async function POST(request: Request) {
     } else {
       const shippingDetails = session.shipping_details ?? session.customer_details ?? null
       await submitToPrintful(shippingDetails)
+    }
+  }
+
+  if (event.type === "payment_intent.succeeded") {
+    const intent = event.data.object as Stripe.PaymentIntent
+    const vaultId = intent.metadata?.vaultId
+    if (vaultId && intent.metadata?.kind === "balance") {
+      try {
+        await recordBalancePayment(vaultId, intent.id)
+      } catch (error) {
+        console.error("[v0] off-session balance confirmation failed:", error)
+      }
     }
   }
 

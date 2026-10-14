@@ -253,7 +253,7 @@ export function OnboardingWizard({
             <h2 className="font-serif text-lg text-foreground">Secure Your Session</h2>
           </div>
           <p className="text-sm text-muted-foreground">
-            A 20% retainer confirms your booking on the calendar. This is processed securely through Stripe.
+            A 50% retainer confirms your booking on the calendar. This is processed securely through Stripe.
           </p>
           {!paid ? (
             <>
@@ -293,8 +293,8 @@ export function OnboardingWizard({
           <h2 className="font-serif text-lg text-foreground">Welcome to The Vault</h2>
           <p className="text-sm text-muted-foreground">
             Your entire project lives in one secure digital hub. Use The Vault to review and sign your production
-            agreement, lock in your calendar date with a 20% retainer, and preview your finished collection. Once
-            your final 80% balance is completed, your high-resolution digital archive unlocks instantly—complete
+            agreement, lock in your calendar date with a 50% retainer, and preview your finished collection. Once
+            your final 50% balance is completed, your high-resolution digital archive unlocks instantly—complete
             with a built-in custom print studio delivering archival wall art and prints straight to your door.
           </p>
           <Button onClick={handleUnlock} disabled={activating} className="w-full">

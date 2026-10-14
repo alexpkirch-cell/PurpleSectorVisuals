@@ -1,0 +1,271 @@
+import type { Config, CustomField } from "@measured/puck"
+
+import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
+import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
+import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
+import { BookingButton } from "@/components/puck/booking-button"
+import { ImageFieldInput } from "@/components/puck/image-field"
+import { DisciplinesBlock, DualSplitBlock, HeroBlock, StudioBlock } from "@/components/puck/site-sections"
+import { cn } from "@/lib/utils"
+
+type Align = "left" | "center"
+
+/** Every photo slot in the editor uses this: file picker -> Supabase `public_site_assets` -> public URL. */
+const imageField = (label: string): CustomField<string> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange }) => <ImageFieldInput value={value ?? ""} onChange={onChange} />,
+})
+
+const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5", "card6"] as const
+const DUAL_SPLIT_FIELD_KEYS = [
+  "alexMain",
+  "alexCard0",
+  "alexCard1",
+  "alexCard2",
+  "gabeMain",
+  "gabeCard0",
+  "gabeCard1",
+  "gabeCard2",
+] as const
+const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events"] as const
+
+type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string>
+type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
+type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string>
+
+const emptyProps = <K extends string>(keys: readonly K[]) =>
+  Object.fromEntries(keys.map((key) => [key, ""])) as Record<K, string>
+
+const DUAL_SPLIT_LABELS: Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> = {
+  alexMain: "Alex: main portrait",
+  alexCard0: "Alex: BTS card",
+  alexCard1: "Alex: lifestyle card",
+  alexCard2: "Alex: detail card",
+  gabeMain: "Gabe: main portrait",
+  gabeCard0: "Gabe: mood card",
+  gabeCard1: "Gabe: vibe card",
+  gabeCard2: "Gabe: form card",
+}
+
+const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> = {
+  sports: "Sports",
+  automotive: "Automotive",
+  portraits: "Portraits",
+  events: "Events",
+}
+
+export type PuckComponents = {
+  Hero: HeroProps
+  Text: {
+    eyebrow: string
+    heading: string
+    body: string
+  }
+  Image: {
+    src: string
+    alt: string
+    caption: string
+    aspect: "video" | "square" | "portrait"
+  }
+  BookingButton: {
+    label: string
+    shooterId: string
+    variant: "default" | "outline" | "secondary"
+    align: Align
+  }
+  Studio: {
+    reel: string
+    sports: string
+    portrait: string
+    bts: { src: string }[]
+  }
+  DualSplit: DualSplitProps
+  Disciplines: DisciplinesProps
+  JoinRoster: Record<string, never>
+}
+
+export type PuckRootProps = {
+  title: string
+  description: string
+}
+
+const aspectClass = {
+  video: "aspect-video",
+  square: "aspect-square",
+  portrait: "aspect-[3/4]",
+} as const
+
+export const puckConfig: Config<PuckComponents, PuckRootProps> = {
+  root: {
+    fields: {
+      title: { type: "text", label: "Page title (SEO)" },
+      description: { type: "textarea", label: "Meta description (SEO)" },
+    },
+    defaultProps: { title: "", description: "" },
+    render: ({ children }) => <div className="min-h-screen w-full bg-[#09090b] text-foreground">{children}</div>,
+  },
+  categories: {
+    sections: {
+      title: "Homepage sections",
+      components: ["Hero", "Text", "Studio", "DualSplit", "Disciplines", "JoinRoster"],
+    },
+    content: { title: "Content", components: ["Image", "BookingButton"] },
+  },
+  components: {
+    Hero: {
+      label: "Hero Section",
+      fields: Object.fromEntries(
+        HERO_FIELD_KEYS.map((key, i) => [key, imageField(`Card ${i + 1}: ${HERO_SLOT_LABELS[i]}`)])
+      ) as Record<(typeof HERO_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(HERO_FIELD_KEYS),
+      render: (props) => <HeroBlock images={HERO_FIELD_KEYS.map((key) => props[key])} />,
+    },
+
+    Text: {
+      label: "Text / Copy",
+      fields: {
+        eyebrow: { type: "text", label: "Eyebrow (small label)" },
+        heading: { type: "text", label: "Heading" },
+        body: { type: "textarea", label: "Body (blank line starts a new paragraph)" },
+      },
+      defaultProps: {
+        eyebrow: HOW_WE_WORK_DEFAULTS.eyebrow,
+        heading: HOW_WE_WORK_DEFAULTS.heading,
+        body: HOW_WE_WORK_DEFAULTS.body,
+      },
+      render: ({ eyebrow, heading, body }) => <HowWeWorkSection eyebrow={eyebrow} heading={heading} body={body} />,
+    },
+
+    Image: {
+      label: "Image",
+      fields: {
+        src: imageField("Image"),
+        alt: { type: "text", label: "Alt text" },
+        caption: { type: "text", label: "Caption (optional)" },
+        aspect: {
+          type: "select",
+          label: "Aspect ratio",
+          options: [
+            { label: "Wide (16:9)", value: "video" },
+            { label: "Square", value: "square" },
+            { label: "Portrait (3:4)", value: "portrait" },
+          ],
+        },
+      },
+      defaultProps: { src: "", alt: "", caption: "", aspect: "video" },
+      render: ({ src, alt, caption, aspect, puck }) => (
+        <section className="w-full bg-[#09090b]">
+          <figure className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:px-10">
+            {src ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={src}
+                alt={alt}
+                className={cn(
+                  "w-full rounded-3xl border border-zinc-800 object-cover shadow-2xl shadow-black/60",
+                  aspectClass[aspect]
+                )}
+              />
+            ) : (
+              <div
+                className={cn(
+                  "flex w-full items-center justify-center rounded-3xl border border-dashed border-zinc-700 bg-zinc-900/60 px-6 text-center text-sm text-zinc-400",
+                  aspectClass[aspect]
+                )}
+              >
+                {puck.isEditing ? "Select this block, then upload a picture in the right-hand panel." : null}
+              </div>
+            )}
+            {caption ? (
+              <figcaption className="font-heading text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
+                {caption}
+              </figcaption>
+            ) : null}
+          </figure>
+        </section>
+      ),
+    },
+
+    BookingButton: {
+      label: "Booking Button",
+      fields: {
+        label: { type: "text", label: "Button label" },
+        shooterId: { type: "text", label: "Photographer ID (optional, pre-selects on /book)" },
+        variant: {
+          type: "select",
+          label: "Style",
+          options: [
+            { label: "Primary", value: "default" },
+            { label: "Outline", value: "outline" },
+            { label: "Secondary", value: "secondary" },
+          ],
+        },
+        align: {
+          type: "radio",
+          label: "Alignment",
+          options: [
+            { label: "Left", value: "left" },
+            { label: "Center", value: "center" },
+          ],
+        },
+      },
+      defaultProps: { label: "Book a shoot", shooterId: "", variant: "default", align: "center" },
+      render: ({ label, shooterId, variant, align }) => (
+        <section className="w-full bg-[#09090b]">
+          <div
+            className={cn(
+              "mx-auto flex max-w-6xl px-6 py-12 sm:px-10",
+              align === "center" ? "justify-center" : "justify-start"
+            )}
+          >
+            <BookingButton label={label} shooterId={shooterId || undefined} variant={variant} />
+          </div>
+        </section>
+      ),
+    },
+
+    Studio: {
+      label: "The Studio",
+      fields: {
+        reel: imageField("Studio reel (large)"),
+        sports: imageField("Sports action"),
+        portrait: imageField("Portrait"),
+        bts: {
+          type: "array",
+          label: "Behind-the-scenes clips (up to 6)",
+          max: 6,
+          arrayFields: { src: imageField("Photo") },
+          defaultItemProps: { src: "" },
+          getItemSummary: (_item, i) => `Clip ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        reel: "",
+        sports: "",
+        portrait: "",
+        bts: Array.from({ length: 6 }, () => ({ src: "" })),
+      },
+      render: ({ reel, sports, portrait, bts }) => (
+        <StudioBlock images={{ reel, sports, portrait, bts: (bts ?? []).map((item) => item.src) }} />
+      ),
+    },
+    DualSplit: {
+      label: "Dual Split (Team)",
+      fields: Object.fromEntries(
+        DUAL_SPLIT_FIELD_KEYS.map((key) => [key, imageField(DUAL_SPLIT_LABELS[key])])
+      ) as Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(DUAL_SPLIT_FIELD_KEYS),
+      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DualSplitBlock images={images} />,
+    },
+    Disciplines: {
+      label: "Disciplines",
+      fields: Object.fromEntries(
+        DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
+      ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(DISCIPLINE_FIELD_KEYS),
+      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DisciplinesBlock images={images} />,
+    },
+    JoinRoster: { label: "Join the Roster", fields: {}, render: () => <JoinTheRosterSection /> },
+  },
+}

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import { splitTotal } from "@/lib/payment-terms"
 import { createClient } from "@/lib/supabase/server"
 import type { SettlementItem, Shoot } from "@/app/actions/shoots"
 
@@ -100,8 +101,7 @@ export async function generateVaultAndSendLink(
     WHERE id = ${id}
   `
 
-  const depositAmount = Math.round(input.totalPrice * 0.2 * 100) / 100
-  const balanceAmount = Math.round((input.totalPrice - depositAmount) * 100) / 100
+  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(input.totalPrice)
 
   const { rows: existingVaultRows } = await sql<{ id: string }>`
     SELECT id FROM vaults WHERE shoot_id = ${id}

@@ -36,7 +36,7 @@ export async function getSiteSlots(): Promise<SiteSlotOverrides> {
 /** Server-side read of every configured text override, keyed by key, falling back to defaults. */
 export async function getSiteText(): Promise<SiteTextOverrides> {
   const supabase = await createClient()
-  const { data } = await supabase.from("site_text_content").select("key, value")
+  const { data } = await supabase.from("site_content").select("section_key, text_value")
 
   const overrides: SiteTextOverrides = {}
   for (const def of SITE_TEXT_DEFINITIONS) {
@@ -44,7 +44,7 @@ export async function getSiteText(): Promise<SiteTextOverrides> {
   }
   if (data) {
     for (const row of data) {
-      overrides[row.key] = row.value
+      if (row.text_value !== null) overrides[row.section_key] = row.text_value
     }
   }
 

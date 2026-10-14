@@ -35,12 +35,18 @@ const cardOffsets = [
   "-right-4 bottom-0 w-16 rotate-3 sm:-right-6 sm:w-24",
 ]
 
+/** Keys are `alexMain`, `alexCard0`..`alexCard2`, `gabeMain`, `gabeCard0`..`gabeCard2`. */
+export type DualSplitImages = Record<string, string | undefined>
+
 export function DualSplitSection({
   overrides,
+  images,
 }: {
   overrides?: SiteSlotOverrides
+  images?: DualSplitImages
 }) {
   const [hovered, setHovered] = useState<Side>(null)
+  const imageFor = (key: string) => images?.[key] || undefined
 
   return (
     <section id="team" className="w-full bg-[#09090b]">
@@ -104,6 +110,7 @@ export function DualSplitSection({
                     label={creator.slotLabel}
                     slotKey={`home.dual-split.${creator.key}.main`}
                     overrides={overrides}
+                    imageUrl={imageFor(`${creator.key}Main`)}
                     className={cn(
                       "transition-all duration-500 ease-out",
                       isHovered &&
@@ -124,6 +131,7 @@ export function DualSplitSection({
                         compact
                         slotKey={`home.dual-split.${creator.key}.card.${i}`}
                         overrides={overrides}
+                        imageUrl={imageFor(`${creator.key}Card${i}`)}
                         className={cn(
                           "transition-all duration-500 ease-out",
                           isHovered &&
@@ -167,6 +175,7 @@ export function DualSplitSection({
                   label={creator.slotLabel}
                   slotKey={`home.dual-split.${creator.key}.main`}
                   overrides={overrides}
+                  imageUrl={imageFor(`${creator.key}Main`)}
                 />
               </div>
             </Link>
@@ -183,6 +192,7 @@ export function DualSplitSection({
                     compact
                     slotKey={`home.dual-split.${creator.key}.card.${i}`}
                     overrides={overrides}
+                    imageUrl={imageFor(`${creator.key}Card${i}`)}
                   />
                 </div>
               ))}

@@ -162,6 +162,46 @@
   --sidebar-ring: #ff8000;
 }
 
+/* Dark skin for the Puck editor chrome (sidebars, fields, header). Scoped so the canvas iframe is untouched. */
+.psv-puck {
+  --puck-color-grey-01: #f4f4f5;
+  --puck-color-grey-02: #e4e4e7;
+  --puck-color-grey-03: #d4d4d8;
+  --puck-color-grey-04: #a1a1aa;
+  --puck-color-grey-05: #8b8b94;
+  --puck-color-grey-06: #71717a;
+  --puck-color-grey-07: #52525b;
+  --puck-color-grey-08: #3f3f46;
+  --puck-color-grey-09: #27272a;
+  --puck-color-grey-10: #1c1c20;
+  --puck-color-grey-11: #121214;
+  --puck-color-grey-12: #09090b;
+  --puck-color-white: #09090b;
+  --puck-color-black: #f4f4f5;
+  --puck-color-azure-01: #fbe3fd;
+  --puck-color-azure-02: #f6b8fa;
+  --puck-color-azure-03: #f08bf6;
+  --puck-color-azure-04: #e829f1;
+  --puck-color-azure-05: #e829f1;
+  --puck-color-azure-06: #c026d3;
+  --puck-color-azure-07: #a21caf;
+  --puck-color-azure-08: #701a75;
+  --puck-color-azure-09: #4a044e;
+  --puck-color-azure-10: #2e1032;
+  --puck-color-azure-11: #1d0b20;
+  --puck-color-azure-12: #14070f;
+  color-scheme: dark;
+}
+
+/* Let the page canvas fill its pane like a live site instead of a padded, bordered card. */
+.psv-puck [class*="_PuckCanvas_"] {
+  padding: 0;
+}
+
+.psv-puck [class*="_PuckCanvas-root_"] {
+  border: none;
+}
+
 .font-heading {
   letter-spacing: -0.01em;
 }
