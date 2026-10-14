@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/server"
 import { chargeBalanceOffSession } from "@/lib/vault-payments"
 import { PROJECT_STATUSES, SERVICE_TIERS, type ProjectStatus, type ServiceTier } from "@/lib/command-center-constants"
 
-export type { ProjectStatus, ServiceTier }
 
 export type SplitTier = "50_50" | "70_30"
 
