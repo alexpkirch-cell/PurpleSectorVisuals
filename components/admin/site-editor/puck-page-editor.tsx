@@ -104,7 +104,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
   }
 
   return (
-    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 min-h-screen w-full bg-background">
+    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 overflow-hidden bg-background">
       <SiteSlotsProvider overrides={slotOverrides}>
       <Puck
         key={path}
@@ -114,7 +114,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
         onPublish={handlePublish}
         headerPath={path}
         renderHeaderActions={() => (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {status ? (
               <span
                 role="status"
@@ -131,7 +131,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
               id="puck-page-select"
               value={path}
               onChange={(event) => openPath(event.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              className="h-8 max-w-32 rounded-md border border-input bg-background px-2 text-sm text-foreground"
             >
               {knownPaths.map((value) => (
                 <option key={value} value={value}>
@@ -150,7 +150,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
                   }}
                   placeholder="new-page"
                   aria-label="New page path"
-                  className="h-8 w-32"
+                  className="h-8 w-28"
                 />
                 <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
                   <Plus className="size-4" />
