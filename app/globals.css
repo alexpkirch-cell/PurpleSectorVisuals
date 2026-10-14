@@ -193,6 +193,15 @@
   color-scheme: dark;
 }
 
+/* Let the page canvas fill its pane like a live site instead of a padded, bordered card. */
+.psv-puck [class*="_PuckCanvas_"] {
+  padding: 0;
+}
+
+.psv-puck [class*="_PuckCanvas-root_"] {
+  border: none;
+}
+
 .font-heading {
   letter-spacing: -0.01em;
 }

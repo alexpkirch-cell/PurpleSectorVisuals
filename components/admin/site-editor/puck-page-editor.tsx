@@ -7,15 +7,18 @@ import { Puck, type Data, type Overrides } from "@measured/puck"
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
+import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { validatePagePath } from "@/lib/page-layout-paths"
 import { puckConfig } from "@/lib/puck/config"
+import type { SiteSlotOverrides } from "@/lib/site-slots"
 
 type PuckPageEditorProps = {
   path: string
   paths: string[]
   initialData: Data
+  slotOverrides: SiteSlotOverrides
 }
 
 const RESIZE_OBSERVER_MESSAGES = [
@@ -40,7 +43,17 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
 
     const frameWindow = frameDocument.defaultView
     frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
-    return () => frameWindow?.removeEventListener("error", ignoreResizeObserverError, true)
+
+    // Real links and buttons from the live site must not navigate away while editing; selection still works.
+    const blockNavigation = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest("a[href]")) event.preventDefault()
+    }
+    frameDocument.addEventListener("click", blockNavigation, true)
+
+    return () => {
+      frameWindow?.removeEventListener("error", ignoreResizeObserverError, true)
+      frameDocument.removeEventListener("click", blockNavigation, true)
+    }
   }, [frameDocument])
 
   return <>{children}</>
@@ -48,7 +61,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
 
 const overrides: Partial<Overrides> = { iframe: PreviewFrame }
 
-export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps) {
+export function PuckPageEditor({ path, paths, initialData, slotOverrides }: PuckPageEditorProps) {
   const router = useRouter()
   const [status, setStatus] = useState<{ tone: "ok" | "error"; message: string } | null>(null)
   const [newPath, setNewPath] = useState("")
@@ -86,7 +99,8 @@ export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps
   }
 
   return (
-    <div className="psv-puck fixed inset-0 z-50 bg-background">
+    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 min-h-screen w-full bg-background">
+      <SiteSlotsProvider overrides={slotOverrides}>
       <Puck
         key={path}
         config={puckConfig}
@@ -156,6 +170,7 @@ export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps
           </div>
         )}
       />
+      </SiteSlotsProvider>
     </div>
   )
 }

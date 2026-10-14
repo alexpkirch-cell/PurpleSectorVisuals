@@ -4,7 +4,9 @@ import { Render } from "@measured/puck"
 
 import { HomePage } from "@/components/home/home-page"
 import { getPageLayout, getRootProps, toUrlPath } from "@/lib/page-layouts"
+import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { puckConfig } from "@/lib/puck/config"
+import { getSiteSlots } from "@/lib/site-slots"
 
 type PageProps = {
   params: Promise<{ page?: string[] }>
@@ -28,7 +30,11 @@ export default async function Page({ params }: PageProps) {
   const layout = await getPageLayout(urlPath)
 
   if (layout) {
-    return <Render config={puckConfig} data={layout.data} />
+    return (
+      <SiteSlotsProvider overrides={await getSiteSlots()}>
+        <Render config={puckConfig} data={layout.data} />
+      </SiteSlotsProvider>
+    )
   }
 
   // The original homepage stays live until a "/" layout is published in the editor.

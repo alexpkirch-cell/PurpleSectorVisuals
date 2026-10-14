@@ -4,7 +4,8 @@ import "@measured/puck/puck.css"
 import { listPageLayoutPaths, loadPageLayoutForEditor } from "@/app/actions/page-layouts"
 import { PuckPageEditor } from "@/components/admin/site-editor/puck-page-editor"
 import { validatePagePath } from "@/lib/page-layout-paths"
-import { DEFAULT_LAYOUT, isEmptyLayout } from "@/lib/puck/default-layout"
+import { getDefaultLayout, isEmptyLayout } from "@/lib/puck/default-layout"
+import { getSiteSlots } from "@/lib/site-slots"
 
 export const metadata: Metadata = {
   title: "Site Editor | Purple Sector Visuals",
@@ -19,7 +20,18 @@ export default async function SiteEditorPage({
   const { path: requestedPath } = await searchParams
   const path = requestedPath && requestedPath === "/" ? "/" : requestedPath && !validatePagePath(requestedPath) ? requestedPath : "/"
 
-  const [paths, saved] = await Promise.all([listPageLayoutPaths(), loadPageLayoutForEditor(path)])
+  const [paths, saved, slotOverrides] = await Promise.all([
+    listPageLayoutPaths(),
+    loadPageLayoutForEditor(path),
+    getSiteSlots(),
+  ])
 
-  return <PuckPageEditor path={path} paths={paths} initialData={isEmptyLayout(saved) ? DEFAULT_LAYOUT : saved!} />
+  return (
+    <PuckPageEditor
+      path={path}
+      paths={paths}
+      slotOverrides={slotOverrides}
+      initialData={isEmptyLayout(saved) ? getDefaultLayout(path) : saved!}
+    />
+  )
 }
