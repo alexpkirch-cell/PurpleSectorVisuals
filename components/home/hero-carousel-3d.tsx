@@ -29,7 +29,9 @@ const TOTAL_DEPTH = NEAR_Z - FAR_Z
 const CREEP_SPEED = 1.6
 const IDLE_MS = 3000
 
-export function HeroCarousel3D() {
+export const HERO_SLOT_LABELS = SLOTS
+
+export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -208,9 +210,14 @@ export function HeroCarousel3D() {
             transformStyle: "preserve-3d",
           }}
         >
-          <span className="px-4 text-center font-mono text-[10px] tracking-wider text-zinc-600 sm:text-xs">
-            {label}
-          </span>
+          {images?.[i] ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={images[i]} alt={label} className="absolute inset-0 size-full object-cover" />
+          ) : (
+            <span className="px-4 text-center font-mono text-[10px] tracking-wider text-zinc-600 sm:text-xs">
+              {label}
+            </span>
+          )}
         </div>
       ))}
 

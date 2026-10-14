@@ -4,10 +4,15 @@ import { ImageSlot } from "@/components/image-slot"
 import { disciplines } from "@/lib/site-data"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
+/** Keyed by lower-cased discipline name: sports, automotive, portraits, events. */
+export type DisciplineImages = Record<string, string | undefined>
+
 export function DisciplinesSection({
   overrides,
+  images,
 }: {
   overrides?: SiteSlotOverrides
+  images?: DisciplineImages
 }) {
   return (
     <section className="w-full bg-[#09090b]">
@@ -43,6 +48,7 @@ export function DisciplinesSection({
                   className="border-none"
                   slotKey={`home.discipline.${discipline.name.toLowerCase()}`}
                   overrides={overrides}
+                  imageUrl={images?.[discipline.name.toLowerCase()] || undefined}
                 />
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/40 to-transparent" />

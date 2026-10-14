@@ -2,9 +2,10 @@
 
 import { createContext, useContext, type ReactNode } from "react"
 
-import { CoreIdentitySection } from "@/components/home/core-identity-section"
-import { DisciplinesSection } from "@/components/home/disciplines-section"
-import { DualSplitSection } from "@/components/home/dual-split-section"
+import { CoreIdentitySection, type CoreIdentityImages } from "@/components/home/core-identity-section"
+import { DisciplinesSection, type DisciplineImages } from "@/components/home/disciplines-section"
+import { DualSplitSection, type DualSplitImages } from "@/components/home/dual-split-section"
+import { HeroCarousel3D } from "@/components/home/hero-carousel-3d"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
 const SiteSlotsContext = createContext<SiteSlotOverrides>({})
@@ -14,14 +15,18 @@ export function SiteSlotsProvider({ overrides, children }: { overrides: SiteSlot
   return <SiteSlotsContext.Provider value={overrides}>{children}</SiteSlotsContext.Provider>
 }
 
-export function StudioBlock() {
-  return <CoreIdentitySection overrides={useContext(SiteSlotsContext)} />
+export function HeroBlock({ images }: { images: (string | undefined)[] }) {
+  return <HeroCarousel3D images={images} />
 }
 
-export function DualSplitBlock() {
-  return <DualSplitSection overrides={useContext(SiteSlotsContext)} />
+export function StudioBlock({ images }: { images: CoreIdentityImages }) {
+  return <CoreIdentitySection overrides={useContext(SiteSlotsContext)} images={images} />
 }
 
-export function DisciplinesBlock() {
-  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} />
+export function DualSplitBlock({ images }: { images: DualSplitImages }) {
+  return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} />
+}
+
+export function DisciplinesBlock({ images }: { images: DisciplineImages }) {
+  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} images={images} />
 }

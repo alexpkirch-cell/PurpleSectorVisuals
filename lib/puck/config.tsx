@@ -1,17 +1,62 @@
-import type { Config } from "@measured/puck"
+import type { Config, CustomField } from "@measured/puck"
 
-import { HeroCarousel3D } from "@/components/home/hero-carousel-3d"
+import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
 import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
 import { ImageFieldInput } from "@/components/puck/image-field"
-import { DisciplinesBlock, DualSplitBlock, StudioBlock } from "@/components/puck/site-sections"
+import { DisciplinesBlock, DualSplitBlock, HeroBlock, StudioBlock } from "@/components/puck/site-sections"
 import { cn } from "@/lib/utils"
 
 type Align = "left" | "center"
 
+/** Every photo slot in the editor uses this: file picker -> Supabase `public_site_assets` -> public URL. */
+const imageField = (label: string): CustomField<string> => ({
+  type: "custom",
+  label,
+  render: ({ value, onChange }) => <ImageFieldInput value={value ?? ""} onChange={onChange} />,
+})
+
+const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5", "card6"] as const
+const DUAL_SPLIT_FIELD_KEYS = [
+  "alexMain",
+  "alexCard0",
+  "alexCard1",
+  "alexCard2",
+  "gabeMain",
+  "gabeCard0",
+  "gabeCard1",
+  "gabeCard2",
+] as const
+const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events"] as const
+
+type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string>
+type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
+type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string>
+
+const emptyProps = <K extends string>(keys: readonly K[]) =>
+  Object.fromEntries(keys.map((key) => [key, ""])) as Record<K, string>
+
+const DUAL_SPLIT_LABELS: Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> = {
+  alexMain: "Alex: main portrait",
+  alexCard0: "Alex: BTS card",
+  alexCard1: "Alex: lifestyle card",
+  alexCard2: "Alex: detail card",
+  gabeMain: "Gabe: main portrait",
+  gabeCard0: "Gabe: mood card",
+  gabeCard1: "Gabe: vibe card",
+  gabeCard2: "Gabe: form card",
+}
+
+const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> = {
+  sports: "Sports",
+  automotive: "Automotive",
+  portraits: "Portraits",
+  events: "Events",
+}
+
 export type PuckComponents = {
-  Hero: Record<string, never>
+  Hero: HeroProps
   Text: {
     eyebrow: string
     heading: string
@@ -29,9 +74,14 @@ export type PuckComponents = {
     variant: "default" | "outline" | "secondary"
     align: Align
   }
-  Studio: Record<string, never>
-  DualSplit: Record<string, never>
-  Disciplines: Record<string, never>
+  Studio: {
+    reel: string
+    sports: string
+    portrait: string
+    bts: { src: string }[]
+  }
+  DualSplit: DualSplitProps
+  Disciplines: DisciplinesProps
   JoinRoster: Record<string, never>
 }
 
@@ -65,8 +115,11 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
   components: {
     Hero: {
       label: "Hero Section",
-      fields: {},
-      render: () => <HeroCarousel3D />,
+      fields: Object.fromEntries(
+        HERO_FIELD_KEYS.map((key, i) => [key, imageField(`Card ${i + 1}: ${HERO_SLOT_LABELS[i]}`)])
+      ) as Record<(typeof HERO_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(HERO_FIELD_KEYS),
+      render: (props) => <HeroBlock images={HERO_FIELD_KEYS.map((key) => props[key])} />,
     },
 
     Text: {
@@ -87,11 +140,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Image: {
       label: "Image",
       fields: {
-        src: {
-          type: "custom",
-          label: "Image",
-          render: ({ value, onChange }) => <ImageFieldInput value={value} onChange={onChange} />,
-        },
+        src: imageField("Image"),
         alt: { type: "text", label: "Alt text" },
         caption: { type: "text", label: "Caption (optional)" },
         aspect: {
@@ -176,9 +225,47 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       ),
     },
 
-    Studio: { label: "The Studio", fields: {}, render: () => <StudioBlock /> },
-    DualSplit: { label: "Dual Split (Team)", fields: {}, render: () => <DualSplitBlock /> },
-    Disciplines: { label: "Disciplines", fields: {}, render: () => <DisciplinesBlock /> },
+    Studio: {
+      label: "The Studio",
+      fields: {
+        reel: imageField("Studio reel (large)"),
+        sports: imageField("Sports action"),
+        portrait: imageField("Portrait"),
+        bts: {
+          type: "array",
+          label: "Behind-the-scenes clips (up to 6)",
+          max: 6,
+          arrayFields: { src: imageField("Photo") },
+          defaultItemProps: { src: "" },
+          getItemSummary: (_item, i) => `Clip ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        reel: "",
+        sports: "",
+        portrait: "",
+        bts: Array.from({ length: 6 }, () => ({ src: "" })),
+      },
+      render: ({ reel, sports, portrait, bts }) => (
+        <StudioBlock images={{ reel, sports, portrait, bts: (bts ?? []).map((item) => item.src) }} />
+      ),
+    },
+    DualSplit: {
+      label: "Dual Split (Team)",
+      fields: Object.fromEntries(
+        DUAL_SPLIT_FIELD_KEYS.map((key) => [key, imageField(DUAL_SPLIT_LABELS[key])])
+      ) as Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(DUAL_SPLIT_FIELD_KEYS),
+      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DualSplitBlock images={images} />,
+    },
+    Disciplines: {
+      label: "Disciplines",
+      fields: Object.fromEntries(
+        DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
+      ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>,
+      defaultProps: emptyProps(DISCIPLINE_FIELD_KEYS),
+      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DisciplinesBlock images={images} />,
+    },
     JoinRoster: { label: "Join the Roster", fields: {}, render: () => <JoinTheRosterSection /> },
   },
 }

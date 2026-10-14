@@ -93,7 +93,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
             className="absolute inset-0 flex items-center justify-center gap-2 bg-background/80 text-sm text-foreground"
           >
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            Uploading
+            Uploading...
           </div>
         ) : null}
       </div>
