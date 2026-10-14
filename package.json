@@ -13,8 +13,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@builder.io/react": "^9.4.8",
-    "@builder.io/sdk": "^6.3.3",
+    "@measured/puck": "^0.20.2",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@stripe/react-stripe-js": "^6.10.0",

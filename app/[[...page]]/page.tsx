@@ -1,41 +1,37 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import { Render } from "@measured/puck"
 
-import { RenderBuilderContent } from "@/components/builder/render-builder-content"
 import { HomePage } from "@/components/home/home-page"
-import { getBuilderPage, toUrlPath } from "@/lib/builder"
+import { getPageLayout, getRootProps, toUrlPath } from "@/lib/page-layouts"
+import { puckConfig } from "@/lib/puck/config"
 
 type PageProps = {
   params: Promise<{ page?: string[] }>
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}
-
-function isBuilderEditor(searchParams: Record<string, string | string[] | undefined>) {
-  return Object.keys(searchParams).some((key) => key.startsWith("builder."))
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { page } = await params
-  const content = await getBuilderPage(toUrlPath(page))
-  const title = content?.data?.title as string | undefined
-  const description = content?.data?.descripton as string | undefined
+  const layout = await getPageLayout(toUrlPath(page))
+  if (!layout) return {}
 
+  const { title, description } = getRootProps(layout.data)
   return {
     ...(title ? { title } : {}),
     ...(description ? { description } : {}),
   }
 }
 
-export default async function Page({ params, searchParams }: PageProps) {
-  const [{ page }, query] = await Promise.all([params, searchParams])
+export default async function Page({ params }: PageProps) {
+  const { page } = await params
   const urlPath = toUrlPath(page)
-  const content = await getBuilderPage(urlPath)
+  const layout = await getPageLayout(urlPath)
 
-  if (content || isBuilderEditor(query)) {
-    return <RenderBuilderContent content={content ?? undefined} />
+  if (layout) {
+    return <Render config={puckConfig} data={layout.data} />
   }
 
-  // The previous hardcoded homepage stays live until a "/" page is published in Builder.
+  // The original homepage stays live until a "/" layout is published in the editor.
   if (urlPath === "/") {
     return <HomePage />
   }

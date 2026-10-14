@@ -1,40 +1,26 @@
 import type { Metadata } from "next"
+import type { Data } from "@measured/puck"
 
-import { listRoster } from "@/app/actions/roster"
-import { listSiteContent } from "@/app/actions/site-editor"
-import { RosterManager } from "@/components/admin/site-editor/roster-manager"
-import { SiteContentForm } from "@/components/admin/site-editor/site-content-form"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { listPageLayoutPaths, loadPageLayoutForEditor } from "@/app/actions/page-layouts"
+import { PuckPageEditor } from "@/components/admin/site-editor/puck-page-editor"
+import { validatePagePath } from "@/lib/page-layout-paths"
 
 export const metadata: Metadata = {
   title: "Site Editor | Purple Sector Visuals",
   robots: { index: false, follow: false },
 }
 
-export default async function SiteEditorPage() {
-  const [content, roster] = await Promise.all([listSiteContent(), listRoster()])
+const EMPTY_LAYOUT = { content: [], root: { props: { title: "", description: "" } } } as Data
 
-  return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-medium text-foreground">Site Editor</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Edit public site copy and images, and manage the photographers shown on the roster.
-        </p>
-      </div>
+export default async function SiteEditorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ path?: string }>
+}) {
+  const { path: requestedPath } = await searchParams
+  const path = requestedPath && requestedPath === "/" ? "/" : requestedPath && !validatePagePath(requestedPath) ? requestedPath : "/"
 
-      <Tabs defaultValue="content">
-        <TabsList>
-          <TabsTrigger value="content">Site content</TabsTrigger>
-          <TabsTrigger value="roster">Photographer roster</TabsTrigger>
-        </TabsList>
-        <TabsContent value="content" className="mt-4">
-          <SiteContentForm initialRows={content} />
-        </TabsContent>
-        <TabsContent value="roster" className="mt-4">
-          <RosterManager initialRoster={roster} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+  const [paths, saved] = await Promise.all([listPageLayoutPaths(), loadPageLayoutForEditor(path)])
+
+  return <PuckPageEditor path={path} paths={paths} initialData={saved ?? EMPTY_LAYOUT} />
 }
