@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { ArrowRight, CreditCard, Loader2, PackageCheck } from "lucide-react"
+import { ArrowRight, CreditCard, Loader2, PackageCheck, Trash2 } from "lucide-react"
 
-import { deliverAndCharge, moveProject, type CommandCenterProject } from "@/app/actions/command-center"
+import { deleteProject, deliverAndCharge, moveProject, type CommandCenterProject } from "@/app/actions/command-center"
 import type { ProjectStatus } from "@/lib/command-center-constants"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,19 @@ function ProjectCard({ project }: { project: CommandCenterProject }) {
     })
   }
 
+  function removeProject() {
+    if (!window.confirm(`Permanently delete ${project.clientName}'s project?`)) return
+    startTransition(async () => {
+      const result = await deleteProject(project.id)
+      if (result.success) {
+        toast.success("Project deleted.")
+      } else {
+        toast.error(result.error)
+      }
+      router.refresh()
+    })
+  }
+
   function deliver() {
     startTransition(async () => {
       const result = await deliverAndCharge(project.id)
@@ -58,7 +71,20 @@ function ProjectCard({ project }: { project: CommandCenterProject }) {
           <h3 className="truncate text-sm font-medium text-foreground">{project.clientName}</h3>
           <p className="truncate text-xs text-muted-foreground">{project.clientEmail}</p>
         </div>
-        <Badge variant="secondary">{project.serviceTier}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{project.serviceTier}</Badge>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 text-muted-foreground hover:text-destructive"
+            aria-label={`Delete ${project.clientName}'s project`}
+            disabled={isPending}
+            onClick={removeProject}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs">

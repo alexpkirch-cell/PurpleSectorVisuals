@@ -168,6 +168,23 @@ const FORWARD_MOVES: Record<ProjectStatus, ProjectStatus | null> = {
 }
 
 /** Manual drag/advance between Kanban columns. Delivery is only reachable through deliverAndCharge. */
+export async function deleteProject(projectId: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { success: false, error: "Not authorized." }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+    return { success: false, error: "Invalid project ID." }
+  }
+
+  try {
+    const result = await sql`DELETE FROM projects WHERE id = ${projectId} RETURNING id`
+    if (result.rowCount === 0) return { success: false, error: "Project not found." }
+    revalidatePath("/admin/command-center")
+    return { success: true }
+  } catch (error) {
+    console.error("[v0] deleteProject failed:", error)
+    return { success: false, error: "Could not delete the project." }
+  }
+}
+
 export async function moveProject(projectId: string, to: ProjectStatus): Promise<ActionResult> {
   if (!(await requireAdmin())) return { success: false, error: "Not authorized." }
   if (to === "Delivered") return { success: false, error: "Use Deliver & Charge to deliver a project." }
