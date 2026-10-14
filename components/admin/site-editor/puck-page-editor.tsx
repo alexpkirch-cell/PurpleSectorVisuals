@@ -10,6 +10,7 @@ import { savePageLayout } from "@/app/actions/page-layouts"
 import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { deferResizeObserver } from "@/lib/defer-resize-observer"
 import { validatePagePath } from "@/lib/page-layout-paths"
 import { puckConfig } from "@/lib/puck/config"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
@@ -20,6 +21,9 @@ type PuckPageEditorProps = {
   initialData: Data
   slotOverrides: SiteSlotOverrides
 }
+
+// Must run before Puck constructs any observer, so patch at module load rather than in an effect.
+if (typeof window !== "undefined") deferResizeObserver(window)
 
 const RESIZE_OBSERVER_MESSAGES = [
   "ResizeObserver loop completed with undelivered notifications.",
@@ -42,6 +46,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 
     const frameWindow = frameDocument.defaultView
+    deferResizeObserver(frameWindow)
     frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
 
     // Real links and buttons from the live site must not navigate away while editing; selection still works.
