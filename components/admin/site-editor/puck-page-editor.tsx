@@ -18,12 +18,29 @@ type PuckPageEditorProps = {
   initialData: Data
 }
 
+const RESIZE_OBSERVER_MESSAGES = [
+  "ResizeObserver loop completed with undelivered notifications.",
+  "ResizeObserver loop limit exceeded",
+]
+
+// Puck's canvas and sidebars resize in response to drags, which makes browsers emit this error. It means a resize
+// notification was deferred to the next frame; nothing is broken, so keep it away from the dev error overlay.
+function ignoreResizeObserverError(event: ErrorEvent) {
+  if (RESIZE_OBSERVER_MESSAGES.includes(event.message)) {
+    event.stopImmediatePropagation()
+  }
+}
+
 // The canvas renders in an iframe; mirror the host's theme classes so Tailwind tokens and next/font variables resolve inside it.
 function PreviewFrame({ children, document: frameDocument }: { children: ReactNode; document?: Document }) {
   useEffect(() => {
     if (!frameDocument) return
     frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
+
+    const frameWindow = frameDocument.defaultView
+    frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
+    return () => frameWindow?.removeEventListener("error", ignoreResizeObserverError, true)
   }, [frameDocument])
 
   return <>{children}</>
@@ -36,6 +53,11 @@ export function PuckPageEditor({ path, paths, initialData }: PuckPageEditorProps
   const [status, setStatus] = useState<{ tone: "ok" | "error"; message: string } | null>(null)
   const [newPath, setNewPath] = useState("")
   const [newPathError, setNewPathError] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.addEventListener("error", ignoreResizeObserverError, true)
+    return () => window.removeEventListener("error", ignoreResizeObserverError, true)
+  }, [])
 
   const knownPaths = Array.from(new Set(["/", ...paths, path])).sort()
 
