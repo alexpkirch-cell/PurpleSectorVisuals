@@ -21,6 +21,19 @@ import {
   HeroBlock,
   StudioBlock,
 } from "@/components/puck/site-sections"
+import {
+  DEFAULT_CUSTOM_HEIGHT,
+  resolveImageSizing,
+  SmartImage,
+  type ImageObjectFit,
+  type ImageSizing,
+} from "@/components/puck/smart-image"
+import {
+  resolveSpecialtyName,
+  SPECIALTY_OPTIONS,
+  SpecialtyBlock,
+  type SpecialtyType,
+} from "@/components/puck/specialty-block"
 import type { PuckBlockMetadata } from "@/lib/puck/block-metadata"
 import { cn } from "@/lib/utils"
 
@@ -94,7 +107,17 @@ export type PuckComponents = {
     src: string
     alt: string
     caption: string
-    aspect: "video" | "square" | "portrait"
+    sizing: ImageSizing
+    objectFit: ImageObjectFit
+    customHeight: number
+    /** Legacy field from before `sizing` existed; only read to keep old pages looking the same. */
+    aspect?: "video" | "square" | "portrait"
+  }
+  Specialty: {
+    specialtyType: SpecialtyType
+    customSpecialtyName: string
+    description: string
+    image: string
   }
   BookingButton: {
     label: string
@@ -143,12 +166,6 @@ export type PuckRootProps = {
   description: string
 }
 
-const aspectClass = {
-  video: "aspect-video",
-  square: "aspect-square",
-  portrait: "aspect-[3/4]",
-} as const
-
 export const puckConfig: Config<PuckComponents, PuckRootProps> = {
   root: {
     fields: {
@@ -163,7 +180,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       title: "Homepage sections",
       components: ["Hero", "Text", "Studio", "DualSplit", "Disciplines", "JoinRoster"],
     },
-    content: { title: "Content", components: ["PageHeader", "Image", "BookingButton"] },
+    content: { title: "Content", components: ["PageHeader", "Image", "Specialty", "BookingButton"] },
     pages: {
       title: "Page sections",
       components: ["WorkGallery", "PackagesConfigurator", "BookingForm", "CreatorProfile", "VaultLogin", "DemoVault"],
@@ -182,9 +199,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Text: {
       label: "Text / Copy",
       fields: {
-        eyebrow: { type: "text", label: "Eyebrow (small label)" },
-        heading: { type: "text", label: "Heading" },
-        body: { type: "textarea", label: "Body (blank line starts a new paragraph)" },
+        eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
+        heading: { type: "text", label: "Heading", contentEditable: true },
+        body: { type: "textarea", label: "Body (blank line starts a new paragraph)", contentEditable: true },
       },
       defaultProps: {
         eyebrow: HOW_WE_WORK_DEFAULTS.eyebrow,
@@ -199,41 +216,56 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       fields: {
         src: imageField("Image"),
         alt: { type: "text", label: "Alt text" },
-        caption: { type: "text", label: "Caption (optional)" },
-        aspect: {
-          type: "select",
-          label: "Aspect ratio",
+        caption: { type: "text", label: "Caption (optional)", contentEditable: true },
+        sizing: {
+          type: "radio",
+          label: "Sizing",
           options: [
-            { label: "Wide (16:9)", value: "video" },
-            { label: "Square", value: "square" },
-            { label: "Portrait (3:4)", value: "portrait" },
+            { label: "Auto", value: "auto" },
+            { label: "Square (1:1)", value: "square" },
+            { label: "Portrait (4:5)", value: "portrait" },
+            { label: "Landscape (16:9)", value: "landscape" },
+            { label: "Custom Height", value: "custom" },
           ],
         },
+        objectFit: {
+          type: "select",
+          label: "Object fit",
+          options: [
+            { label: "Cover (fill and crop)", value: "cover" },
+            { label: "Contain (show whole image)", value: "contain" },
+          ],
+        },
+        customHeight: { type: "number", label: "Custom height (px)", min: 120, max: 1600, step: 10 },
       },
-      defaultProps: { src: "", alt: "", caption: "", aspect: "video" },
-      render: ({ src, alt, caption, aspect, puck }) => (
+      defaultProps: {
+        src: "",
+        alt: "",
+        caption: "",
+        sizing: "landscape",
+        objectFit: "cover",
+        customHeight: DEFAULT_CUSTOM_HEIGHT,
+      },
+      resolveFields: (data, { fields }) => {
+        const { objectFit, customHeight, ...base } = fields
+        const sizing = resolveImageSizing(data.props.sizing, data.props.aspect)
+        return {
+          ...base,
+          ...(sizing !== "auto" ? { objectFit } : {}),
+          ...(sizing === "custom" ? { customHeight } : {}),
+        } as typeof fields
+      },
+      render: ({ src, alt, caption, sizing, objectFit, customHeight, aspect, puck }) => (
         <section className="w-full bg-[#09090b]">
           <figure className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:px-10">
-            {src ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={src}
-                alt={alt}
-                className={cn(
-                  "w-full rounded-3xl border border-zinc-800 object-cover shadow-2xl shadow-black/60",
-                  aspectClass[aspect]
-                )}
-              />
-            ) : (
-              <div
-                className={cn(
-                  "flex w-full items-center justify-center rounded-3xl border border-dashed border-zinc-700 bg-zinc-900/60 px-6 text-center text-sm text-zinc-400",
-                  aspectClass[aspect]
-                )}
-              >
-                {puck.isEditing ? "Select this block, then upload a picture in the right-hand panel." : null}
-              </div>
-            )}
+            <SmartImage
+              src={src}
+              alt={alt}
+              sizing={resolveImageSizing(sizing, aspect)}
+              objectFit={objectFit}
+              customHeight={customHeight}
+              emptyLabel={puck.isEditing ? "Select this block, then upload a picture in the right-hand panel." : undefined}
+            />
             {caption ? (
               <figcaption className="font-heading text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
                 {caption}
@@ -241,6 +273,40 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
             ) : null}
           </figure>
         </section>
+      ),
+    },
+
+    Specialty: {
+      label: "Specialty / Service",
+      fields: {
+        specialtyType: { type: "select", label: "Specialty", options: SPECIALTY_OPTIONS },
+        customSpecialtyName: { type: "text", label: "Custom specialty name", placeholder: "e.g. Real estate" },
+        description: { type: "textarea", label: "Description", contentEditable: true },
+        image: imageField("Photo (optional)"),
+      },
+      defaultProps: {
+        specialtyType: "Portraits",
+        customSpecialtyName: "",
+        description: "Signature portraits that capture personality, light, and mood.",
+        image: "",
+      },
+      resolveFields: (data, { fields }) => {
+        const { customSpecialtyName, ...base } = fields
+        if (data.props.specialtyType !== "custom") return base as typeof fields
+        return {
+          specialtyType: base.specialtyType,
+          customSpecialtyName,
+          description: base.description,
+          image: base.image,
+        }
+      },
+      render: ({ specialtyType, customSpecialtyName, description, image }) => (
+        <SpecialtyBlock
+          name={resolveSpecialtyName(specialtyType, customSpecialtyName)}
+          description={description}
+          image={image}
+          imageAlt={resolveSpecialtyName(specialtyType, customSpecialtyName)}
+        />
       ),
     },
 
@@ -328,9 +394,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     PageHeader: {
       label: "Page Header",
       fields: {
-        eyebrow: { type: "text", label: "Eyebrow (small label)" },
-        heading: { type: "text", label: "Heading" },
-        body: { type: "textarea", label: "Intro text" },
+        eyebrow: { type: "text", label: "Eyebrow (small label)", contentEditable: true },
+        heading: { type: "text", label: "Heading", contentEditable: true },
+        body: { type: "textarea", label: "Intro text", contentEditable: true },
         align: {
           type: "radio",
           label: "Alignment",
@@ -389,9 +455,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     VaultLogin: {
       label: "Vault Login",
       fields: {
-        eyebrow: { type: "text", label: "Small label" },
-        heading: { type: "text", label: "Heading" },
-        body: { type: "textarea", label: "Intro text" },
+        eyebrow: { type: "text", label: "Small label", contentEditable: true },
+        heading: { type: "text", label: "Heading", contentEditable: true },
+        body: { type: "textarea", label: "Intro text", contentEditable: true },
       },
       defaultProps: { eyebrow: "PURPLE SECTOR VISUALS", heading: "Client Vault", body: "" },
       render: (props) => <VaultLoginBlock {...props} />,
@@ -400,9 +466,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     DemoVault: {
       label: "Demo Vault Gallery",
       fields: {
-        eyebrow: { type: "text", label: "Small label" },
-        heading: { type: "text", label: "Heading" },
-        body: { type: "textarea", label: "Intro text" },
+        eyebrow: { type: "text", label: "Small label", contentEditable: true },
+        heading: { type: "text", label: "Heading", contentEditable: true },
+        body: { type: "textarea", label: "Intro text", contentEditable: true },
         photos: {
           type: "array",
           label: "Sample photos",
