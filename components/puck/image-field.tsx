@@ -25,8 +25,10 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
 
   async function handleFile(file: File | undefined) {
     if (!file) return
-    if (!file.type.startsWith("image/")) {
-      setError("Choose an image file (JPG, PNG, WebP, or GIF).")
+    // Some browsers report an empty MIME type for .heic files, so fall back to the extension.
+    const isImage = file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name)
+    if (!isImage) {
+      setError("Choose an image file (JPG, PNG, WebP, or HEIC).")
       return
     }
     if (file.size > MAX_BYTES) {
@@ -84,7 +86,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
           >
             <ImagePlus className="size-6" aria-hidden="true" />
             <span>Drop an image here or click to browse</span>
-            <span className="text-xs">JPG, PNG, WebP or GIF up to 10 MB</span>
+            <span className="text-xs">JPG, PNG, WebP or HEIC up to 10 MB</span>
           </button>
         )}
         {uploading ? (
@@ -101,7 +103,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg, image/png, image/webp, image/heic, .heic"
         className="sr-only"
         tabIndex={-1}
         onChange={(event) => void handleFile(event.target.files?.[0])}

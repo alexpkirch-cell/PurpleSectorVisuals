@@ -224,6 +224,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
             { label: "Auto", value: "auto" },
             { label: "Square (1:1)", value: "square" },
             { label: "Portrait (4:5)", value: "portrait" },
+            { label: "Vertical / Mobile (9:16)", value: "vertical" },
             { label: "Landscape (16:9)", value: "landscape" },
             { label: "Custom Height", value: "custom" },
           ],

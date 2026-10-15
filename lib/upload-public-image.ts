@@ -8,7 +8,7 @@ export async function uploadPublicImage(bucket: string, folder: string, file: Fi
 
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(path, file, { contentType: file.type, upsert: false })
+    .upload(path, file, { contentType: file.type || (extension === "heic" ? "image/heic" : undefined), upsert: false })
   if (error) throw new Error(error.message)
 
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl
