@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google"
 
 import "./globals.css"
+import { ResizeObserverGuard } from "@/components/admin/resize-observer-guard"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
@@ -56,6 +57,7 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-svh">
+        <ResizeObserverGuard />
         <ThemeProvider
           forcedTheme="dark"
           defaultTheme="dark"
