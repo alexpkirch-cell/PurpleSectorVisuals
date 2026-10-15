@@ -100,7 +100,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 left-60 z-40 flex flex-col overflow-hidden bg-background">
+    <div className="fixed inset-y-0 right-0 left-60 z-[60] flex flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background px-3 py-2">
         <PageNavigator path={path} editablePaths={paths} />
 

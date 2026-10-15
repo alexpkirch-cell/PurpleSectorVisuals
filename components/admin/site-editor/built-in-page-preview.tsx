@@ -13,7 +13,7 @@ type BuiltInPagePreviewProps = {
 
 export function BuiltInPagePreview({ path, editablePaths }: BuiltInPagePreviewProps) {
   return (
-    <div className="fixed inset-y-0 right-0 left-60 z-40 flex flex-col overflow-hidden bg-background">
+    <div className="fixed inset-y-0 right-0 left-60 z-[60] flex flex-col overflow-hidden bg-background">
       <header className="flex shrink-0 items-center gap-3 border-b border-border px-3 py-2">
         <PageNavigator path={path} editablePaths={editablePaths} />
         <div className="ml-auto flex shrink-0 items-center gap-2">
