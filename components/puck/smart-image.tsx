@@ -83,7 +83,10 @@ export function SmartImage({
   if (sizing === "auto") {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={src} alt={alt} className={cn(frame, "h-auto", className)} />
+      <div className={outer}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt={alt} className={cn("relative block h-auto w-full object-cover", frame, className)} />
+      </div>
     )
   }
 
@@ -105,7 +108,7 @@ export function SmartImage({
           fill
           sizes={isVertical ? "(max-width: 448px) 100vw, 448px" : "(max-width: 1152px) 100vw, 1152px"}
           unoptimized={needsUnoptimized(src)}
-          className={objectFit === "contain" ? "object-contain" : "object-cover"}
+          className={cn("h-full w-full", objectFit === "contain" ? "object-contain" : "object-cover")}
         />
       </div>
     </div>

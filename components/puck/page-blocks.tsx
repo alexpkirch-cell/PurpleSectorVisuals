@@ -162,7 +162,7 @@ export function DemoVaultBlock({
                   src={photo.src}
                   alt={`Sample delivered photo ${index + 1}`}
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 />
               ) : null}
