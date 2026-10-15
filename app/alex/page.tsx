@@ -1,15 +1,22 @@
 import type { Metadata } from "next"
 
 import { CreatorPage } from "@/components/creator-page"
+import { renderSavedLayout } from "@/components/puck/saved-layout"
+import { withSavedMetadata } from "@/lib/page-layouts"
 import { getSiteSlots } from "@/lib/site-slots"
 
-export const metadata: Metadata = {
-  title: "Alex | Purple Sector Visuals",
-  description:
-    "Alex shoots sports and automotive for Purple Sector Visuals — high-speed action frozen with precision and light.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/alex", {
+    title: "Alex | Purple Sector Visuals",
+    description:
+      "Alex shoots sports and automotive for Purple Sector Visuals — high-speed action frozen with precision and light.",
+  })
 }
 
 export default async function AlexPage() {
+  const saved = await renderSavedLayout("/alex")
+  if (saved) return saved
+
   const overrides = await getSiteSlots()
 
   return (

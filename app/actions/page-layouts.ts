@@ -3,7 +3,7 @@
 import type { Data } from "@measured/puck"
 import { revalidatePath } from "next/cache"
 
-import { validatePagePath } from "@/lib/page-layout-paths"
+import { isBuiltInPagePath, validatePagePath } from "@/lib/page-layout-paths"
 import { getRootProps } from "@/lib/page-layouts"
 import { createClient } from "@/lib/supabase/server"
 
@@ -32,7 +32,7 @@ export async function savePageLayout(
   path: string,
   data: Data
 ): Promise<{ success: true } | { success: false; error: string }> {
-  const pathError = validatePagePath(path)
+  const pathError = isBuiltInPagePath(path) ? null : validatePagePath(path)
   if (pathError) return { success: false, error: pathError }
   if (!isPuckData(data)) return { success: false, error: "Layout data is invalid." }
 

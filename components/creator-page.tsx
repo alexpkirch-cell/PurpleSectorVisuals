@@ -6,12 +6,26 @@ import { galleryItems, type GalleryItem } from "@/lib/site-data"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { cn } from "@/lib/utils"
 
+export interface CreatorShotContent {
+  src: string
+  title: string
+  category: string
+}
+
 interface CreatorPageProps {
   name: "Alex" | "Gabe"
   role: string
   bio: string
   specialties: string[]
   overrides?: SiteSlotOverrides
+  /** Editor-supplied hero photo; falls back to the saved site slot when empty. */
+  heroImage?: string
+  /** Editor-supplied shots, matched by position to the creator's built-in gallery items. */
+  shotContent?: CreatorShotContent[]
+  shotsHeading?: string
+  galleryLabel?: string
+  ctaLine?: string
+  bookLabel?: string
 }
 
 export function CreatorPage({
@@ -20,10 +34,33 @@ export function CreatorPage({
   bio,
   specialties,
   overrides,
+  heroImage,
+  shotContent,
+  shotsHeading = "Selected work",
+  galleryLabel = "Full gallery",
+  ctaLine = `Ready to shoot with ${name}?`,
+  bookLabel = `Book with ${name}`,
 }: CreatorPageProps) {
-  const shots: GalleryItem[] = galleryItems.filter(
+  const baseShots: GalleryItem[] = galleryItems.filter(
     (item) => item.creator === name
   )
+  const shots = shotContent
+    ? shotContent.map((content, i) => ({
+        id: baseShots[i]?.id ?? `custom-${i}`,
+        aspect: baseShots[i]?.aspect ?? "4:5 Slot",
+        slotKey: baseShots[i] ? `gallery.${baseShots[i].id}` : undefined,
+        src: content.src,
+        title: content.title,
+        category: content.category,
+      }))
+    : baseShots.map((item) => ({
+        id: item.id,
+        aspect: item.aspect,
+        slotKey: `gallery.${item.id}`,
+        src: "",
+        title: item.title,
+        category: item.category as string,
+      }))
 
   return (
     <div className="bg-[#09090b]">
@@ -35,6 +72,7 @@ export function CreatorPage({
             className="border-none"
             slotKey={`creator.${name.toLowerCase()}.hero`}
             overrides={overrides}
+            imageUrl={heroImage || undefined}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/60 to-[#09090b]/20" />
         </div>
@@ -66,13 +104,13 @@ export function CreatorPage({
       <section className="mx-auto max-w-6xl px-6 py-20 sm:px-10">
         <div className="flex items-end justify-between gap-4">
           <h2 className="font-heading text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            Selected work
+            {shotsHeading}
           </h2>
           <Link
             href="/work"
             className="hidden shrink-0 items-center gap-1 rounded-full border border-zinc-800 px-5 py-2.5 text-sm font-medium text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)] sm:inline-flex"
           >
-            Full gallery
+            {galleryLabel}
             <ArrowUpRight className="size-4" />
           </Link>
         </div>
@@ -90,8 +128,9 @@ export function CreatorPage({
                 aspect={shot.aspect}
                 label=""
                 className="border-none"
-                slotKey={`gallery.${shot.id}`}
+                slotKey={shot.slotKey}
                 overrides={overrides}
+                imageUrl={shot.src || undefined}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090b]/80 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
               <div className="absolute inset-x-0 bottom-0 p-4 opacity-0 transition-opacity group-hover:opacity-100">
@@ -110,13 +149,13 @@ export function CreatorPage({
       <div className="sticky bottom-0 z-30 border-t border-zinc-800/80 bg-zinc-950/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4 sm:px-10">
           <p className="text-sm text-zinc-400">
-            Ready to shoot with {name}?
+            {ctaLine}
           </p>
           <Link
             href={`/contact?shooter=${name}`}
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#e829f1] px-6 py-3 text-sm font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
           >
-            Book with {name}
+            {bookLabel}
             <ArrowUpRight className="size-4" />
           </Link>
         </div>

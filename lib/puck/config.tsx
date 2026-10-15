@@ -5,10 +5,38 @@ import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
 import { ImageFieldInput } from "@/components/puck/image-field"
-import { DisciplinesBlock, DualSplitBlock, HeroBlock, StudioBlock } from "@/components/puck/site-sections"
+import {
+  BookingFormBlock,
+  DemoVaultBlock,
+  PackagesBlock,
+  PageHeaderBlock,
+  VaultLoginBlock,
+  WorkGalleryBlock,
+  type BlockWidth,
+} from "@/components/puck/page-blocks"
+import {
+  CreatorBlock,
+  DisciplinesBlock,
+  DualSplitBlock,
+  HeroBlock,
+  StudioBlock,
+} from "@/components/puck/site-sections"
+import type { PuckBlockMetadata } from "@/lib/puck/block-metadata"
 import { cn } from "@/lib/utils"
 
 type Align = "left" | "center"
+
+const blockMetadata = (puck: { metadata?: unknown }) => (puck.metadata ?? {}) as Partial<PuckBlockMetadata>
+
+const widthField = {
+  type: "select",
+  label: "Content width",
+  options: [
+    { label: "Wide", value: "wide" },
+    { label: "Medium", value: "medium" },
+    { label: "Narrow", value: "narrow" },
+  ],
+} as const
 
 /** Every photo slot in the editor uses this: file picker -> Supabase `public_site_assets` -> public URL. */
 const imageField = (label: string): CustomField<string> => ({
@@ -83,6 +111,31 @@ export type PuckComponents = {
   DualSplit: DualSplitProps
   Disciplines: DisciplinesProps
   JoinRoster: Record<string, never>
+  PageHeader: {
+    eyebrow: string
+    heading: string
+    body: string
+    align: Align
+    width: BlockWidth
+    style: "large" | "compact"
+  }
+  WorkGallery: { width: BlockWidth }
+  PackagesConfigurator: Record<string, never>
+  BookingForm: { width: BlockWidth }
+  VaultLogin: { eyebrow: string; heading: string; body: string }
+  DemoVault: { eyebrow: string; heading: string; body: string; photos: { src: string }[] }
+  CreatorProfile: {
+    name: "Alex" | "Gabe"
+    role: string
+    bio: string
+    specialties: { tag: string }[]
+    heroImage: string
+    shotsHeading: string
+    galleryLabel: string
+    ctaLine: string
+    bookLabel: string
+    shots: { src: string; title: string; category: string }[]
+  }
 }
 
 export type PuckRootProps = {
@@ -110,7 +163,11 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       title: "Homepage sections",
       components: ["Hero", "Text", "Studio", "DualSplit", "Disciplines", "JoinRoster"],
     },
-    content: { title: "Content", components: ["Image", "BookingButton"] },
+    content: { title: "Content", components: ["PageHeader", "Image", "BookingButton"] },
+    pages: {
+      title: "Page sections",
+      components: ["WorkGallery", "PackagesConfigurator", "BookingForm", "CreatorProfile", "VaultLogin", "DemoVault"],
+    },
   },
   components: {
     Hero: {
@@ -267,5 +324,159 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DisciplinesBlock images={images} />,
     },
     JoinRoster: { label: "Join the Roster", fields: {}, render: () => <JoinTheRosterSection /> },
+
+    PageHeader: {
+      label: "Page Header",
+      fields: {
+        eyebrow: { type: "text", label: "Eyebrow (small label)" },
+        heading: { type: "text", label: "Heading" },
+        body: { type: "textarea", label: "Intro text" },
+        align: {
+          type: "radio",
+          label: "Alignment",
+          options: [
+            { label: "Left", value: "left" },
+            { label: "Center", value: "center" },
+          ],
+        },
+        style: {
+          type: "radio",
+          label: "Size",
+          options: [
+            { label: "Large", value: "large" },
+            { label: "Compact", value: "compact" },
+          ],
+        },
+        width: widthField,
+      },
+      defaultProps: {
+        eyebrow: "Purple Sector Visuals",
+        heading: "Page heading",
+        body: "",
+        align: "left",
+        width: "wide",
+        style: "large",
+      },
+      render: (props) => <PageHeaderBlock {...props} />,
+    },
+
+    WorkGallery: {
+      label: "Work Gallery",
+      fields: { width: widthField },
+      defaultProps: { width: "wide" },
+      render: ({ width, puck }) => <WorkGalleryBlock width={width} items={blockMetadata(puck).portfolioItems ?? []} />,
+    },
+
+    PackagesConfigurator: {
+      label: "Packages Configurator",
+      fields: {},
+      render: ({ puck }) => <PackagesBlock packages={blockMetadata(puck).packages ?? []} />,
+    },
+
+    BookingForm: {
+      label: "Booking Form",
+      fields: { width: widthField },
+      defaultProps: { width: "medium" },
+      render: ({ width, puck }) => (
+        <BookingFormBlock
+          width={width}
+          packages={blockMetadata(puck).packages ?? []}
+          requestedShooter={blockMetadata(puck).requestedShooter ?? null}
+        />
+      ),
+    },
+
+    VaultLogin: {
+      label: "Vault Login",
+      fields: {
+        eyebrow: { type: "text", label: "Small label" },
+        heading: { type: "text", label: "Heading" },
+        body: { type: "textarea", label: "Intro text" },
+      },
+      defaultProps: { eyebrow: "PURPLE SECTOR VISUALS", heading: "Client Vault", body: "" },
+      render: (props) => <VaultLoginBlock {...props} />,
+    },
+
+    DemoVault: {
+      label: "Demo Vault Gallery",
+      fields: {
+        eyebrow: { type: "text", label: "Small label" },
+        heading: { type: "text", label: "Heading" },
+        body: { type: "textarea", label: "Intro text" },
+        photos: {
+          type: "array",
+          label: "Sample photos",
+          max: 12,
+          arrayFields: { src: imageField("Photo") },
+          defaultItemProps: { src: "" },
+          getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
+        },
+      },
+      defaultProps: {
+        eyebrow: "DEMO VAULT",
+        heading: "Sample Gallery",
+        body: "",
+        photos: Array.from({ length: 6 }, (_, i) => ({ src: `/placeholders/${i + 1}.jpg` })),
+      },
+      render: (props) => <DemoVaultBlock {...props} />,
+    },
+
+    CreatorProfile: {
+      label: "Photographer Profile",
+      fields: {
+        name: {
+          type: "radio",
+          label: "Photographer",
+          options: [
+            { label: "Alex", value: "Alex" },
+            { label: "Gabe", value: "Gabe" },
+          ],
+        },
+        role: { type: "text", label: "Role / specialty line" },
+        bio: { type: "textarea", label: "Bio" },
+        specialties: {
+          type: "array",
+          label: "Specialty tags",
+          arrayFields: { tag: { type: "text", label: "Tag" } },
+          defaultItemProps: { tag: "New specialty" },
+          getItemSummary: (item) => item.tag || "Tag",
+        },
+        heroImage: imageField("Hero portrait"),
+        shotsHeading: { type: "text", label: "Gallery heading" },
+        galleryLabel: { type: "text", label: "Full gallery link label" },
+        shots: {
+          type: "array",
+          label: "Selected work",
+          arrayFields: {
+            src: imageField("Photo"),
+            title: { type: "text", label: "Title" },
+            category: { type: "text", label: "Category" },
+          },
+          defaultItemProps: { src: "", title: "New shot", category: "Sports" },
+          getItemSummary: (item, i) => item.title || `Shot ${(i ?? 0) + 1}`,
+        },
+        ctaLine: { type: "text", label: "Booking bar text" },
+        bookLabel: { type: "text", label: "Booking button label" },
+      },
+      defaultProps: {
+        name: "Alex",
+        role: "",
+        bio: "",
+        specialties: [],
+        heroImage: "",
+        shotsHeading: "Selected work",
+        galleryLabel: "Full gallery",
+        ctaLine: "Ready to shoot?",
+        bookLabel: "Book now",
+        shots: [],
+      },
+      render: ({ specialties, shots, ...rest }) => (
+        <CreatorBlock
+          {...rest}
+          specialties={specialties.map((item) => item.tag)}
+          shotContent={shots}
+        />
+      ),
+    },
   },
 }

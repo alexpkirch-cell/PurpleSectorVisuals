@@ -33,7 +33,16 @@ const IDLE_MS = 3000
 
 export const HERO_SLOT_LABELS = SLOTS
 
-export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) {
+export const HERO_TEXT_DEFAULTS = {
+  hintMove: "Move your cursor or swipe sideways to navigate",
+  hintAutoplay: "Auto-play resumes after 3 seconds of inactivity",
+  hintScroll: "Scroll to explore",
+}
+
+export type HeroText = Partial<typeof HERO_TEXT_DEFAULTS>
+
+export function HeroCarousel3D({ images, text }: { images?: (string | undefined)[]; text?: HeroText }) {
+  const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
   const containerRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
@@ -227,10 +236,10 @@ export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) 
       <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8 sm:gap-3 sm:px-6">
         <div className="flex flex-col items-center gap-1 sm:gap-1.5">
           <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-zinc-500 sm:text-xs sm:tracking-[0.3em]">
-            Move your cursor or swipe sideways to navigate
+            {copy.hintMove}
           </p>
           <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-zinc-500 sm:text-xs sm:tracking-[0.3em]">
-            Auto-play resumes after 3 seconds of inactivity
+            {copy.hintAutoplay}
           </p>
         </div>
         <button
@@ -246,7 +255,7 @@ export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) 
           aria-label="Scroll to explore"
         >
           <span className="font-mono text-[9px] uppercase tracking-[0.25em] sm:text-[10px] sm:tracking-[0.3em]">
-            Scroll to explore
+            {copy.hintScroll}
           </span>
           <svg
             width="16"

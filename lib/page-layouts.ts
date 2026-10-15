@@ -1,4 +1,6 @@
 import type { Data } from "@measured/puck"
+import type { Metadata } from "next"
+import { cache } from "react"
 
 import { createClient } from "@/lib/supabase/server"
 
@@ -13,7 +15,7 @@ export function toUrlPath(segments?: string[]) {
   return `/${(segments ?? []).map((segment) => decodeURIComponent(segment)).join("/")}`
 }
 
-export async function getPageLayout(path: string): Promise<PageLayout | null> {
+export const getPageLayout = cache(async (path: string): Promise<PageLayout | null> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from("page_layouts")
@@ -26,6 +28,14 @@ export async function getPageLayout(path: string): Promise<PageLayout | null> {
     return null
   }
   return data as PageLayout | null
+})
+
+/** Uses the title/description saved in the editor for `path`, falling back to the route's own metadata. */
+export async function withSavedMetadata(path: string, fallback: Metadata): Promise<Metadata> {
+  const layout = await getPageLayout(path)
+  if (!layout) return fallback
+  const { title, description } = getRootProps(layout.data)
+  return { ...fallback, ...(title ? { title } : {}), ...(description ? { description } : {}) }
 }
 
 /** Puck stores root fields either flat or under `props` depending on version; read both. */

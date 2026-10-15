@@ -1,15 +1,22 @@
 import type { Metadata } from "next"
 
 import { CreatorPage } from "@/components/creator-page"
+import { renderSavedLayout } from "@/components/puck/saved-layout"
+import { withSavedMetadata } from "@/lib/page-layouts"
 import { getSiteSlots } from "@/lib/site-slots"
 
-export const metadata: Metadata = {
-  title: "Gabe | Purple Sector Visuals",
-  description:
-    "Gabe shoots portraits and events for Purple Sector Visuals — candid atmosphere and character captured with a documentary eye.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/gabe", {
+    title: "Gabe | Purple Sector Visuals",
+    description:
+      "Gabe shoots portraits and events for Purple Sector Visuals — candid atmosphere and character captured with a documentary eye.",
+  })
 }
 
 export default async function GabePage() {
+  const saved = await renderSavedLayout("/gabe")
+  if (saved) return saved
+
   const overrides = await getSiteSlots()
 
   return (

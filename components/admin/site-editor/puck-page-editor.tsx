@@ -14,6 +14,7 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { deferResizeObserver } from "@/lib/defer-resize-observer"
 import { validatePagePath } from "@/lib/page-layout-paths"
+import type { PuckBlockMetadata } from "@/lib/puck/block-metadata"
 import { puckConfig } from "@/lib/puck/config"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
@@ -22,6 +23,7 @@ type PuckPageEditorProps = {
   paths: string[]
   initialData: Data
   slotOverrides: SiteSlotOverrides
+  blockMetadata: Pick<PuckBlockMetadata, "packages" | "portfolioItems">
 }
 
 // Must run before Puck constructs any observer, so patch at module load rather than in an effect.
@@ -68,7 +70,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
 
 const overrides: Partial<Overrides> = { iframe: PreviewFrame }
 
-export function PuckPageEditor({ path, paths, initialData, slotOverrides }: PuckPageEditorProps) {
+export function PuckPageEditor({ path, paths, initialData, slotOverrides, blockMetadata }: PuckPageEditorProps) {
   const router = useRouter()
   const [status, setStatus] = useState<{ tone: "ok" | "error"; message: string } | null>(null)
   const [newPath, setNewPath] = useState("")
@@ -153,6 +155,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
             config={puckConfig}
             overrides={overrides}
             data={initialData}
+            metadata={blockMetadata}
             onPublish={handlePublish}
             headerPath={path}
           />

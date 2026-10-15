@@ -3,13 +3,13 @@ import { redirect } from "next/navigation"
 import "@measured/puck/puck.css"
 
 import { listPageLayoutPaths, loadPageLayoutForEditor } from "@/app/actions/page-layouts"
-import { BuiltInPagePreview } from "@/components/admin/site-editor/built-in-page-preview"
 import { PuckPageEditor } from "@/components/admin/site-editor/puck-page-editor"
 import { editorHref } from "@/lib/editor-paths"
 import { isBuiltInPagePath, validatePagePath } from "@/lib/page-layout-paths"
 import { toUrlPath } from "@/lib/page-layouts"
+import { getBlockMetadata } from "@/lib/puck/block-metadata"
 import { getDefaultLayout, isEmptyLayout } from "@/lib/puck/default-layout"
-import { getSiteSlots } from "@/lib/site-slots"
+import { getSiteSlots, getSiteText } from "@/lib/site-slots"
 
 export const metadata: Metadata = {
   title: "Site Editor | Purple Sector Visuals",
@@ -29,16 +29,14 @@ export default async function SiteEditorPage({ params, searchParams }: SiteEdito
 
   const path = toUrlPath(puckPath)
 
-  if (isBuiltInPagePath(path)) {
-    return <BuiltInPagePreview path={path} editablePaths={await listPageLayoutPaths()} />
-  }
+  if (path !== "/" && !isBuiltInPagePath(path) && validatePagePath(path)) redirect(editorHref("/"))
 
-  if (path !== "/" && validatePagePath(path)) redirect(editorHref("/"))
-
-  const [paths, saved, slotOverrides] = await Promise.all([
+  const [paths, saved, slotOverrides, siteText, blockMetadata] = await Promise.all([
     listPageLayoutPaths(),
     loadPageLayoutForEditor(path),
     getSiteSlots(),
+    getSiteText(),
+    getBlockMetadata(),
   ])
 
   return (
@@ -46,7 +44,8 @@ export default async function SiteEditorPage({ params, searchParams }: SiteEdito
       path={path}
       paths={paths}
       slotOverrides={slotOverrides}
-      initialData={isEmptyLayout(saved) ? getDefaultLayout(path) : saved!}
+      blockMetadata={blockMetadata}
+      initialData={isEmptyLayout(saved) ? getDefaultLayout(path, siteText) : saved!}
     />
   )
 }

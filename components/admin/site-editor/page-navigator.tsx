@@ -35,23 +35,31 @@ function PageTab({ href, active, children }: { href: string; active: boolean; ch
 
 export function PageNavigator({ path, editablePaths }: PageNavigatorProps) {
   const builtInPaths: string[] = BUILT_IN_PAGES.map((page) => page.path)
-  const editable = Array.from(new Set(["/", ...editablePaths, path])).filter((value) => !builtInPaths.includes(value))
-  editable.sort((a, b) => (a === "/" ? -1 : b === "/" ? 1 : a.localeCompare(b)))
+  const custom = Array.from(new Set(editablePaths.concat(path))).filter(
+    (value) => value !== "/" && !builtInPaths.includes(value)
+  )
+  custom.sort((a, b) => a.localeCompare(b))
 
   return (
     <nav aria-label="Site pages" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-      {editable.map((value) => (
-        <PageTab key={value} href={value} active={value === path}>
-          {value === "/" ? "Home" : value}
-        </PageTab>
-      ))}
-      <span aria-hidden className="mx-2 h-5 w-px shrink-0 bg-border" />
-      <span className="shrink-0 pr-1 text-xs uppercase tracking-wide text-muted-foreground">Built-in</span>
+      <PageTab href="/" active={path === "/"}>
+        Home
+      </PageTab>
       {BUILT_IN_PAGES.map((page) => (
         <PageTab key={page.path} href={page.path} active={page.path === path}>
           {page.label}
         </PageTab>
       ))}
+      {custom.length > 0 ? (
+        <>
+          <span aria-hidden className="mx-2 h-5 w-px shrink-0 bg-border" />
+          {custom.map((value) => (
+            <PageTab key={value} href={value} active={value === path}>
+              {value}
+            </PageTab>
+          ))}
+        </>
+      ) : null}
     </nav>
   )
 }

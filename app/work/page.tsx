@@ -3,14 +3,21 @@ import { Suspense } from "react"
 
 import { GalleryGrid } from "@/components/gallery-grid"
 import { listPortfolioItems } from "@/app/actions/portfolio"
+import { renderSavedLayout } from "@/components/puck/saved-layout"
+import { withSavedMetadata } from "@/lib/page-layouts"
 
-export const metadata: Metadata = {
-  title: "Work | Purple Sector Visuals",
-  description:
-    "Browse the full portfolio from Purple Sector Visuals across sports, automotive, portrait, and event photography.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/work", {
+    title: "Work | Purple Sector Visuals",
+    description:
+      "Browse the full portfolio from Purple Sector Visuals across sports, automotive, portrait, and event photography.",
+  })
 }
 
 export default async function WorkPage() {
+  const saved = await renderSavedLayout("/work")
+  if (saved) return saved
+
   const items = await listPortfolioItems()
 
   return (
