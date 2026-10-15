@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { editorHref } from "@/lib/editor-paths"
 import { BUILT_IN_PAGES } from "@/lib/page-layout-paths"
 
 type PageNavigatorProps = {
@@ -12,7 +13,7 @@ type PageNavigatorProps = {
 }
 
 export function openEditorPath(router: ReturnType<typeof useRouter>, path: string) {
-  router.push(`/admin/site-editor?path=${encodeURIComponent(path)}`)
+  router.push(editorHref(path))
 }
 
 export function PageNavigator({ path, editablePaths }: PageNavigatorProps) {

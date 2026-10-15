@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react"
 
+import { useEditMode } from "@/components/puck/edit-mode"
+
 const SLOTS = [
   "SLOT 01 // PORTRAIT",
   "SLOT 02 // AUTOMOTIVE",
@@ -32,6 +34,7 @@ const IDLE_MS = 3000
 export const HERO_SLOT_LABELS = SLOTS
 
 export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) {
+  const isEditing = useEditMode()
   const containerRef = useRef<HTMLDivElement>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
   const cardRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -232,7 +235,11 @@ export function HeroCarousel3D({ images }: { images?: (string | undefined)[] }) 
         </div>
         <button
           type="button"
-          onClick={() => {
+          onClick={(event) => {
+            if (isEditing) {
+              event.preventDefault()
+              return
+            }
             containerRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
           }}
           className="pointer-events-auto mt-1 flex flex-col items-center gap-1 text-zinc-500 transition-colors hover:text-zinc-200"

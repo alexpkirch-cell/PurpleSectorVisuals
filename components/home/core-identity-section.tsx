@@ -1,5 +1,5 @@
 import { Camera } from "lucide-react"
-import Link from "next/link"
+import Link from "@/components/puck/edit-mode"
 
 import { ImageSlot } from "@/components/image-slot"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"

@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/puck/edit-mode"
 import { useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 

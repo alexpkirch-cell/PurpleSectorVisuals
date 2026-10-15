@@ -8,6 +8,7 @@ import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
 import { PageNavigator, openEditorPath } from "@/components/admin/site-editor/page-navigator"
+import { EditModeProvider } from "@/components/puck/edit-mode"
 import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -62,7 +63,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     }
   }, [frameDocument])
 
-  return <>{children}</>
+  return <EditModeProvider>{children}</EditModeProvider>
 }
 
 const overrides: Partial<Overrides> = { iframe: PreviewFrame }
