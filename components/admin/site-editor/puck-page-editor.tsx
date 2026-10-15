@@ -7,6 +7,7 @@ import { Puck, type Data, type Overrides } from "@measured/puck"
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
+import { PageNavigator, openEditorPath } from "@/components/admin/site-editor/page-navigator"
 import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -77,19 +78,13 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
     return () => window.removeEventListener("error", ignoreResizeObserverError, true)
   }, [])
 
-  const knownPaths = Array.from(new Set(["/", ...paths, path])).sort()
-
-  function openPath(next: string) {
-    router.push(`/admin/site-editor?path=${encodeURIComponent(next)}`)
-  }
-
   function handleCreate() {
     const normalized = `/${newPath.trim().replace(/^\/+|\/+$/g, "").toLowerCase()}`
     const error = validatePagePath(normalized)
     setNewPathError(error)
     if (error) return
     setNewPath("")
-    openPath(normalized)
+    openEditorPath(router, normalized)
   }
 
   async function handlePublish(data: Data) {
@@ -124,21 +119,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
               </span>
             ) : null}
 
-            <label htmlFor="puck-page-select" className="sr-only">
-              Page
-            </label>
-            <select
-              id="puck-page-select"
-              value={path}
-              onChange={(event) => openPath(event.target.value)}
-              className="h-8 max-w-32 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-            >
-              {knownPaths.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+            <PageNavigator path={path} editablePaths={paths} />
 
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
