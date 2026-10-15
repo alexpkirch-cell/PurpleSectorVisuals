@@ -423,7 +423,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         width: "wide",
         style: "large",
       },
-      render: (props) => <PageHeaderBlock {...props} />,
+      render: ({ puck: _puck, ...props }) => <PageHeaderBlock {...props} />,
     },
 
     WorkGallery: {
@@ -460,7 +460,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         body: { type: "textarea", label: "Intro text", contentEditable: true },
       },
       defaultProps: { eyebrow: "PURPLE SECTOR VISUALS", heading: "Client Vault", body: "" },
-      render: (props) => <VaultLoginBlock {...props} />,
+      render: ({ eyebrow, heading, body }) => <VaultLoginBlock eyebrow={eyebrow} heading={heading} body={body} />,
     },
 
     DemoVault: {
@@ -484,7 +484,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         body: "",
         photos: Array.from({ length: 6 }, (_, i) => ({ src: `/placeholders/${i + 1}.jpg` })),
       },
-      render: (props) => <DemoVaultBlock {...props} />,
+      render: ({ puck: _puck, ...props }) => <DemoVaultBlock {...props} />,
     },
 
     CreatorProfile: {
@@ -536,7 +536,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         bookLabel: "Book now",
         shots: [],
       },
-      render: ({ specialties, shots, ...rest }) => (
+      render: ({ specialties, shots, puck: _puck, ...rest }) => (
         <CreatorBlock
           {...rest}
           specialties={specialties.map((item) => item.tag)}
