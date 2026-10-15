@@ -1,11 +1,11 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { editorHref } from "@/lib/editor-paths"
 import { BUILT_IN_PAGES } from "@/lib/page-layout-paths"
+import { cn } from "@/lib/utils"
 
 type PageNavigatorProps = {
   path: string
@@ -16,54 +16,42 @@ export function openEditorPath(router: ReturnType<typeof useRouter>, path: strin
   router.push(editorHref(path))
 }
 
-export function PageNavigator({ path, editablePaths }: PageNavigatorProps) {
-  const router = useRouter()
-
-  const editable = Array.from(new Set(["/", ...editablePaths, path])).filter(
-    (value) => !BUILT_IN_PAGES.some((page) => page.path === value)
+function PageTab({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+  return (
+    <Link
+      href={editorHref(href)}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "shrink-0 rounded-md px-3 py-1.5 text-sm transition-colors",
+        active
+          ? "bg-primary text-primary-foreground"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+      )}
+    >
+      {children}
+    </Link>
   )
+}
+
+export function PageNavigator({ path, editablePaths }: PageNavigatorProps) {
+  const builtInPaths: string[] = BUILT_IN_PAGES.map((page) => page.path)
+  const editable = Array.from(new Set(["/", ...editablePaths, path])).filter((value) => !builtInPaths.includes(value))
   editable.sort((a, b) => (a === "/" ? -1 : b === "/" ? 1 : a.localeCompare(b)))
 
-  const allPaths = [...editable, ...BUILT_IN_PAGES.map((page) => page.path as string)]
-  const index = Math.max(allPaths.indexOf(path), 0)
-
-  function step(direction: -1 | 1) {
-    const next = allPaths[(index + direction + allPaths.length) % allPaths.length]
-    openEditorPath(router, next)
-  }
-
   return (
-    <div className="flex items-center gap-1">
-      <Button type="button" size="icon" variant="outline" className="size-8" onClick={() => step(-1)} aria-label="Previous page">
-        <ChevronLeft className="size-4" />
-      </Button>
-      <label htmlFor="puck-page-select" className="sr-only">
-        Page
-      </label>
-      <select
-        id="puck-page-select"
-        value={path}
-        onChange={(event) => openEditorPath(router, event.target.value)}
-        className="h-8 w-40 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-      >
-        <optgroup label="Editable pages">
-          {editable.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="Built-in pages (preview)">
-          {BUILT_IN_PAGES.map((page) => (
-            <option key={page.path} value={page.path}>
-              {page.label} ({page.path})
-            </option>
-          ))}
-        </optgroup>
-      </select>
-      <Button type="button" size="icon" variant="outline" className="size-8" onClick={() => step(1)} aria-label="Next page">
-        <ChevronRight className="size-4" />
-      </Button>
-    </div>
+    <nav aria-label="Site pages" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+      {editable.map((value) => (
+        <PageTab key={value} href={value} active={value === path}>
+          {value === "/" ? "Home" : value}
+        </PageTab>
+      ))}
+      <span aria-hidden className="mx-2 h-5 w-px shrink-0 bg-border" />
+      <span className="shrink-0 pr-1 text-xs uppercase tracking-wide text-muted-foreground">Built-in</span>
+      {BUILT_IN_PAGES.map((page) => (
+        <PageTab key={page.path} href={page.path} active={page.path === path}>
+          {page.label}
+        </PageTab>
+      ))}
+    </nav>
   )
 }

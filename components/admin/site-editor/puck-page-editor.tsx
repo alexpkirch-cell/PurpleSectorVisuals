@@ -100,64 +100,64 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
   }
 
   return (
-    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 overflow-hidden bg-background">
-      <SiteSlotsProvider overrides={slotOverrides}>
-      <Puck
-        key={path}
-        config={puckConfig}
-        overrides={overrides}
-        data={initialData}
-        onPublish={handlePublish}
-        headerPath={path}
-        renderHeaderActions={() => (
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            {status ? (
-              <span
-                role="status"
-                className={status.tone === "ok" ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
-              >
-                {status.message}
+    <div className="fixed inset-y-0 right-0 left-60 z-40 flex flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background px-3 py-2">
+        <PageNavigator path={path} editablePaths={paths} />
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {status ? (
+            <span
+              role="status"
+              className={status.tone === "ok" ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
+            >
+              {status.message}
+            </span>
+          ) : null}
+
+          <div className="relative flex items-center gap-1">
+            <Input
+              value={newPath}
+              onChange={(event) => setNewPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCreate()
+              }}
+              placeholder="new-page"
+              aria-label="New page path"
+              className="h-8 w-28"
+            />
+            <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
+              <Plus className="size-4" />
+            </Button>
+            {newPathError ? (
+              <span className="absolute top-full right-0 z-10 mt-1 w-64 rounded-md border border-border bg-background p-2 text-xs text-destructive">
+                {newPathError}
               </span>
             ) : null}
-
-            <PageNavigator path={path} editablePaths={paths} />
-
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newPath}
-                  onChange={(event) => setNewPath(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCreate()
-                  }}
-                  placeholder="new-page"
-                  aria-label="New page path"
-                  className="h-8 w-28"
-                />
-                <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
-                  <Plus className="size-4" />
-                </Button>
-              </div>
-              {newPathError ? <span className="absolute top-full mt-1 max-w-64 text-xs text-destructive">{newPathError}</span> : null}
-            </div>
-
-            <a
-              href={path}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ExternalLink className="size-4" />
-              View live
-            </a>
-            <Link href="/admin" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              <ArrowLeft className="size-4" />
-              Admin
-            </Link>
           </div>
-        )}
-      />
-      </SiteSlotsProvider>
+
+          <a href={path} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <ExternalLink className="size-4" />
+            View live
+          </a>
+          <Link href="/admin" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <ArrowLeft className="size-4" />
+            Admin
+          </Link>
+        </div>
+      </header>
+
+      <div className="psv-puck min-h-0 flex-1 overflow-hidden">
+        <SiteSlotsProvider overrides={slotOverrides}>
+          <Puck
+            key={path}
+            config={puckConfig}
+            overrides={overrides}
+            data={initialData}
+            onPublish={handlePublish}
+            headerPath={path}
+          />
+        </SiteSlotsProvider>
+      </div>
     </div>
   )
 }

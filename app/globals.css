@@ -193,6 +193,14 @@
   color-scheme: dark;
 }
 
+/* Puck sizes itself to 100dvh; the site editor adds its own page toolbar above it, so fill the remaining pane. */
+.psv-puck,
+.psv-puck [class*="_Puck_"],
+.psv-puck [class*="_PuckLayout_"],
+.psv-puck [class*="_PuckLayout-inner_"] {
+  height: 100%;
+}
+
 /* Let the page canvas fill its pane like a live site instead of a padded, bordered card. */
 .psv-puck [class*="_PuckCanvas_"] {
   padding: 0;
