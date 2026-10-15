@@ -44,13 +44,15 @@ function ignoreResizeObserverError(event: ErrorEvent) {
 
 // The canvas renders in an iframe; mirror the host's theme classes so Tailwind tokens and next/font variables resolve inside it.
 function PreviewFrame({ children, document: frameDocument }: { children: ReactNode; document?: Document }) {
+  // Child effects run before this component's effects, so patch during render to cover observers they create.
+  deferResizeObserver(frameDocument?.defaultView)
+
   useEffect(() => {
     if (!frameDocument) return
     frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 
     const frameWindow = frameDocument.defaultView
-    deferResizeObserver(frameWindow)
     frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
 
     // Real links and buttons from the live site must not navigate away while editing; selection still works.
