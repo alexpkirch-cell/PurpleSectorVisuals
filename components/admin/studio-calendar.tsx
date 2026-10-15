@@ -42,7 +42,7 @@ function addDays(date: Date, days: number) {
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
+export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[]; className?: string }) {
   const router = useRouter()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -113,7 +113,7 @@ export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
   }
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle>Studio Calendar</CardTitle>
@@ -132,7 +132,7 @@ export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-5">
+      <CardContent className="flex flex-1 flex-col gap-5">
         {isFormOpen ? (
           <form
             action={handleCreate}
@@ -170,7 +170,10 @@ export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
           </form>
         ) : null}
 
-        <div className="grid grid-cols-7 gap-1.5 text-center">
+        <div
+          className="grid flex-1 grid-cols-7 gap-1.5 text-center"
+          style={{ gridTemplateRows: `auto repeat(${days.length / 7}, minmax(6rem, 1fr))` }}
+        >
           {WEEKDAY_LABELS.map((label) => (
             <span key={label} className="pb-1 text-xs font-medium tracking-wide text-muted-foreground">
               {label}
@@ -184,7 +187,7 @@ export function StudioCalendar({ blocks }: { blocks: CalendarBlock[] }) {
               <div
                 key={iso}
                 className={
-                  "flex min-h-24 flex-col gap-1 rounded-md border p-1.5 text-left " +
+                  "flex flex-col gap-1 rounded-md border p-1.5 text-left " +
                   (isInRange ? "border-border bg-card" : "border-border/40 bg-muted/20 opacity-50")
                 }
               >

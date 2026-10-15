@@ -30,6 +30,7 @@ export interface BookingRequest {
   created_at: string
   shoot_id: string | null
   final_quoted_fee: string | null
+  lead_source: string | null
 }
 
 const PIN_LENGTH = 6

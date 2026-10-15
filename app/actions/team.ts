@@ -114,7 +114,7 @@ export async function updateTeamMember(
     WHERE id = ${id}
   `
 
-  revalidatePath("/admin/team")
+  revalidatePath("/admin/roster")
   revalidatePath("/")
 }
 
@@ -125,7 +125,7 @@ export async function assignGearToMember(gearId: string, teamMemberId: string | 
     UPDATE gear_items SET team_member_id = ${teamMemberId} WHERE id = ${gearId}
   `
 
-  revalidatePath("/admin/team")
+  revalidatePath("/admin/roster")
   revalidatePath("/admin/gear")
 }
 
@@ -163,7 +163,7 @@ export async function uploadTeamPhoto(id: string, formData: FormData): Promise<s
 
   await sql`UPDATE team_members SET photo_url = ${data.publicUrl}, updated_at = now() WHERE id = ${id}`
 
-  revalidatePath("/admin/team")
+  revalidatePath("/admin/roster")
   revalidatePath("/")
 
   return data.publicUrl
