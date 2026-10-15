@@ -2,8 +2,9 @@ import type { Metadata } from "next"
 import "@measured/puck/puck.css"
 
 import { listPageLayoutPaths, loadPageLayoutForEditor } from "@/app/actions/page-layouts"
+import { BuiltInPagePreview } from "@/components/admin/site-editor/built-in-page-preview"
 import { PuckPageEditor } from "@/components/admin/site-editor/puck-page-editor"
-import { validatePagePath } from "@/lib/page-layout-paths"
+import { isBuiltInPagePath, validatePagePath } from "@/lib/page-layout-paths"
 import { getDefaultLayout, isEmptyLayout } from "@/lib/puck/default-layout"
 import { getSiteSlots } from "@/lib/site-slots"
 
@@ -18,6 +19,10 @@ export default async function SiteEditorPage({
   searchParams: Promise<{ path?: string }>
 }) {
   const { path: requestedPath } = await searchParams
+  if (requestedPath && isBuiltInPagePath(requestedPath)) {
+    return <BuiltInPagePreview path={requestedPath} editablePaths={await listPageLayoutPaths()} />
+  }
+
   const path = requestedPath && requestedPath === "/" ? "/" : requestedPath && !validatePagePath(requestedPath) ? requestedPath : "/"
 
   const [paths, saved, slotOverrides] = await Promise.all([

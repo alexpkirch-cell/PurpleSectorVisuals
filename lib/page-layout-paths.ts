@@ -15,6 +15,22 @@ export const RESERVED_ROOT_SEGMENTS = [
   "work",
 ]
 
+/** Pages defined in code (their own route files). The editor can preview them but not edit their layout. */
+export const BUILT_IN_PAGES = [
+  { path: "/work", label: "Work" },
+  { path: "/packages", label: "Packages" },
+  { path: "/book", label: "Book" },
+  { path: "/contact", label: "Contact" },
+  { path: "/alex", label: "Alex" },
+  { path: "/gabe", label: "Gabe" },
+  { path: "/vault", label: "Vault" },
+  { path: "/vault/demo", label: "Vault demo" },
+] as const
+
+export function isBuiltInPagePath(path: string): boolean {
+  return BUILT_IN_PAGES.some((page) => page.path === path)
+}
+
 export function validatePagePath(path: string): string | null {
   if (!PAGE_PATH_PATTERN.test(path)) {
     return "Use lowercase letters, numbers and hyphens, starting with a slash (for example /about)."

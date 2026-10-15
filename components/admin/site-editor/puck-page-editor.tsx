@@ -7,9 +7,11 @@ import { Puck, type Data, type Overrides } from "@measured/puck"
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
+import { PageNavigator, openEditorPath } from "@/components/admin/site-editor/page-navigator"
 import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { deferResizeObserver } from "@/lib/defer-resize-observer"
 import { validatePagePath } from "@/lib/page-layout-paths"
 import { puckConfig } from "@/lib/puck/config"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
@@ -20,6 +22,9 @@ type PuckPageEditorProps = {
   initialData: Data
   slotOverrides: SiteSlotOverrides
 }
+
+// Must run before Puck constructs any observer, so patch at module load rather than in an effect.
+if (typeof window !== "undefined") deferResizeObserver(window)
 
 const RESIZE_OBSERVER_MESSAGES = [
   "ResizeObserver loop completed with undelivered notifications.",
@@ -42,6 +47,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 
     const frameWindow = frameDocument.defaultView
+    deferResizeObserver(frameWindow)
     frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
 
     // Real links and buttons from the live site must not navigate away while editing; selection still works.
@@ -72,19 +78,13 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
     return () => window.removeEventListener("error", ignoreResizeObserverError, true)
   }, [])
 
-  const knownPaths = Array.from(new Set(["/", ...paths, path])).sort()
-
-  function openPath(next: string) {
-    router.push(`/admin/site-editor?path=${encodeURIComponent(next)}`)
-  }
-
   function handleCreate() {
     const normalized = `/${newPath.trim().replace(/^\/+|\/+$/g, "").toLowerCase()}`
     const error = validatePagePath(normalized)
     setNewPathError(error)
     if (error) return
     setNewPath("")
-    openPath(normalized)
+    openEditorPath(router, normalized)
   }
 
   async function handlePublish(data: Data) {
@@ -99,7 +99,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
   }
 
   return (
-    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 min-h-screen w-full bg-background">
+    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 overflow-hidden bg-background">
       <SiteSlotsProvider overrides={slotOverrides}>
       <Puck
         key={path}
@@ -109,7 +109,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
         onPublish={handlePublish}
         headerPath={path}
         renderHeaderActions={() => (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
             {status ? (
               <span
                 role="status"
@@ -119,21 +119,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
               </span>
             ) : null}
 
-            <label htmlFor="puck-page-select" className="sr-only">
-              Page
-            </label>
-            <select
-              id="puck-page-select"
-              value={path}
-              onChange={(event) => openPath(event.target.value)}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground"
-            >
-              {knownPaths.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
+            <PageNavigator path={path} editablePaths={paths} />
 
             <div className="flex flex-col">
               <div className="flex items-center gap-1">
@@ -145,7 +131,7 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
                   }}
                   placeholder="new-page"
                   aria-label="New page path"
-                  className="h-8 w-32"
+                  className="h-8 w-28"
                 />
                 <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
                   <Plus className="size-4" />
