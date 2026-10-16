@@ -23,7 +23,6 @@ async function main() {
         ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
     `)
     await client.query(`ALTER TABLE team_members ALTER COLUMN title SET DEFAULT '';`)
-    await client.query(`UPDATE team_members SET cutout_image_url = photo_url WHERE cutout_image_url IS NULL AND photo_url IS NOT NULL;`)
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS team_members_slug_key ON team_members (slug);`)
     await client.query(`CREATE INDEX IF NOT EXISTS team_members_active_sort_idx ON team_members (is_active, sort_order);`)
 

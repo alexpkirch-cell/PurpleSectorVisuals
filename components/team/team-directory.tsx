@@ -158,14 +158,12 @@ export function TeamDirectory() {
             <li key={key} className="h-80 animate-pulse rounded-2xl border border-border bg-card sm:h-96" />
           ))}
         </ul>
-      ) : filtered.length === 0 ? (
+      ) : !members?.length ? null : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-12 text-center">
-          <p className="text-foreground">{members?.length ? "No one matches those filters." : "The roster is being assembled."}</p>
-          {filtersActive ? (
-            <button type="button" onClick={clearAll} className="text-sm text-primary underline underline-offset-4">
-              Reset filters
-            </button>
-          ) : null}
+          <p className="text-foreground">No one matches those filters.</p>
+          <button type="button" onClick={clearAll} className="text-sm text-primary underline underline-offset-4">
+            Reset filters
+          </button>
         </div>
       ) : (
         <motion.ul layout={!reduceMotion} className="grid grid-cols-1 gap-6 xl:grid-cols-2">
