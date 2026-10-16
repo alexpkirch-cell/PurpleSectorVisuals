@@ -76,7 +76,7 @@ const photoInfoFields = Object.fromEntries(
   PHOTO_INFO_KEYS.map((key) => [key, { type: "text", label: PHOTO_INFO_LABELS[key] }])
 ) as Record<(typeof PHOTO_INFO_KEYS)[number], { type: "text"; label: string }>
 
-const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5"] as const
+const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5", "card6", "card7", "card8"] as const
 const DUAL_SPLIT_FIELD_KEYS = [
   "alexMain",
   "alexCard0",
@@ -228,6 +228,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       },
       resolveData: ({ props }) => ({
         props: {
+          ...emptyProps(HERO_FIELD_KEYS),
           ...props,
           ...Object.fromEntries(HERO_FIELD_KEYS.map((key) => [`${key}Info`, { ...emptyPhotoInfo(), ...props[`${key}Info`] }])),
         },
