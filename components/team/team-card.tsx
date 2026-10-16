@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
+import { User } from "lucide-react"
 
 import { isVideoUrl, type DirectoryMember } from "@/lib/team-directory"
 
 const MAX_VISIBLE_BADGES = 5
-const CUTOUT_WIDTH = "42%"
+const CUTOUT_WIDTH = "45%"
 
 function HighlightCarousel({ media }: { media: string[] }) {
   const [index, setIndex] = useState(0)
@@ -77,7 +78,7 @@ export function TeamCard({ member }: { member: DirectoryMember }) {
   const hasMedia = member.highlight_media.length > 0
   const hasCutout = Boolean(member.cutout_image_url)
   const showMedia = active && hasMedia
-  const contentLeft = hasCutout ? CUTOUT_WIDTH : "0%"
+  const contentLeft = CUTOUT_WIDTH
   const fade = { duration: reduceMotion ? 0 : 0.4, ease: "easeOut" } as const
 
   return (
@@ -90,7 +91,7 @@ export function TeamCard({ member }: { member: DirectoryMember }) {
       onBlur={() => setActive(false)}
       className="group block rounded-2xl pt-12 outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="relative h-72 sm:h-80">
+      <div className="relative min-h-[400px]">
         <div className="absolute inset-0 rounded-2xl border border-border bg-card transition-colors group-hover:border-primary/60 group-focus-visible:border-primary" />
 
         {hasCutout ? (
@@ -103,7 +104,16 @@ export function TeamCard({ member }: { member: DirectoryMember }) {
               className="object-contain object-bottom"
             />
           </div>
-        ) : null}
+        ) : (
+          <div
+            className="pointer-events-none absolute top-6 bottom-6 left-4 flex flex-col items-center justify-end gap-2 rounded-xl border-2 border-dashed border-muted-foreground/40 bg-muted/30 pb-4"
+            style={{ width: `calc(${CUTOUT_WIDTH} - 1rem)` }}
+            aria-hidden="true"
+          >
+            <User className="size-24 text-muted-foreground/40 sm:size-32" strokeWidth={1} />
+            <span className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground/70 uppercase">Cutout PNG</span>
+          </div>
+        )}
 
         <motion.div
           className="absolute inset-y-0 right-0 flex flex-col justify-center gap-3 py-6 pr-5 pl-3 sm:pr-8 sm:pl-4"

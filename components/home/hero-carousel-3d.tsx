@@ -52,16 +52,6 @@ const CLUSTER_SLOTS: ClusterSlot[] = [
 
 const CYCLE_SECONDS = 30
 
-/** Positions for however many photos exist: re-centred on the cluster and pulled in when there are only a few. */
-function layoutCluster(count: number): ClusterSlot[] {
-  const slots = CLUSTER_SLOTS.slice(0, count)
-  if (slots.length === 0) return []
-  const spread = Math.min(1, 0.55 + slots.length * 0.07)
-  const meanX = slots.reduce((sum, slot) => sum + slot.x, 0) / slots.length
-  const meanY = slots.reduce((sum, slot) => sum + slot.y, 0) / slots.length
-  return slots.map((slot) => ({ ...slot, x: (slot.x - meanX) * spread, y: (slot.y - meanY) * spread }))
-}
-
 export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: HeroText }) {
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
@@ -73,9 +63,8 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   })
   const filled = allSlots.filter((slot) => slot.src)
 
-  // Live page: a slot without an image URL is dropped, so nothing renders for it and the cluster closes up.
-  // Editor: every slot stays on the canvas at its fixed position so empty ones can be clicked and filled.
-  const visible = isEditing ? allSlots : filled
+  // All 8 slots always render at fixed positions; an empty one is a visible dashed placeholder so it stays clickable.
+  const visible = allSlots
 
   const gallery: LightboxImage[] = filled.map(({ label, photo, src }) => ({
     src,
@@ -87,7 +76,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
     settings: photo?.settings || null,
   }))
 
-  const layout = isEditing ? CLUSTER_SLOTS : layoutCluster(filled.length)
+  const layout = CLUSTER_SLOTS
 
   return (
     <div
@@ -118,7 +107,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
               >
                 <div
                   className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg shadow-2xl shadow-black/60 ${card.aspect} ${
-                    src ? "bg-zinc-900/70" : "border-2 border-dashed border-zinc-500 bg-zinc-800"
+                    src ? "bg-zinc-900/70" : "border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 backdrop-blur-sm"
                   }`}
                   style={{
                     left: `${50 + card.x}%`,
