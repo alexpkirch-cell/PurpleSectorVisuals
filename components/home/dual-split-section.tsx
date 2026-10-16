@@ -76,7 +76,7 @@ export function DualSplitSection({
       </div>
 
       {/* Desktop fluid split */}
-      <div className="hidden min-h-[85vh] w-full md:flex">
+      <div className="mx-auto hidden min-h-[75vh] w-full max-w-6xl px-6 pb-12 sm:px-10 md:flex">
         {creators.map((creator) => {
           const isHovered = hovered === creator.key
           const isOther = hovered !== null && hovered !== creator.key
@@ -173,7 +173,7 @@ export function DualSplitSection({
       </div>
 
       {/* Mobile stacked profiles */}
-      <div className="flex flex-col gap-14 px-6 pb-12 md:hidden">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-6 pb-12 md:hidden">
         {creators.map((creator) => (
           <div key={creator.key} className="flex flex-col gap-6">
             <Link href={creator.href} className="flex flex-col gap-6">

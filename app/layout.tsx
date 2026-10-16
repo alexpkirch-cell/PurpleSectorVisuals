@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
 import { Toaster } from "@/components/ui/sonner"
+import { GlobalLightbox } from "@/components/global-lightbox"
 import { cn } from "@/lib/utils"
 import { AfkScreensaver } from "@/components/system/afk-screensaver"
 import { Konami } from "@/components/system/konami"
@@ -67,6 +68,7 @@ export default function RootLayout({
           <main>{children}</main>
           <SiteFooter />
           <Toaster />
+          <GlobalLightbox />
           <AfkScreensaver />
           <Konami />
           <SpeedTrap />

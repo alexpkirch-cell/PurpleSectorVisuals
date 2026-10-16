@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { toast } from "sonner"
 
 import { submitRosterApplication } from "@/app/actions/roster-applications"
 
@@ -27,8 +28,15 @@ export function RosterApplicationForm() {
         setError(null)
         startTransition(async () => {
           const result = await submitRosterApplication(formData)
-          if (result.ok) setSent(true)
-          else setError(result.error)
+          if (result.ok) {
+            setSent(true)
+            toast.success("Application sent", {
+              description: "We review every application and will reach out if it's a fit.",
+            })
+          } else {
+            setError(result.error)
+            toast.error("Couldn't send your application", { description: result.error })
+          }
         })
       }}
     >

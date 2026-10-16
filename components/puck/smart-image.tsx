@@ -1,6 +1,6 @@
 import Image from "next/image"
 
-import { LightboxTrigger } from "@/components/photo-lightbox"
+import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { cn } from "@/lib/utils"
 
 export type ImageSizing = "auto" | "square" | "portrait" | "vertical" | "landscape" | "custom"
@@ -47,6 +47,8 @@ type SmartImageProps = {
   customHeight?: number
   emptyLabel?: string
   className?: string
+  /** Title, category, photographer and EXIF shown in the lightbox. */
+  info?: Omit<LightboxImage, "src">
 }
 
 export function SmartImage({
@@ -57,6 +59,7 @@ export function SmartImage({
   customHeight = DEFAULT_CUSTOM_HEIGHT,
   emptyLabel,
   className,
+  info,
 }: SmartImageProps) {
   const frame = "w-full overflow-hidden rounded-3xl border border-zinc-800 shadow-2xl shadow-black/60"
   const isVertical = sizing === "vertical"
@@ -81,7 +84,17 @@ export function SmartImage({
     )
   }
 
-  const lightboxImages = [{ src, title: alt }]
+  const lightboxImages: LightboxImage[] = [
+    {
+      src,
+      title: info?.title || alt,
+      category: info?.category || undefined,
+      shooter: info?.shooter || null,
+      camera: info?.camera || null,
+      lens: info?.lens || null,
+      settings: info?.settings || null,
+    },
+  ]
 
   if (sizing === "auto") {
     return (

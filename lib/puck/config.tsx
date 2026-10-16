@@ -1,4 +1,4 @@
-import type { Config, CustomField } from "@measured/puck"
+import type { Config, CustomField, Fields } from "@measured/puck"
 
 import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
 import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
@@ -58,7 +58,25 @@ const imageField = (label: string): CustomField<string> => ({
   render: ({ value, onChange }) => <ImageFieldInput value={value ?? ""} onChange={onChange} />,
 })
 
-const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5", "card6"] as const
+const PHOTO_INFO_KEYS = ["title", "category", "shooter", "camera", "lens", "settings"] as const
+type PhotoInfo = Record<(typeof PHOTO_INFO_KEYS)[number], string>
+
+const PHOTO_INFO_LABELS: Record<(typeof PHOTO_INFO_KEYS)[number], string> = {
+  title: "Title",
+  category: "Category",
+  shooter: "Photographer (name links to their page)",
+  camera: "Camera",
+  lens: "Lens",
+  settings: "Settings (e.g. f/2.8, 1/1000s, ISO 400)",
+}
+
+const emptyPhotoInfo = (): PhotoInfo => ({ title: "", category: "", shooter: "", camera: "", lens: "", settings: "" })
+
+const photoInfoFields = Object.fromEntries(
+  PHOTO_INFO_KEYS.map((key) => [key, { type: "text", label: PHOTO_INFO_LABELS[key] }])
+) as Record<(typeof PHOTO_INFO_KEYS)[number], { type: "text"; label: string }>
+
+const HERO_FIELD_KEYS = ["card1", "card2", "card3", "card4", "card5"] as const
 const DUAL_SPLIT_FIELD_KEYS = [
   "alexMain",
   "alexCard0",
@@ -71,7 +89,8 @@ const DUAL_SPLIT_FIELD_KEYS = [
 ] as const
 const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events"] as const
 
-type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string>
+type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string> &
+  Partial<Record<`${(typeof HERO_FIELD_KEYS)[number]}Info`, PhotoInfo>>
 type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
 type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
 type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
@@ -105,7 +124,7 @@ export type PuckComponents = {
     heading: string
     body: string
   }
-  Image: {
+  Image: Partial<PhotoInfo> & {
     src: string
     alt: string
     caption: string
@@ -194,10 +213,27 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Hero: {
       label: "Hero Section",
       fields: Object.fromEntries(
-        HERO_FIELD_KEYS.map((key, i) => [key, imageField(`Card ${i + 1}: ${HERO_SLOT_LABELS[i]}`)])
-      ) as Record<(typeof HERO_FIELD_KEYS)[number], CustomField<string>>,
-      defaultProps: emptyProps(HERO_FIELD_KEYS),
-      render: (props) => <HeroBlock images={HERO_FIELD_KEYS.map((key) => props[key])} />,
+        HERO_FIELD_KEYS.flatMap((key, i) => [
+          [key, imageField(`Photo ${i + 1}: ${HERO_SLOT_LABELS[i]}`)],
+          [
+            `${key}Info`,
+            { type: "object", label: `Photo ${i + 1} details (shown when clicked)`, objectFields: photoInfoFields },
+          ],
+        ])
+      ) as unknown as Fields<HeroProps>,
+      defaultProps: {
+        ...emptyProps(HERO_FIELD_KEYS),
+        ...Object.fromEntries(HERO_FIELD_KEYS.map((key) => [`${key}Info`, emptyPhotoInfo()])),
+      },
+      resolveData: ({ props }) => ({
+        props: {
+          ...props,
+          ...Object.fromEntries(HERO_FIELD_KEYS.map((key) => [`${key}Info`, { ...emptyPhotoInfo(), ...props[`${key}Info`] }])),
+        },
+      }),
+      render: (props) => (
+        <HeroBlock photos={HERO_FIELD_KEYS.map((key) => ({ src: props[key], ...props[`${key}Info`] }))} />
+      ),
     },
 
     Text: {
@@ -242,6 +278,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
           ],
         },
         customHeight: { type: "number", label: "Custom height (px)", min: 120, max: 1600, step: 10 },
+        ...photoInfoFields,
       },
       defaultProps: {
         src: "",
@@ -250,6 +287,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         sizing: "landscape",
         objectFit: "cover",
         customHeight: DEFAULT_CUSTOM_HEIGHT,
+        ...emptyPhotoInfo(),
       },
       resolveFields: (data, { fields }) => {
         const { objectFit, customHeight, ...base } = fields
@@ -260,12 +298,13 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
           ...(sizing === "custom" ? { customHeight } : {}),
         } as typeof fields
       },
-      render: ({ src, alt, caption, sizing, objectFit, customHeight, aspect, puck }) => (
+      render: ({ src, alt, caption, sizing, objectFit, customHeight, aspect, puck, title, category, shooter, camera, lens, settings }) => (
         <section className="w-full bg-[#09090b]">
           <figure className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:px-10">
             <SmartImage
               src={src}
               alt={alt}
+              info={{ title, category, shooter, camera, lens, settings }}
               sizing={resolveImageSizing(sizing, aspect)}
               objectFit={objectFit}
               customHeight={customHeight}
