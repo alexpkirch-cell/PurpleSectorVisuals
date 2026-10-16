@@ -32,6 +32,21 @@ export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "ov
   return <CreatorPage {...props} overrides={useContext(SiteSlotsContext)} />
 }
 
-export function DisciplinesBlock({ images, hrefs }: { images: DisciplineImages; hrefs?: DisciplineHrefs }) {
-  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} images={images} hrefs={hrefs} />
+export function DisciplinesBlock({
+  images,
+  hrefs,
+  heading,
+}: {
+  images: DisciplineImages
+  hrefs?: DisciplineHrefs
+  heading?: string
+}) {
+  return (
+    <DisciplinesSection
+      overrides={useContext(SiteSlotsContext)}
+      images={images}
+      hrefs={hrefs}
+      text={heading?.trim() ? { heading } : undefined}
+    />
+  )
 }

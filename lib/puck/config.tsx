@@ -87,14 +87,14 @@ const DUAL_SPLIT_FIELD_KEYS = [
   "gabeCard1",
   "gabeCard2",
 ] as const
-const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events"] as const
+const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events", "commercial"] as const
 
 type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string> &
   Partial<Record<`${(typeof HERO_FIELD_KEYS)[number]}Info`, PhotoInfo>>
 type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
 type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
 type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
-  Partial<Record<DisciplineHrefKey, string>>
+  Partial<Record<DisciplineHrefKey, string>> & { heading?: string }
 
 const emptyProps = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((key) => [key, ""])) as Record<K, string>
@@ -115,6 +115,7 @@ const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> 
   automotive: "Automotive",
   portraits: "Portraits",
   events: "Events",
+  commercial: "Commercial",
 }
 
 export type PuckComponents = {
@@ -429,6 +430,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Disciplines: {
       label: "Disciplines",
       fields: {
+        heading: { type: "text", label: "Section heading", contentEditable: true },
         ...(Object.fromEntries(
           DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
         ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>),
@@ -441,13 +443,16 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       },
       defaultProps: {
         ...emptyProps(DISCIPLINE_FIELD_KEYS),
+        heading: "Built for five disciplines.",
         sportsHref: "/work?category=Sports",
         automotiveHref: "/work?category=Automotive",
         portraitsHref: "/work?category=Portraits",
         eventsHref: "/work?category=Events",
+        commercialHref: "/work",
       },
       render: (props) => (
         <DisciplinesBlock
+          heading={props.heading}
           images={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[key]]))}
           hrefs={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[`${key}Href`]]))}
         />

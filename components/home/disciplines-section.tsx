@@ -4,7 +4,15 @@ import { ImageSlot } from "@/components/image-slot"
 import { disciplines } from "@/lib/site-data"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
-/** Keyed by lower-cased discipline name: sports, automotive, portraits, events. */
+const CARD_SPANS = [
+  "lg:col-span-2",
+  "lg:col-span-2",
+  "lg:col-span-2",
+  "lg:col-span-3",
+  "sm:col-span-2 lg:col-span-3",
+]
+
+/** Keyed by lower-cased discipline name: sports, automotive, portraits, events, commercial. */
 export type DisciplineImages = Record<string, string | undefined>
 
 /** "View Gallery" destinations keyed by lower-cased discipline name; blank falls back to the filtered /work page. */
@@ -12,7 +20,7 @@ export type DisciplineHrefs = Record<string, string | undefined>
 
 export const DISCIPLINES_TEXT_DEFAULTS = {
   eyebrow: "Disciplines",
-  heading: "Built for four disciplines.",
+  heading: "Built for five disciplines.",
   seeAllLabel: "See all work",
   viewGalleryLabel: "View Gallery",
   portraitsTitle: "Portraits",
@@ -23,6 +31,8 @@ export const DISCIPLINES_TEXT_DEFAULTS = {
   automotiveDescription: "Steel, light, and motion rendered with intent.",
   eventsTitle: "Events",
   eventsDescription: "Every atmosphere, documented in full fidelity.",
+  commercialTitle: "Commercial",
+  commercialDescription: "Brand-ready imagery built to move product and perception.",
 }
 
 export type DisciplinesText = Partial<typeof DISCIPLINES_TEXT_DEFAULTS>
@@ -60,11 +70,11 @@ export function DisciplinesSection({
           </Link>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {disciplines.map((discipline) => (
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          {disciplines.map((discipline, index) => (
             <div
               key={discipline.name}
-              className="group relative flex h-96 flex-col justify-end overflow-hidden rounded-3xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+              className={`group relative flex h-96 flex-col justify-end overflow-hidden rounded-3xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)] ${CARD_SPANS[index] ?? ""}`}
             >
               <div className="absolute inset-0">
                 <ImageSlot
@@ -85,7 +95,7 @@ export function DisciplinesSection({
                   {copy[`${discipline.name.toLowerCase()}Description` as keyof typeof copy]}
                 </p>
                 <Link
-                  href={hrefs?.[discipline.name.toLowerCase()]?.trim() || `/work?category=${discipline.name}`}
+                  href={hrefs?.[discipline.name.toLowerCase()]?.trim() || discipline.galleryHref || `/work?category=${discipline.name}`}
                   className="mt-4 inline-flex items-center rounded-full border border-zinc-700 bg-zinc-950/70 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:text-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
                 >
                   {copy.viewGalleryLabel}

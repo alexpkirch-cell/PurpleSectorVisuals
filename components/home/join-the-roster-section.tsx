@@ -4,26 +4,9 @@ export type RosterBenefit = { title: string; body: string }
 
 export const JOIN_ROSTER_DEFAULTS = {
   eyebrow: "Join the Roster",
-  heading: "Shoot your style. Skip the business headache.",
-  body: "We handle clients, contracts, insurance, and getting paid. You keep your eye and your edit. If that sounds like a fit, tell us a little about your work.",
-  benefits: [
-    {
-      title: "60% to 70% of every booking",
-      body: "40% for shooting, 20% for editing, plus a 10% bonus when you bring the client.",
-    },
-    {
-      title: "25% print royalties",
-      body: "Automatic royalties on every print order from your galleries.",
-    },
-    {
-      title: "Paid before downloads unlock",
-      body: "50% retainer, 50% at delivery. No chasing checks.",
-    },
-    {
-      title: "Back office and gear",
-      body: "Contracts, disputes, insurance, press credentials, and the shared gear locker.",
-    },
-  ] as RosterBenefit[],
+  heading: "Interested in joining the roster?",
+  body: "You shoot your style. We handle the business. If you're a high-end creator looking to plug into a commercial agency machine, send us your portfolio.",
+  benefits: [] as RosterBenefit[],
 }
 
 export type JoinRosterText = Partial<typeof JOIN_ROSTER_DEFAULTS>
@@ -41,13 +24,15 @@ export function JoinTheRosterSection({ text }: { text?: JoinRosterText }) {
           </h2>
           <p className="mt-3 max-w-md text-pretty text-sm leading-relaxed text-zinc-500">{copy.body}</p>
 
-          <ul className="mt-6 flex flex-col gap-3">
-            {(copy.benefits ?? []).map((benefit, index) => (
-              <li key={index} className="text-sm leading-relaxed text-zinc-500">
-                <span className="text-zinc-300">{benefit.title}.</span> {benefit.body}
-              </li>
-            ))}
-          </ul>
+          {copy.benefits?.length ? (
+            <ul className="mt-6 flex flex-col gap-3">
+              {copy.benefits.map((benefit, index) => (
+                <li key={index} className="text-sm leading-relaxed text-zinc-500">
+                  <span className="text-zinc-300">{benefit.title}.</span> {benefit.body}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <div className="lg:pt-8">

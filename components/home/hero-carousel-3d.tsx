@@ -4,7 +4,6 @@ import { useRef } from "react"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { useEditMode } from "@/components/puck/edit-mode"
-import { cn } from "@/lib/utils"
 
 export const HERO_SLOT_LABELS = [
   "SLOT 01 // PORTRAIT",
@@ -31,14 +30,18 @@ export type HeroPhoto = {
   settings?: string
 }
 
-// Desktop mosaic on a 12 x 2 grid; mobile is a 2 x 3 grid with the first photo spanning the top row.
-const CELL_CLASSES = [
-  "col-span-2 md:col-span-5 md:row-span-2",
-  "md:col-span-4",
-  "md:col-span-3",
-  "md:col-span-3",
-  "md:col-span-4",
+type FloatingCard = { x: number; y: number; width: number; aspect: string }
+
+// x / y are percent offsets from the centre of the hero, so the middle stays clear for the nav and logo.
+const FLOATING_CARDS: FloatingCard[] = [
+  { x: -30, y: -20, width: 280, aspect: "aspect-[4/5]" },
+  { x: 29, y: -24, width: 330, aspect: "aspect-[16/9]" },
+  { x: -29, y: 24, width: 320, aspect: "aspect-[16/9]" },
+  { x: 31, y: 22, width: 260, aspect: "aspect-[4/5]" },
+  { x: 2, y: -36, width: 300, aspect: "aspect-[16/9]" },
 ]
+
+const CYCLE_SECONDS = 30
 
 export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: HeroText }) {
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
@@ -67,42 +70,47 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       className="relative h-[85svh] w-full overflow-hidden bg-zinc-950 sm:h-[100svh]"
       aria-label="Purple Sector Visuals showcase"
     >
-      <div className="grid size-full grid-cols-2 grid-rows-3 gap-2 p-2 md:grid-cols-12 md:grid-rows-2 md:gap-3 md:p-3">
-        {HERO_SLOT_LABELS.map((label, i) => {
-          const photo = photos?.[i]
-          const src = photo?.src
-          const galleryIndex = gallery.findIndex((item) => item.src === src)
+      {FLOATING_CARDS.map((card, i) => {
+        const label = HERO_SLOT_LABELS[i]
+        const photo = photos?.[i]
+        const src = photo?.src
+        const galleryIndex = gallery.findIndex((item) => item.src === src)
 
-          return (
+        return (
+          <div
+            key={label}
+            className="pointer-events-none absolute inset-0 motion-safe:animate-[psv-hero-approach_var(--psv-cycle)_linear_infinite]"
+            style={
+              {
+                "--psv-cycle": `${CYCLE_SECONDS}s`,
+                animationDelay: `${-(i * CYCLE_SECONDS) / FLOATING_CARDS.length}s`,
+              } as React.CSSProperties
+            }
+          >
             <div
-              key={label}
-              className={cn(
-                "relative min-h-0 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 motion-safe:animate-[psv-fade-up_0.9s_ease-out_both]",
-                CELL_CLASSES[i],
-              )}
-              style={{ animationDelay: `${i * 120}ms` }}
+              className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg bg-zinc-900/70 shadow-2xl shadow-black/60 ${card.aspect}`}
+              style={{
+                left: `${50 + card.x}%`,
+                top: `${50 + card.y}%`,
+                width: `min(${card.width}px, 40vw)`,
+              }}
             >
               {src ? (
                 <LightboxTrigger images={gallery} startIndex={Math.max(galleryIndex, 0)} className="absolute inset-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={src}
-                    alt={photo?.title || label}
-                    className="size-full object-cover motion-safe:animate-[psv-hero-drift_18s_ease-in-out_infinite_alternate]"
-                    style={{ animationDelay: `${i * -3}s` }}
-                  />
+                  <img src={src} alt={photo?.title || label} className="size-full object-cover" />
                 </LightboxTrigger>
               ) : (
-                <div className="flex size-full items-center justify-center px-4 text-center">
+                <div className="flex size-full items-center justify-center px-3 text-center">
                   <span className="font-mono text-[10px] tracking-wider text-zinc-600 sm:text-xs">{label}</span>
                 </div>
               )}
             </div>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
 
-      <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/80" />
+      <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-zinc-950/50 via-transparent to-zinc-950/80" />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8">
         <button
