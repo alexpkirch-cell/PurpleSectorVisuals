@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef } from "react"
+import { Camera } from "lucide-react"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { useEditMode } from "@/components/puck/edit-mode"
@@ -66,12 +67,15 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   const isEditing = useEditMode()
   const sectionRef = useRef<HTMLDivElement>(null)
 
-  // A slot without an image URL is dropped here, so nothing is rendered for it and the cluster closes up.
-  const filled = HERO_SLOT_LABELS.flatMap((label, i) => {
+  const allSlots = HERO_SLOT_LABELS.map((label, i) => {
     const photo = photos?.[i]
-    const src = photo?.src?.trim()
-    return src ? [{ label, photo, src }] : []
+    return { label, photo, src: photo?.src?.trim() || "" }
   })
+  const filled = allSlots.filter((slot) => slot.src)
+
+  // Live page: a slot without an image URL is dropped, so nothing renders for it and the cluster closes up.
+  // Editor: every slot stays on the canvas at its fixed position so empty ones can be clicked and filled.
+  const visible = isEditing ? allSlots : filled
 
   const gallery: LightboxImage[] = filled.map(({ label, photo, src }) => ({
     src,
@@ -83,43 +87,57 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
     settings: photo?.settings || null,
   }))
 
-  const layout = layoutCluster(filled.length)
+  const layout = isEditing ? CLUSTER_SLOTS : layoutCluster(filled.length)
 
   return (
     <div
       ref={sectionRef}
-      className="relative h-[85svh] w-full overflow-hidden bg-zinc-950 sm:h-[100svh]"
+      className="relative min-h-[85svh] w-full overflow-hidden bg-zinc-950 sm:min-h-screen"
       aria-label="Purple Sector Visuals showcase"
     >
       <div className="absolute inset-0 flex items-center justify-center px-4">
-        <div className="relative h-full max-h-[46rem] w-full max-w-6xl">
-          {filled.map(({ label, photo, src }, rank) => {
+        <div className="relative mx-auto h-full max-h-[46rem] w-full max-w-6xl">
+          {visible.map(({ label, photo, src }, rank) => {
             const card = layout[rank]
 
             return (
               <div
                 key={label}
-                className="pointer-events-none absolute inset-0 motion-safe:animate-[psv-hero-approach_var(--psv-cycle)_linear_infinite]"
+                className={
+                  isEditing
+                    ? "pointer-events-none absolute inset-0"
+                    : "pointer-events-none absolute inset-0 motion-safe:animate-[psv-hero-approach_var(--psv-cycle)_linear_infinite]"
+                }
                 style={
                   {
                     "--psv-cycle": `${CYCLE_SECONDS}s`,
-                    animationDelay: `${-(rank * CYCLE_SECONDS) / filled.length}s`,
+                    animationDelay: `${-(rank * CYCLE_SECONDS) / visible.length}s`,
                     zIndex: card.z,
                   } as React.CSSProperties
                 }
               >
                 <div
-                  className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg bg-zinc-900/70 shadow-2xl shadow-black/60 ${card.aspect}`}
+                  className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg shadow-2xl shadow-black/60 ${card.aspect} ${
+                    src ? "bg-zinc-900/70" : "border-2 border-dashed border-zinc-500 bg-zinc-800"
+                  }`}
                   style={{
                     left: `${50 + card.x}%`,
                     top: `${50 + card.y}%`,
                     width: `min(${card.width}px, 38vw)`,
                   }}
                 >
-                  <LightboxTrigger images={gallery} startIndex={rank} className="absolute inset-0">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={photo?.title || label} className="size-full object-cover" />
-                  </LightboxTrigger>
+                  {src ? (
+                    <LightboxTrigger images={gallery} startIndex={filled.findIndex((s) => s.label === label)} className="absolute inset-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={src} alt={photo?.title || label} className="size-full object-cover" />
+                    </LightboxTrigger>
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 text-center text-zinc-300">
+                      <Camera className="size-6 sm:size-8" aria-hidden="true" />
+                      <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{label}</span>
+                      <span className="text-[10px] text-zinc-400">Click to upload</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )

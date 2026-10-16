@@ -1,8 +1,10 @@
 import type { Metadata } from "next"
 
 import { listApplications, listCrew } from "@/app/actions/crew"
+import { listDirectoryMembers } from "@/app/actions/team-directory"
 import { CrewList } from "@/components/admin/crew/crew-list"
 import { RecruitmentPipeline } from "@/components/admin/crew/recruitment-pipeline"
+import { TeamRosterManager } from "@/components/admin/crew/team-roster-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export const metadata: Metadata = {
@@ -11,10 +13,11 @@ export const metadata: Metadata = {
 }
 
 export default async function CrewHubPage() {
-  const [applications, active, archived] = await Promise.all([
+  const [applications, active, archived, directoryMembers] = await Promise.all([
     listApplications(),
     listCrew(true),
     listCrew(false),
+    listDirectoryMembers(),
   ])
 
   return (
@@ -27,7 +30,7 @@ export default async function CrewHubPage() {
       </div>
 
       <Tabs defaultValue="pipeline" className="gap-6">
-        <TabsList>
+        <TabsList className="h-auto flex-wrap">
           <TabsTrigger value="pipeline" className="px-4">
             Recruitment Pipeline
           </TabsTrigger>
@@ -36,6 +39,9 @@ export default async function CrewHubPage() {
           </TabsTrigger>
           <TabsTrigger value="archived" className="px-4">
             Archived ({archived.length})
+          </TabsTrigger>
+          <TabsTrigger value="roster" className="px-4">
+            Manage Roster ({directoryMembers.length})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="pipeline">
@@ -46,6 +52,9 @@ export default async function CrewHubPage() {
         </TabsContent>
         <TabsContent value="archived">
           <CrewList initialMembers={archived} archived />
+        </TabsContent>
+        <TabsContent value="roster">
+          <TeamRosterManager initialMembers={directoryMembers} />
         </TabsContent>
       </Tabs>
     </div>

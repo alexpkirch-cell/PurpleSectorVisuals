@@ -1,29 +1,14 @@
-import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 import { User } from "lucide-react"
 
-import { getPublicContractor } from "@/app/actions/roster"
+import type { getPublicContractor } from "@/app/actions/roster"
 import { Button } from "@/components/ui/button"
 
-type Params = Promise<{ id: string }>
+type Contractor = NonNullable<Awaited<ReturnType<typeof getPublicContractor>>>
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
-  const { id } = await params
-  const contractor = await getPublicContractor(id)
-  if (!contractor) return { title: "Photographer not found | Purple Sector Visuals" }
-  return {
-    title: `${contractor.name} | Purple Sector Visuals`,
-    description: contractor.bio?.slice(0, 160) || `Portfolio of ${contractor.name}, Purple Sector Visuals.`,
-  }
-}
-
-export default async function PhotographerPage({ params }: { params: Params }) {
-  const { id } = await params
-  const contractor = await getPublicContractor(id)
-  if (!contractor) notFound()
-
+/** Legacy 1099 contractor profile, still reached from shooter and booking links at /team/<contractor-id>. */
+export function ContractorProfile({ contractor }: { contractor: Contractor }) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-12 px-4 py-20 sm:px-6 sm:py-28">
       <header className="flex flex-col items-center gap-6 text-center sm:flex-row sm:items-center sm:gap-10 sm:text-left">
