@@ -4,7 +4,7 @@ import { createContext, useContext, type ComponentProps, type ReactNode } from "
 
 import { CreatorPage } from "@/components/creator-page"
 import { CoreIdentitySection, type CoreIdentityImages } from "@/components/home/core-identity-section"
-import { DisciplinesSection, type DisciplineImages } from "@/components/home/disciplines-section"
+import { DisciplinesSection, type DisciplineHrefs, type DisciplineImages } from "@/components/home/disciplines-section"
 import { DualSplitSection, type DualSplitImages } from "@/components/home/dual-split-section"
 import { HeroCarousel3D } from "@/components/home/hero-carousel-3d"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
@@ -32,6 +32,6 @@ export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "ov
   return <CreatorPage {...props} overrides={useContext(SiteSlotsContext)} />
 }
 
-export function DisciplinesBlock({ images }: { images: DisciplineImages }) {
-  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} images={images} />
+export function DisciplinesBlock({ images, hrefs }: { images: DisciplineImages; hrefs?: DisciplineHrefs }) {
+  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} images={images} hrefs={hrefs} />
 }

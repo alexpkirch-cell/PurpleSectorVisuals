@@ -25,14 +25,14 @@ export type DualSplitText = Partial<typeof DUAL_SPLIT_TEXT_DEFAULTS>
 const creatorConfig = [
   {
     key: "alex" as const,
-    slotLabel: "ALEX // PORTRAIT SLOT",
-    cards: ["BTS Slot", "Lifestyle Slot", "Detail Slot"],
+    slotLabel: "ALEX // PERSONALITY SHOT",
+    cards: ["BTS 1", "BTS 2", "BTS 3"],
     href: "/alex",
   },
   {
     key: "gabe" as const,
-    slotLabel: "GABE // PORTRAIT SLOT",
-    cards: ["Mood Slot", "Vibe Slot", "Form Slot"],
+    slotLabel: "GABE // PERSONALITY SHOT",
+    cards: ["BTS 1", "BTS 2", "BTS 3"],
     href: "/gabe",
   },
 ]

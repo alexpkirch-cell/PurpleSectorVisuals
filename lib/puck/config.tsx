@@ -73,20 +73,22 @@ const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events"] as
 
 type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string>
 type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
-type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string>
+type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
+type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
+  Partial<Record<DisciplineHrefKey, string>>
 
 const emptyProps = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((key) => [key, ""])) as Record<K, string>
 
 const DUAL_SPLIT_LABELS: Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> = {
-  alexMain: "Alex: main portrait",
-  alexCard0: "Alex: BTS card",
-  alexCard1: "Alex: lifestyle card",
-  alexCard2: "Alex: detail card",
-  gabeMain: "Gabe: main portrait",
-  gabeCard0: "Gabe: mood card",
-  gabeCard1: "Gabe: vibe card",
-  gabeCard2: "Gabe: form card",
+  alexMain: "Alex: personality shot",
+  alexCard0: "Alex: BTS 1",
+  alexCard1: "Alex: BTS 2",
+  alexCard2: "Alex: BTS 3",
+  gabeMain: "Gabe: personality shot",
+  gabeCard0: "Gabe: BTS 1",
+  gabeCard1: "Gabe: BTS 2",
+  gabeCard2: "Gabe: BTS 3",
 }
 
 const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> = {
@@ -126,10 +128,12 @@ export type PuckComponents = {
     align: Align
   }
   Studio: {
-    reel: string
-    sports: string
-    portrait: string
-    bts: { src: string }[]
+    images?: { src: string }[]
+    /** Legacy fixed slots from before `images` existed; only read when `images` was never saved. */
+    reel?: string
+    sports?: string
+    portrait?: string
+    bts?: { src: string }[]
   }
   DualSplit: DualSplitProps
   Disciplines: DisciplinesProps
@@ -352,30 +356,31 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Studio: {
       label: "The Studio",
       fields: {
-        reel: imageField("Studio reel (large)"),
-        sports: imageField("Sports action"),
-        portrait: imageField("Portrait"),
-        bts: {
+        images: {
           type: "array",
-          label: "Behind-the-scenes clips (up to 6)",
-          max: 6,
+          label: "Studio photos (add as many as you like)",
           arrayFields: { src: imageField("Photo") },
           defaultItemProps: { src: "" },
-          getItemSummary: (_item, i) => `Clip ${(i ?? 0) + 1}`,
+          getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
         },
       },
       defaultProps: {
-        reel: "",
-        sports: "",
-        portrait: "",
-        bts: Array.from({ length: 6 }, () => ({ src: "" })),
+        images: Array.from({ length: 6 }, () => ({ src: "" })),
       },
-      render: ({ reel, sports, portrait, bts }) => (
-        <StudioBlock images={{ reel, sports, portrait, bts: (bts ?? []).map((item) => item.src) }} />
+      render: ({ images, reel, sports, portrait, bts }) => (
+        <StudioBlock
+          images={{
+            gallery: images?.map((item) => item.src),
+            reel,
+            sports,
+            portrait,
+            bts: bts?.map((item) => item.src),
+          }}
+        />
       ),
     },
     DualSplit: {
-      label: "Dual Split (Team)",
+      label: "Founders Split (Alex & Gabe)",
       fields: Object.fromEntries(
         DUAL_SPLIT_FIELD_KEYS.map((key) => [key, imageField(DUAL_SPLIT_LABELS[key])])
       ) as Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], CustomField<string>>,
@@ -384,11 +389,30 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     },
     Disciplines: {
       label: "Disciplines",
-      fields: Object.fromEntries(
-        DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
-      ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>,
-      defaultProps: emptyProps(DISCIPLINE_FIELD_KEYS),
-      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DisciplinesBlock images={images} />,
+      fields: {
+        ...(Object.fromEntries(
+          DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
+        ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>),
+        ...(Object.fromEntries(
+          DISCIPLINE_FIELD_KEYS.map((key) => [
+            `${key}Href`,
+            { type: "text", label: `${DISCIPLINE_LABELS[key]}: View Gallery link` },
+          ])
+        ) as Record<DisciplineHrefKey, { type: "text"; label: string }>),
+      },
+      defaultProps: {
+        ...emptyProps(DISCIPLINE_FIELD_KEYS),
+        sportsHref: "/work?category=Sports",
+        automotiveHref: "/work?category=Automotive",
+        portraitsHref: "/work?category=Portraits",
+        eventsHref: "/work?category=Events",
+      },
+      render: (props) => (
+        <DisciplinesBlock
+          images={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[key]]))}
+          hrefs={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[`${key}Href`]]))}
+        />
+      ),
     },
     JoinRoster: { label: "Join the Roster", fields: {}, render: () => <JoinTheRosterSection /> },
 

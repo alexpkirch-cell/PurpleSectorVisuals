@@ -17,6 +17,7 @@ import {
   Package,
   PencilRuler,
   ScanFace,
+  UserRoundCheck,
   Users,
   Wallet,
   type LucideIcon,
@@ -35,6 +36,7 @@ const primaryLinks: NavLink[] = [
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/site-editor", label: "Site Editor", icon: PencilRuler },
   { href: "/admin/roster", label: "Roster & Teams", icon: Users },
+  { href: "/admin/crew", label: "1099 Crew Hub", icon: UserRoundCheck },
   { href: "/admin/packages", label: "Package Manager", icon: Package },
 ]
 

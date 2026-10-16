@@ -1,9 +1,10 @@
 "use client"
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 import type { PortfolioCategory, PortfolioItem } from "@/app/actions/portfolio"
+import { PhotoLightbox, type LightboxImage } from "@/components/photo-lightbox"
 import { cn } from "@/lib/utils"
 
 type Discipline = "Portraits" | "Sports" | "Automotive" | "Events"
@@ -28,6 +29,21 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
     if (active === "All") return items
     return items.filter((item) => CATEGORY_TO_DISCIPLINE[item.category] === active)
   }, [items, active])
+
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const lightboxImages: LightboxImage[] = useMemo(
+    () =>
+      filtered.map((item) => ({
+        src: item.image_url,
+        title: item.title,
+        category: CATEGORY_TO_DISCIPLINE[item.category],
+        shooter: item.shooter,
+        camera: item.camera,
+        lens: item.lens,
+        settings: item.settings,
+      })),
+    [filtered],
+  )
 
   function setFilter(value: Discipline | "All") {
     const params = new URLSearchParams(searchParams.toString())
@@ -64,8 +80,18 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
         {filtered.map((item, i) => (
           <div
             key={item.id}
+            role="button"
+            tabIndex={0}
+            aria-label={`View ${item.title} larger`}
+            onClick={() => setOpenIndex(i)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault()
+                setOpenIndex(i)
+              }
+            }}
             className={cn(
-              "group relative overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
+              "group relative cursor-zoom-in overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
               i % 5 === 0
                 ? "col-span-2 aspect-[16/10] sm:aspect-[4/3]"
                 : "aspect-[3/4]"
@@ -90,6 +116,15 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
 
       {filtered.length === 0 ? (
         <p className="mt-16 text-center text-sm text-zinc-500">No work in this category yet.</p>
+      ) : null}
+
+      {openIndex !== null ? (
+        <PhotoLightbox
+          images={lightboxImages}
+          index={openIndex}
+          onIndexChange={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
+        />
       ) : null}
     </div>
   )

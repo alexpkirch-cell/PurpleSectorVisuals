@@ -1,5 +1,6 @@
 import Image from "next/image"
 
+import { LightboxTrigger } from "@/components/photo-lightbox"
 import { cn } from "@/lib/utils"
 
 export type ImageSizing = "auto" | "square" | "portrait" | "vertical" | "landscape" | "custom"
@@ -80,18 +81,22 @@ export function SmartImage({
     )
   }
 
+  const lightboxImages = [{ src, title: alt }]
+
   if (sizing === "auto") {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
       <div className={outer}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={alt} className={cn("relative block h-auto w-full object-cover", frame, className)} />
+        <LightboxTrigger images={lightboxImages}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={alt} className={cn("relative block h-auto w-full object-cover", frame, className)} />
+        </LightboxTrigger>
       </div>
     )
   }
 
   return (
     <div className={outer}>
+      <LightboxTrigger images={lightboxImages}>
       <div
         className={cn(
           "relative",
@@ -111,6 +116,7 @@ export function SmartImage({
           className={cn("h-full w-full", objectFit === "contain" ? "object-contain" : "object-cover")}
         />
       </div>
+      </LightboxTrigger>
     </div>
   )
 }
