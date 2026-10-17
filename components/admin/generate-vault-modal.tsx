@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -33,12 +33,14 @@ export function GenerateVaultModal({
   const [totalQuote, setTotalQuote] = useState("0")
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
+  const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
+  if (shoot !== syncedShoot) {
+    setSyncedShoot(shoot)
     if (shoot) {
       const current = Number(shoot.base_price) + Number(shoot.travel_fee)
       setTotalQuote(current > 0 ? String(current) : "0")
     }
-  }, [shoot])
+  }
 
   const total = Number(totalQuote) || 0
   const { deposit: depositAmount, balance: balanceAmount } = splitTotal(total)

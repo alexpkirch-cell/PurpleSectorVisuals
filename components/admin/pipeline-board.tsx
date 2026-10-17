@@ -75,6 +75,7 @@ export function PipelineBoard({
   // initial client render match exactly (its date is computed from `new Date()`,
   // which would otherwise differ between the SSR pass and hydration).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- must run post-mount to avoid a hydration mismatch
     setShoots((current) => (current.some((s) => isMockShoot(s.id)) ? current : [...current, createMockTestLead()]))
   }, [])
 

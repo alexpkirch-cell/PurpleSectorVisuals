@@ -131,27 +131,39 @@ export function ShootDetailSheet({
     return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
   }, [shoot, bookingTiers])
 
-  useEffect(() => {
+  const shouldLoadLedger = !!shoot && shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)
+
+  const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
+  if (shoot !== syncedShoot) {
+    setSyncedShoot(shoot)
+    setLedgerEntries([])
+    setIsLoadingLedger(shouldLoadLedger)
     if (shoot) {
       setTotalPrice(String(calculatedTotal))
       setPriceTouched(false)
       setAssignedShooter(shoot.assigned_shooter ?? "")
       setAssignedEditor(shoot.assigned_editor ?? "")
       setNotes(shoot.notes ?? "")
-      if (shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)) {
-        setIsLoadingLedger(true)
-        listLedgerEntries(shoot.id)
-          .then(setLedgerEntries)
-          .catch(() => setLedgerEntries([]))
-          .finally(() => setIsLoadingLedger(false))
-      } else {
-        setLedgerEntries([])
-      }
-    } else {
-      setLedgerEntries([])
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- calculatedTotal intentionally excluded; only reset when the selected shoot changes
-  }, [shoot])
+  }
+
+  useEffect(() => {
+    if (!shoot || !shouldLoadLedger) return
+    let cancelled = false
+    listLedgerEntries(shoot.id)
+      .then((entries) => {
+        if (!cancelled) setLedgerEntries(entries)
+      })
+      .catch(() => {
+        if (!cancelled) setLedgerEntries([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingLedger(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [shoot, shouldLoadLedger])
 
   const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
 

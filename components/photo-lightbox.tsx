@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from "react"
+import { useCallback, useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 
@@ -19,6 +19,8 @@ export type LightboxImage = {
   settings?: string | null
 }
 
+const subscribeNoop = () => () => {}
+
 const BACKDROP_MASK = "radial-gradient(ellipse at center, #000 25%, rgba(0,0,0,0.55) 55%, transparent 88%)"
 
 type PhotoLightboxProps = {
@@ -30,7 +32,7 @@ type PhotoLightboxProps = {
 }
 
 export function PhotoLightbox({ images, index, onClose, onIndexChange }: PhotoLightboxProps) {
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
   const image = images[index]
   const isGallery = images.length > 1
 
@@ -41,8 +43,6 @@ export function PhotoLightbox({ images, index, onClose, onIndexChange }: PhotoLi
     },
     [images.length, index, isGallery, onIndexChange],
   )
-
-  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow

@@ -49,6 +49,8 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
 
   useEffect(() => {
     if (!frameDocument) return
+    // The iframe document is an external DOM node owned by Puck; mutating it in an effect is the intent.
+    // eslint-disable-next-line react-hooks/immutability
     frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 

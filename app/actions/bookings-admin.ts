@@ -110,7 +110,7 @@ export async function approveBooking(id: string) {
   const packagePrice = Number(booking.package_price ?? 0)
 
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-  let vaultAccessCode = `PS-${Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("")}`
+  const vaultAccessCode = `PS-${Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("")}`
 
   const { rows: shootRows } = await sql<{ id: string }>`
     INSERT INTO shoots (
