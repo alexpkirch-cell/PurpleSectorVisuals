@@ -5,13 +5,12 @@ import { ExternalLink, UserCheck, X } from "lucide-react"
 import { toast } from "sonner"
 
 import {
-  APPLICATION_STATUSES,
   deleteApplication,
   promoteApplication,
   updateApplicationStatus,
-  type ApplicationStatus,
   type RosterApplication,
 } from "@/app/actions/crew"
+import { APPLICATION_STATUSES, type ApplicationStatus } from "@/lib/crew-statuses"
 import { Button } from "@/components/ui/button"
 
 const COLUMN_LABELS: Record<ApplicationStatus, string> = {

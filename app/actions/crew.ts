@@ -6,9 +6,7 @@ import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
 import { BUSINESS_DOCUMENTS_BUCKET } from "@/lib/storage-buckets"
 import { isFounderName } from "@/lib/shooter-link"
-
-export const APPLICATION_STATUSES = ["new", "reviewing", "accepted", "declined"] as const
-export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number]
+import { APPLICATION_STATUSES, type ApplicationStatus } from "@/lib/crew-statuses"
 
 export interface RosterApplication {
   id: string
