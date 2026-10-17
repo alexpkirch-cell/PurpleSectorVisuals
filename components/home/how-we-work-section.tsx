@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 export const HOW_WE_WORK_DEFAULTS = {
   eyebrow: "How We Work",
   heading: "One Production House. Every Visual Style.",
@@ -5,9 +7,9 @@ export const HOW_WE_WORK_DEFAULTS = {
 }
 
 type HowWeWorkSectionProps = {
-  eyebrow?: string
-  heading?: string
-  body?: string
+  eyebrow?: ReactNode
+  heading?: ReactNode
+  body?: ReactNode
 }
 
 export function HowWeWorkSection({
@@ -15,7 +17,8 @@ export function HowWeWorkSection({
   heading = HOW_WE_WORK_DEFAULTS.heading,
   body = HOW_WE_WORK_DEFAULTS.body,
 }: HowWeWorkSectionProps) {
-  const paragraphs = body.split(/\n{2,}/).filter(Boolean)
+  // In the Puck editor an inline-editable `body` arrives as an element, not a string.
+  const paragraphs = typeof body === "string" ? body.split(/\n{2,}/).filter(Boolean) : [body]
 
   return (
     <section className="w-full bg-[#09090b]">

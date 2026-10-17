@@ -1,9 +1,11 @@
-export type Discipline = "Sports" | "Automotive" | "Portraits" | "Events"
+export type Discipline = "Sports" | "Automotive" | "Portraits" | "Events" | "Commercial"
 
 export const disciplines: {
   name: Discipline
   description: string
   aspect: string
+  /** Fallback "View Gallery" destination when none is set in the editor. */
+  galleryHref?: string
 }[] = [
   {
     name: "Portraits",
@@ -24,6 +26,12 @@ export const disciplines: {
     name: "Events",
     description: "Every atmosphere, documented in full fidelity.",
     aspect: "16:9 Slot",
+  },
+  {
+    name: "Commercial",
+    description: "Brand-ready imagery built to move product and perception.",
+    aspect: "4:5 Slot",
+    galleryHref: "/work",
   },
 ]
 
@@ -53,7 +61,7 @@ export const galleryItems: GalleryItem[] = [
 export const navLinks = [
   { label: "Home", href: "/" },
   { label: "Portfolio", href: "/work" },
-  { label: "Team", href: "/#team" },
+  { label: "Team", href: "/team" },
   { label: "Packages", href: "/packages" },
   { label: "Vault", href: "/vault" },
   ]

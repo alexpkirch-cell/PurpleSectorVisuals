@@ -15,7 +15,10 @@ export const RESERVED_ROOT_SEGMENTS = [
   "work",
 ]
 
-/** Pages defined in code (their own route files). The editor can preview them but not edit their layout. */
+/**
+ * Pages with their own route files. They render a layout saved from the editor when one exists and
+ * fall back to their code defaults otherwise, so they are fully editable here.
+ */
 export const BUILT_IN_PAGES = [
   { path: "/work", label: "Work" },
   { path: "/packages", label: "Packages" },

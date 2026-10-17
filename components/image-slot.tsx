@@ -44,7 +44,7 @@ export function ImageSlot({
           alt={imageAlt ?? label ?? "Site asset"}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
-          className={cn("object-cover", imageClassName)}
+          className={cn("h-full w-full object-cover", imageClassName)}
         />
       </div>
     )

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
+import { ResizeObserverGuard } from "@/components/admin/resize-observer-guard"
 
 export default async function AdminLayout({
   children,

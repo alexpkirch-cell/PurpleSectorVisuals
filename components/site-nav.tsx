@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/puck/edit-mode"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import {
@@ -35,7 +35,7 @@ export function SiteNav() {
 
         <ul className="hidden items-center gap-1 md:flex">
           {navLinks.map((link) => {
-            const active = pathname === link.href
+            const active = pathname === link.href || (link.href !== "/" && pathname.startsWith(`${link.href}/`))
             return (
               <li key={link.href}>
                 <Link

@@ -1,11 +1,12 @@
 "use client"
 
-import { createContext, useContext, type ReactNode } from "react"
+import { createContext, useContext, type ComponentProps, type ReactNode } from "react"
 
+import { CreatorPage } from "@/components/creator-page"
 import { CoreIdentitySection, type CoreIdentityImages } from "@/components/home/core-identity-section"
-import { DisciplinesSection, type DisciplineImages } from "@/components/home/disciplines-section"
+import { DisciplinesSection, type DisciplineHrefs, type DisciplineImages } from "@/components/home/disciplines-section"
 import { DualSplitSection, type DualSplitImages } from "@/components/home/dual-split-section"
-import { HeroCarousel3D } from "@/components/home/hero-carousel-3d"
+import { HeroCarousel3D, type HeroPhoto } from "@/components/home/hero-carousel-3d"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
 const SiteSlotsContext = createContext<SiteSlotOverrides>({})
@@ -15,8 +16,8 @@ export function SiteSlotsProvider({ overrides, children }: { overrides: SiteSlot
   return <SiteSlotsContext.Provider value={overrides}>{children}</SiteSlotsContext.Provider>
 }
 
-export function HeroBlock({ images }: { images: (string | undefined)[] }) {
-  return <HeroCarousel3D images={images} />
+export function HeroBlock({ photos }: { photos: HeroPhoto[] }) {
+  return <HeroCarousel3D photos={photos} />
 }
 
 export function StudioBlock({ images }: { images: CoreIdentityImages }) {
@@ -27,6 +28,25 @@ export function DualSplitBlock({ images }: { images: DualSplitImages }) {
   return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} />
 }
 
-export function DisciplinesBlock({ images }: { images: DisciplineImages }) {
-  return <DisciplinesSection overrides={useContext(SiteSlotsContext)} images={images} />
+export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "overrides">) {
+  return <CreatorPage {...props} overrides={useContext(SiteSlotsContext)} />
+}
+
+export function DisciplinesBlock({
+  images,
+  hrefs,
+  heading,
+}: {
+  images: DisciplineImages
+  hrefs?: DisciplineHrefs
+  heading?: string
+}) {
+  return (
+    <DisciplinesSection
+      overrides={useContext(SiteSlotsContext)}
+      images={images}
+      hrefs={hrefs}
+      text={heading?.trim() ? { heading } : undefined}
+    />
+  )
 }

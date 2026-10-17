@@ -3,15 +3,22 @@ import { Suspense } from "react"
 
 import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
 import { listActivePackages } from "@/app/actions/packages"
+import { renderSavedLayout } from "@/components/puck/saved-layout"
+import { withSavedMetadata } from "@/lib/page-layouts"
 import { getSiteText } from "@/lib/site-slots"
 
-export const metadata: Metadata = {
-  title: "Contact | Purple Sector Visuals",
-  description:
-    "Book a session with Purple Sector Visuals. Tell us your date, category, and shooter preference.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/contact", {
+    title: "Contact | Purple Sector Visuals",
+    description:
+      "Book a session with Purple Sector Visuals. Tell us your date, category, and shooter preference.",
+  })
 }
 
 export default async function ContactPage() {
+  const saved = await renderSavedLayout("/contact")
+  if (saved) return saved
+
   const [text, packages] = await Promise.all([getSiteText(), listActivePackages()])
 
   return (

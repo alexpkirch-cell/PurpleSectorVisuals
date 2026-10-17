@@ -4,7 +4,7 @@ import { randomInt } from "node:crypto"
 
 import { revalidatePath } from "next/cache"
 
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient, createClient } from "@/lib/supabase/server"
 
 const GALLERY_PHOTOS_BUCKET = "gallery-photos"
 
@@ -115,6 +115,18 @@ export async function deleteGallery(galleryId: string) {
     await supabase.storage
       .from(GALLERY_PHOTOS_BUCKET)
       .remove(photos.map((p) => p.storage_path))
+  }
+
+  // vaults.gallery_id has no ON DELETE rule. Vaults hold the client's contract
+  // and payment records, so detach them instead of deleting them. The service
+  // role is used so RLS can't silently turn this into a no-op.
+  const { error: detachError } = await createAdminClient()
+    .from("vaults")
+    .update({ gallery_id: null })
+    .eq("gallery_id", galleryId)
+
+  if (detachError) {
+    throw new Error(detachError.message)
   }
 
   const { error } = await supabase.from("galleries").delete().eq("id", galleryId)

@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import Link from "@/components/puck/edit-mode"
 import { useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 
@@ -10,21 +10,29 @@ import { cn } from "@/lib/utils"
 
 type Side = "alex" | "gabe" | null
 
-const creators = [
+export const DUAL_SPLIT_TEXT_DEFAULTS = {
+  eyebrow: "Two Perspectives, One Studio",
+  heading: "Two eyes on every frame.",
+  alexName: "ALEX",
+  alexSubtitle: "Pace, Apex, & Burst Tracking",
+  gabeName: "GABE",
+  gabeSubtitle: "Atmosphere, Tone, & Form",
+  viewProfileLabel: "View Profile",
+}
+
+export type DualSplitText = Partial<typeof DUAL_SPLIT_TEXT_DEFAULTS>
+
+const creatorConfig = [
   {
     key: "alex" as const,
-    name: "ALEX",
-    subtitle: "Pace, Apex, & Burst Tracking",
-    slotLabel: "ALEX // PORTRAIT SLOT",
-    cards: ["BTS Slot", "Lifestyle Slot", "Detail Slot"],
+    slotLabel: "ALEX // PERSONALITY SHOT",
+    cards: ["BTS 1", "BTS 2", "BTS 3"],
     href: "/alex",
   },
   {
     key: "gabe" as const,
-    name: "GABE",
-    subtitle: "Atmosphere, Tone, & Form",
-    slotLabel: "GABE // PORTRAIT SLOT",
-    cards: ["Mood Slot", "Vibe Slot", "Form Slot"],
+    slotLabel: "GABE // PERSONALITY SHOT",
+    cards: ["BTS 1", "BTS 2", "BTS 3"],
     href: "/gabe",
   },
 ]
@@ -41,10 +49,18 @@ export type DualSplitImages = Record<string, string | undefined>
 export function DualSplitSection({
   overrides,
   images,
+  text,
 }: {
   overrides?: SiteSlotOverrides
   images?: DualSplitImages
+  text?: DualSplitText
 }) {
+  const copy = { ...DUAL_SPLIT_TEXT_DEFAULTS, ...text }
+  const creators = creatorConfig.map((creator) => ({
+    ...creator,
+    name: creator.key === "alex" ? copy.alexName : copy.gabeName,
+    subtitle: creator.key === "alex" ? copy.alexSubtitle : copy.gabeSubtitle,
+  }))
   const [hovered, setHovered] = useState<Side>(null)
   const imageFor = (key: string) => images?.[key] || undefined
 
@@ -52,15 +68,15 @@ export function DualSplitSection({
     <section id="team" className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 pb-6 pt-24 sm:px-10">
         <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
-          Two Perspectives, One Studio
+          {copy.eyebrow}
         </p>
         <h2 className="mt-4 max-w-2xl text-balance font-heading text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
-          Two eyes on every frame.
+          {copy.heading}
         </h2>
       </div>
 
       {/* Desktop fluid split */}
-      <div className="hidden min-h-[85vh] w-full md:flex">
+      <div className="mx-auto hidden min-h-[75vh] w-full max-w-6xl px-6 pb-12 sm:px-10 md:flex">
         {creators.map((creator) => {
           const isHovered = hovered === creator.key
           const isOther = hovered !== null && hovered !== creator.key
@@ -145,7 +161,7 @@ export function DualSplitSection({
 
               <div className="relative z-10 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
-                  View Profile
+                  {copy.viewProfileLabel}
                 </span>
                 <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#e829f1] text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                   <ArrowUpRight className="size-5" />
@@ -157,7 +173,7 @@ export function DualSplitSection({
       </div>
 
       {/* Mobile stacked profiles */}
-      <div className="flex flex-col gap-14 px-6 pb-12 md:hidden">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-6 pb-12 md:hidden">
         {creators.map((creator) => (
           <div key={creator.key} className="flex flex-col gap-6">
             <Link href={creator.href} className="flex flex-col gap-6">
@@ -203,7 +219,7 @@ export function DualSplitSection({
               className="flex items-center justify-between rounded-full border border-zinc-800 bg-zinc-950/60 px-5 py-3"
             >
               <span className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
-                View Profile
+                {copy.viewProfileLabel}
               </span>
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#e829f1] text-white">
                 <ArrowUpRight className="size-4" />

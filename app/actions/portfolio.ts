@@ -16,6 +16,10 @@ export interface PortfolioItem {
   featured: boolean
   sort_order: number
   created_at: string
+  shooter?: string | null
+  camera?: string | null
+  lens?: string | null
+  settings?: string | null
 }
 
 async function requireAdmin() {
@@ -74,7 +78,15 @@ export async function createPortfolioItem(input: {
 
 export async function updatePortfolioItem(
   id: string,
-  patch: { title?: string; category?: PortfolioCategory; featured?: boolean },
+  patch: {
+    title?: string
+    category?: PortfolioCategory
+    featured?: boolean
+    shooter?: string | null
+    camera?: string | null
+    lens?: string | null
+    settings?: string | null
+  },
 ): Promise<void> {
   await requireAdmin()
 
@@ -86,7 +98,11 @@ export async function updatePortfolioItem(
     UPDATE portfolio_items
     SET title = ${patch.title ?? current.title},
         category = ${patch.category ?? current.category},
-        featured = ${patch.featured ?? current.featured}
+        featured = ${patch.featured ?? current.featured},
+        shooter = ${patch.shooter !== undefined ? patch.shooter || null : (current.shooter ?? null)},
+        camera = ${patch.camera !== undefined ? patch.camera || null : (current.camera ?? null)},
+        lens = ${patch.lens !== undefined ? patch.lens || null : (current.lens ?? null)},
+        settings = ${patch.settings !== undefined ? patch.settings || null : (current.settings ?? null)}
     WHERE id = ${id}
   `
 

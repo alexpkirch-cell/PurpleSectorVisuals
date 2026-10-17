@@ -8,11 +8,13 @@ import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
 import { PageNavigator, openEditorPath } from "@/components/admin/site-editor/page-navigator"
+import { EditModeProvider } from "@/components/puck/edit-mode"
 import { SiteSlotsProvider } from "@/components/puck/site-sections"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { deferResizeObserver } from "@/lib/defer-resize-observer"
 import { validatePagePath } from "@/lib/page-layout-paths"
+import type { PuckBlockMetadata } from "@/lib/puck/block-metadata"
 import { puckConfig } from "@/lib/puck/config"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
@@ -21,6 +23,7 @@ type PuckPageEditorProps = {
   paths: string[]
   initialData: Data
   slotOverrides: SiteSlotOverrides
+  blockMetadata: Pick<PuckBlockMetadata, "packages" | "portfolioItems">
 }
 
 // Must run before Puck constructs any observer, so patch at module load rather than in an effect.
@@ -41,13 +44,15 @@ function ignoreResizeObserverError(event: ErrorEvent) {
 
 // The canvas renders in an iframe; mirror the host's theme classes so Tailwind tokens and next/font variables resolve inside it.
 function PreviewFrame({ children, document: frameDocument }: { children: ReactNode; document?: Document }) {
+  // Child effects run before this component's effects, so patch during render to cover observers they create.
+  deferResizeObserver(frameDocument?.defaultView)
+
   useEffect(() => {
     if (!frameDocument) return
     frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 
     const frameWindow = frameDocument.defaultView
-    deferResizeObserver(frameWindow)
     frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
 
     // Real links and buttons from the live site must not navigate away while editing; selection still works.
@@ -62,12 +67,12 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     }
   }, [frameDocument])
 
-  return <>{children}</>
+  return <EditModeProvider>{children}</EditModeProvider>
 }
 
 const overrides: Partial<Overrides> = { iframe: PreviewFrame }
 
-export function PuckPageEditor({ path, paths, initialData, slotOverrides }: PuckPageEditorProps) {
+export function PuckPageEditor({ path, paths, initialData, slotOverrides, blockMetadata }: PuckPageEditorProps) {
   const router = useRouter()
   const [status, setStatus] = useState<{ tone: "ok" | "error"; message: string } | null>(null)
   const [newPath, setNewPath] = useState("")
@@ -99,64 +104,65 @@ export function PuckPageEditor({ path, paths, initialData, slotOverrides }: Puck
   }
 
   return (
-    <div className="psv-puck fixed inset-y-0 right-0 left-60 z-40 overflow-hidden bg-background">
-      <SiteSlotsProvider overrides={slotOverrides}>
-      <Puck
-        key={path}
-        config={puckConfig}
-        overrides={overrides}
-        data={initialData}
-        onPublish={handlePublish}
-        headerPath={path}
-        renderHeaderActions={() => (
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-            {status ? (
-              <span
-                role="status"
-                className={status.tone === "ok" ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
-              >
-                {status.message}
+    <div className="fixed inset-y-0 right-0 left-60 z-[60] flex flex-col overflow-hidden bg-background">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background px-3 py-2">
+        <PageNavigator path={path} editablePaths={paths} />
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {status ? (
+            <span
+              role="status"
+              className={status.tone === "ok" ? "text-sm text-muted-foreground" : "text-sm text-destructive"}
+            >
+              {status.message}
+            </span>
+          ) : null}
+
+          <div className="relative flex items-center gap-1">
+            <Input
+              value={newPath}
+              onChange={(event) => setNewPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCreate()
+              }}
+              placeholder="new-page"
+              aria-label="New page path"
+              className="h-8 w-28"
+            />
+            <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
+              <Plus className="size-4" />
+            </Button>
+            {newPathError ? (
+              <span className="absolute top-full right-0 z-10 mt-1 w-64 rounded-md border border-border bg-background p-2 text-xs text-destructive">
+                {newPathError}
               </span>
             ) : null}
-
-            <PageNavigator path={path} editablePaths={paths} />
-
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1">
-                <Input
-                  value={newPath}
-                  onChange={(event) => setNewPath(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.nativeEvent.isComposing) handleCreate()
-                  }}
-                  placeholder="new-page"
-                  aria-label="New page path"
-                  className="h-8 w-28"
-                />
-                <Button type="button" size="icon" variant="outline" className="size-8" onClick={handleCreate} aria-label="Create page">
-                  <Plus className="size-4" />
-                </Button>
-              </div>
-              {newPathError ? <span className="absolute top-full mt-1 max-w-64 text-xs text-destructive">{newPathError}</span> : null}
-            </div>
-
-            <a
-              href={path}
-              target="_blank"
-              rel="noreferrer"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ExternalLink className="size-4" />
-              View live
-            </a>
-            <Link href="/admin" className={buttonVariants({ variant: "ghost", size: "sm" })}>
-              <ArrowLeft className="size-4" />
-              Admin
-            </Link>
           </div>
-        )}
-      />
-      </SiteSlotsProvider>
+
+          <a href={path} target="_blank" rel="noreferrer" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <ExternalLink className="size-4" />
+            View live
+          </a>
+          <Link href="/admin" className={buttonVariants({ variant: "ghost", size: "sm" })}>
+            <ArrowLeft className="size-4" />
+            Admin
+          </Link>
+        </div>
+      </header>
+
+      <div className="psv-puck min-h-0 flex-1 overflow-hidden">
+        <SiteSlotsProvider overrides={slotOverrides}>
+          <Puck
+            key={path}
+            config={puckConfig}
+            overrides={overrides}
+            data={initialData}
+            metadata={blockMetadata}
+            onPublish={handlePublish}
+            headerPath={path}
+          />
+        </SiteSlotsProvider>
+      </div>
     </div>
   )
 }

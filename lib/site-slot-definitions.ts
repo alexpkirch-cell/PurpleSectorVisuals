@@ -28,6 +28,7 @@ export const SITE_SLOT_DEFINITIONS: { key: string; label: string; group: string 
   { key: "home.discipline.automotive", label: "Discipline — Automotive", group: "Home" },
   { key: "home.discipline.portraits", label: "Discipline — Portraits", group: "Home" },
   { key: "home.discipline.events", label: "Discipline — Events", group: "Home" },
+  { key: "home.discipline.commercial", label: "Discipline — Commercial", group: "Home" },
   { key: "creator.alex.hero", label: "Alex — Page Hero", group: "Creator Pages" },
   { key: "creator.gabe.hero", label: "Gabe — Page Hero", group: "Creator Pages" },
   { key: "gallery.g1", label: "Apex Sprint", group: "Portfolio" },

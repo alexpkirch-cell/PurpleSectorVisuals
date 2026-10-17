@@ -2,10 +2,12 @@ import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google"
 
 import "./globals.css"
+import { ResizeObserverGuard } from "@/components/admin/resize-observer-guard"
 import { ThemeProvider } from "@/components/theme-provider"
 import { SiteNav } from "@/components/site-nav"
 import { SiteFooter } from "@/components/site-footer"
 import { Toaster } from "@/components/ui/sonner"
+import { GlobalLightbox } from "@/components/global-lightbox"
 import { cn } from "@/lib/utils"
 import { AfkScreensaver } from "@/components/system/afk-screensaver"
 import { Konami } from "@/components/system/konami"
@@ -56,6 +58,7 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-svh">
+        <ResizeObserverGuard />
         <ThemeProvider
           forcedTheme="dark"
           defaultTheme="dark"
@@ -65,6 +68,7 @@ export default function RootLayout({
           <main>{children}</main>
           <SiteFooter />
           <Toaster />
+          <GlobalLightbox />
           <AfkScreensaver />
           <Konami />
           <SpeedTrap />

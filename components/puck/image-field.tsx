@@ -9,7 +9,8 @@ import { PUBLIC_SITE_ASSETS_BUCKET } from "@/lib/storage-buckets"
 import { uploadPublicImage } from "@/lib/upload-public-image"
 import { cn } from "@/lib/utils"
 
-const MAX_BYTES = 10 * 1024 * 1024
+// Matches Supabase Storage's default per-file limit; the browser uploads straight to the bucket, so Vercel's request body limit never applies.
+const MAX_BYTES = 50 * 1024 * 1024
 
 type ImageFieldInputProps = {
   value?: string
@@ -25,12 +26,14 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
 
   async function handleFile(file: File | undefined) {
     if (!file) return
-    if (!file.type.startsWith("image/")) {
-      setError("Choose an image file (JPG, PNG, WebP, or GIF).")
+    // Some browsers report an empty MIME type for .heic files, so fall back to the extension.
+    const isImage = file.type.startsWith("image/") || /\.(heic|heif)$/i.test(file.name)
+    if (!isImage) {
+      setError("Choose an image file (JPG, PNG, WebP, or HEIC).")
       return
     }
     if (file.size > MAX_BYTES) {
-      setError("That image is over 10 MB. Resize it and try again.")
+      setError("That image is over 50 MB. Export a smaller version and try again.")
       return
     }
 
@@ -74,7 +77,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       >
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="absolute inset-0 size-full object-cover" />
+          <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
           <button
             type="button"
@@ -84,7 +87,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
           >
             <ImagePlus className="size-6" aria-hidden="true" />
             <span>Drop an image here or click to browse</span>
-            <span className="text-xs">JPG, PNG, WebP or GIF up to 10 MB</span>
+            <span className="text-xs">JPG, PNG, WebP or HEIC up to 50 MB</span>
           </button>
         )}
         {uploading ? (
@@ -101,7 +104,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg, image/png, image/webp, image/heic, .heic"
         className="sr-only"
         tabIndex={-1}
         onChange={(event) => void handleFile(event.target.files?.[0])}

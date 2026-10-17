@@ -2,16 +2,23 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import { Download } from "lucide-react"
 
+import { renderSavedLayout } from "@/components/puck/saved-layout"
 import { Button } from "@/components/ui/button"
+import { withSavedMetadata } from "@/lib/page-layouts"
 
-export const metadata: Metadata = {
-  title: "Demo Gallery | Purple Sector Visuals",
-  description: "A sample client vault gallery preview.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/vault/demo", {
+    title: "Demo Gallery | Purple Sector Visuals",
+    description: "A sample client vault gallery preview.",
+  })
 }
 
 const demoPhotos = Array.from({ length: 6 }, (_, i) => `/placeholders/${i + 1}.jpg`)
 
-export default function VaultDemoPage() {
+export default async function VaultDemoPage() {
+  const saved = await renderSavedLayout("/vault/demo")
+  if (saved) return saved
+
   return (
     <main className="min-h-screen bg-zinc-950 px-4 py-16 sm:px-8">
       <div className="mx-auto flex max-w-6xl flex-col gap-10">

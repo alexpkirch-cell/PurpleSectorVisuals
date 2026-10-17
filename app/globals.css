@@ -193,6 +193,14 @@
   color-scheme: dark;
 }
 
+/* Puck sizes itself to 100dvh; the site editor adds its own page toolbar above it, so fill the remaining pane. */
+.psv-puck,
+.psv-puck [class*="_Puck_"],
+.psv-puck [class*="_PuckLayout_"],
+.psv-puck [class*="_PuckLayout-inner_"] {
+  height: 100%;
+}
+
 /* Let the page canvas fill its pane like a live site instead of a padded, bordered card. */
 .psv-puck [class*="_PuckCanvas_"] {
   padding: 0;
@@ -219,4 +227,21 @@
 
 .psv-fade-up {
   animation: psv-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes psv-hero-approach {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
 }

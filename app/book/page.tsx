@@ -4,10 +4,14 @@ import { Suspense } from "react"
 import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
 import { listActivePackages } from "@/app/actions/packages"
 import { getPublicContractor } from "@/app/actions/roster"
+import { renderSavedLayout } from "@/components/puck/saved-layout"
+import { withSavedMetadata } from "@/lib/page-layouts"
 
-export const metadata: Metadata = {
-  title: "Book a Shoot | Purple Sector Visuals",
-  description: "Request a shoot with Purple Sector Visuals and get your client vault access code.",
+export function generateMetadata(): Promise<Metadata> {
+  return withSavedMetadata("/book", {
+    title: "Book a Shoot | Purple Sector Visuals",
+    description: "Request a shoot with Purple Sector Visuals and get your client vault access code.",
+  })
 }
 
 export default async function BookPage({
@@ -16,10 +20,13 @@ export default async function BookPage({
   searchParams: Promise<{ shooter?: string }>
 }) {
   const { shooter: shooterId } = await searchParams
-  const [packages, shooter] = await Promise.all([
-    listActivePackages(),
-    shooterId ? getPublicContractor(shooterId) : Promise.resolve(null),
-  ])
+  const shooter = shooterId ? await getPublicContractor(shooterId) : null
+  const requestedShooter = shooter ? { id: shooter.id, name: shooter.name } : null
+
+  const saved = await renderSavedLayout("/book", { requestedShooter })
+  if (saved) return saved
+
+  const packages = await listActivePackages()
 
   return (
     <main className="flex min-h-screen flex-col items-center px-4 py-20 sm:py-28">
