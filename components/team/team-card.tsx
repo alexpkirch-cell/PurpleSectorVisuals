@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { User } from "lucide-react"
@@ -61,12 +60,11 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
             whileHover={reduceMotion ? undefined : { scale: 1.05 }}
             transition={{ type: "spring", stiffness: 260, damping: 22 }}
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={member.cutout_image_url as string}
               alt={member.name}
-              fill
-              sizes="(min-width: 1024px) 30vw, 44vw"
-              className="object-contain object-bottom drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)]"
+              className="absolute inset-0 size-full object-contain object-bottom drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)]"
             />
           </motion.div>
         ) : (
@@ -88,11 +86,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
             reversed ? "mr-auto pr-2 pl-6 sm:pl-10" : "ml-auto pr-6 pl-2 sm:pr-10"
           )}
         >
-          <motion.div
-            className="flex flex-col gap-4"
-            animate={{ y: boxHovered && !reduceMotion ? -10 : 0, opacity: boxHovered ? 0.6 : 1 }}
-            transition={{ type: "spring", stiffness: 260, damping: 26 }}
-          >
+          <div className="flex flex-col gap-4">
             <h3 className="font-heading text-3xl font-bold text-balance text-foreground sm:text-5xl">{member.name}</h3>
 
             {badges.length > 0 ? (
@@ -100,10 +94,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
                 {badges.map((badge) => (
                   <li
                     key={`${badge.kind}-${badge.label}`}
-                    className={cn(
-                      "rounded-full border border-primary/50 px-3 py-1 font-mono text-[11px] tracking-wider text-primary uppercase",
-                      badge.kind === "role" ? "bg-primary/15" : "bg-transparent"
-                    )}
+                    className="rounded-full bg-brand-pink px-3 py-1 font-mono text-[11px] font-semibold tracking-wider text-background uppercase"
                   >
                     {badge.label}
                   </li>
@@ -112,9 +103,15 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
             ) : null}
 
             {member.bio ? (
-              <p className="line-clamp-4 text-sm leading-relaxed text-pretty text-muted-foreground sm:text-base">{member.bio}</p>
+              <motion.p
+                className="line-clamp-4 text-sm leading-relaxed text-pretty text-muted-foreground sm:text-base"
+                animate={{ y: boxHovered && !reduceMotion ? -14 : 0, opacity: boxHovered ? 0.45 : 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 26 }}
+              >
+                {member.bio}
+              </motion.p>
             ) : null}
-          </motion.div>
+          </div>
 
           {visibleMedia.length > 0 ? (
             <ul

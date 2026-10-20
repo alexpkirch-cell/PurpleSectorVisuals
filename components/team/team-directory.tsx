@@ -3,24 +3,11 @@
 import { useMemo, useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import { ListFilter, Search, X } from "lucide-react"
-import useSWR from "swr"
 
 import { TeamCard } from "@/components/team/team-card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { createClient } from "@/lib/supabase/client"
 import { uniqueSorted, type DirectoryMember } from "@/lib/team-directory"
-
-async function fetchActiveMembers(): Promise<DirectoryMember[]> {
-  const { data, error } = await createClient()
-    .from("team_members")
-    .select("id, slug, name, bio, cutout_image_url, highlight_media, roles, specialties, is_active, sort_order")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true })
-  if (error) throw error
-  return (data ?? []) as DirectoryMember[]
-}
 
 function toggle(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value]
@@ -51,19 +38,18 @@ function FilterGroup({
   )
 }
 
-export function TeamDirectory() {
-  const { data: members, error, isLoading } = useSWR("team-members-active", fetchActiveMembers)
+export function TeamDirectory({ members }: { members: DirectoryMember[] }) {
   const reduceMotion = useReducedMotion()
   const [query, setQuery] = useState("")
   const [selectedRoles, setSelectedRoles] = useState<string[]>([])
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([])
 
-  const roleOptions = useMemo(() => uniqueSorted((members ?? []).flatMap((m) => m.roles)), [members])
-  const specialtyOptions = useMemo(() => uniqueSorted((members ?? []).flatMap((m) => m.specialties)), [members])
+  const roleOptions = useMemo(() => uniqueSorted(members.flatMap((m) => m.roles)), [members])
+  const specialtyOptions = useMemo(() => uniqueSorted(members.flatMap((m) => m.specialties)), [members])
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return (members ?? []).filter((member) => {
+    return members.filter((member) => {
       if (needle && !member.name.toLowerCase().includes(needle) && !member.bio.toLowerCase().includes(needle)) return false
       if (selectedRoles.length > 0 && !member.roles.some((role) => selectedRoles.includes(role))) return false
       if (selectedSpecialties.length > 0 && !member.specialties.some((s) => selectedSpecialties.includes(s))) return false
@@ -159,7 +145,7 @@ export function TeamDirectory() {
 
         <div className="flex items-center justify-between gap-4 px-1">
           <p role="status" aria-live="polite" className="font-mono text-xs text-muted-foreground">
-            {isLoading ? "Loading roster" : `${filtered.length} of ${members?.length ?? 0} shown`}
+            {`${filtered.length} of ${members.length} shown`}
           </p>
           {filtersActive ? (
             <button type="button" onClick={clearAll} className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground">
@@ -169,17 +155,11 @@ export function TeamDirectory() {
         </div>
       </section>
 
-      {error ? (
-        <p role="alert" className="rounded-xl border border-destructive/40 p-6 text-sm text-destructive">
-          The roster could not be loaded. Refresh the page to try again.
-        </p>
-      ) : isLoading ? (
-        <ul className="flex flex-col gap-16" aria-hidden="true">
-          {[0, 1].map((key) => (
-            <li key={key} className="mt-24 h-[26rem] animate-pulse rounded-3xl border border-border bg-card" />
-          ))}
-        </ul>
-      ) : !members?.length ? null : filtered.length === 0 ? (
+      {members.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-12 text-center">
+          <p className="text-foreground">The roster is being assembled. Check back soon.</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-12 text-center">
           <p className="text-foreground">No one matches those filters.</p>
           <button type="button" onClick={clearAll} className="text-sm text-primary underline underline-offset-4">

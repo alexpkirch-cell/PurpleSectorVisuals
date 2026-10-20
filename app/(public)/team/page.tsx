@@ -1,6 +1,9 @@
 import type { Metadata } from "next"
 
 import { TeamDirectory } from "@/components/team/team-directory"
+import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
+
+export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
   title: "Team | Purple Sector Visuals",
@@ -8,10 +11,12 @@ export const metadata: Metadata = {
     "Meet the shooters, editors and operators behind Purple Sector Visuals. Search the roster by name, role or specialty.",
 }
 
-export default function TeamPage() {
+export default async function TeamPage() {
+  const members = await getActiveDirectoryMembers()
+
   return (
     <main className="mx-auto w-full max-w-7xl px-4 pt-32 pb-24 sm:px-6">
-      <TeamDirectory />
+      <TeamDirectory members={members} />
     </main>
   )
 }
