@@ -1,11 +1,16 @@
 "use server"
 
+import { randomInt } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import { isBookingStatus, nextBookingStatus } from "@/lib/booking-statuses"
 import { createClient } from "@/lib/supabase/server"
+import { slugify } from "@/lib/team-directory"
 
 type ActionResult = { ok: true } | { ok: false; error: string }
+type AdminClient = Awaited<ReturnType<typeof createClient>>
+
+const VAULT_STAGE = "Vault & Onboarding"
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -35,7 +40,7 @@ export async function advanceBooking(id: string): Promise<ActionResult> {
 
   const { data: booking, error: readError } = await supabase
     .from("bookings")
-    .select("status")
+    .select("status, client_name")
     .eq("id", id)
     .eq("is_archived", false)
     .maybeSingle()
@@ -47,11 +52,59 @@ export async function advanceBooking(id: string): Promise<ActionResult> {
   const next = nextBookingStatus(booking.status)
   if (!next) return { ok: false, error: "This booking is already completed." }
 
+  let createdVaultId: string | null = null
+  if (next === VAULT_STAGE) {
+    const vault = await ensureVaultForBooking(supabase, id, booking.client_name)
+    if (!vault.ok) return { ok: false, error: vault.error }
+    createdVaultId = vault.createdId
+  }
+
   const { error } = await supabase.from("bookings").update({ status: next }).eq("id", id)
-  if (error) return { ok: false, error: "Could not move this booking." }
+  if (error) {
+    if (createdVaultId) await supabase.from("vaults").delete().eq("id", createdVaultId)
+    return { ok: false, error: "Could not move this booking." }
+  }
 
   refreshBoard()
+  if (createdVaultId) revalidatePath("/admin/vaults")
   return { ok: true }
+}
+
+async function ensureVaultForBooking(
+  supabase: AdminClient,
+  bookingId: string,
+  clientName: string,
+): Promise<{ ok: true; createdId: string | null } | { ok: false; error: string }> {
+  const { data: existing, error: existingError } = await supabase
+    .from("vaults")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .limit(1)
+    .maybeSingle()
+  if (existingError) return { ok: false, error: "Could not check for an existing vault." }
+  if (existing) return { ok: true, createdId: null }
+
+  const baseSlug = slugify(clientName) || "client"
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${randomInt(100, 1000)}`
+    const { data, error } = await supabase
+      .from("vaults")
+      .insert({
+        booking_id: bookingId,
+        client_name: clientName,
+        slug,
+        pin_code: String(randomInt(0, 1_000_000)).padStart(6, "0"),
+        status: "Onboarding",
+      })
+      .select("id")
+      .single()
+
+    if (!error) return { ok: true, createdId: data.id }
+    if (error.code !== "23505") return { ok: false, error: "Could not create the client vault." }
+  }
+
+  return { ok: false, error: "Could not generate a unique vault link." }
 }
 
 export async function archiveBooking(id: string): Promise<ActionResult> {

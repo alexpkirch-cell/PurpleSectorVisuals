@@ -20,7 +20,7 @@ export async function startDepositCheckout(vaultId: string) {
               COALESCE(b.email, s.client_email) as email,
               p.title as package_title, p.category as service_category
        FROM vaults v
-       LEFT JOIN booking_requests b ON b.id = v.booking_id
+       LEFT JOIN booking_requests b ON b.id = v.booking_request_id
        LEFT JOIN shoots s ON s.id = v.shoot_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.id = $1`,
@@ -122,7 +122,7 @@ export async function startBalanceCheckout(vaultId: string) {
     const result = await pool.query(
       `SELECT v.id, v.balance_amount, v.balance_paid, b.first_name, b.last_name, p.title as package_title, p.category as service_category
        FROM vaults v
-       LEFT JOIN booking_requests b ON b.id = v.booking_id
+       LEFT JOIN booking_requests b ON b.id = v.booking_request_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.id = $1`,
       [vaultId]

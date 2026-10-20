@@ -100,14 +100,14 @@ export async function lookupVaultByPin(
   try {
     const result = await pool.query(
       `SELECT
-        v.id, v.booking_id, v.shoot_id, v.gallery_id, v.status,
+        v.id, v.booking_request_id AS booking_id, v.shoot_id, v.gallery_id, v.status,
         v.contract_signed, v.deposit_paid, v.deposit_amount, v.shoot_date,
         v.is_minor, v.portfolio_consent, v.balance_amount, v.balance_paid, v.final_quoted_fee,
         b.first_name, b.last_name, b.subject,
         p.title as package_title,
         (SELECT MIN(gp.created_at) FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) as delivered_at
        FROM vaults v
-       LEFT JOIN booking_requests b ON b.id = v.booking_id
+       LEFT JOIN booking_requests b ON b.id = v.booking_request_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.pin_code = $1
        LIMIT 1`,
