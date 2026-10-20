@@ -21,7 +21,7 @@ export function NewGalleryForm() {
     try {
       const galleryId = await createGallery(formData)
       formRef.current?.reset()
-      router.push(`/admin/galleries/${galleryId}`)
+      router.push(`/admin/vaults/${galleryId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.")
     } finally {

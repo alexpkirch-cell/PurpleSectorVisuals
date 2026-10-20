@@ -44,7 +44,7 @@ export function GalleryList({ galleries }: { galleries: Gallery[] }) {
       {galleries.map((gallery) => (
         <Card key={gallery.id}>
           <CardContent className="flex items-center justify-between gap-4">
-            <Link href={`/admin/galleries/${gallery.id}`} className="flex-1">
+            <Link href={`/admin/vaults/${gallery.id}`} className="flex-1">
               <p className="font-medium text-foreground">{gallery.title}</p>
               <p className="text-sm text-muted-foreground">
                 {gallery.client_name ? `${gallery.client_name} · ` : ""}
