@@ -3,20 +3,22 @@
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 
-import type { PortfolioCategory, PortfolioItem } from "@/app/actions/portfolio"
+import type { PortfolioItem } from "@/app/actions/portfolio"
 import { PhotoLightbox, type LightboxImage } from "@/components/photo-lightbox"
+import { itemCategories, type PortfolioCategory } from "@/lib/portfolio-categories"
 import { cn } from "@/lib/utils"
 
-type Discipline = "Portraits" | "Sports" | "Automotive" | "Events"
+type Discipline = "Portraits" | "Sports" | "Automotive" | "Events" | "Commercial"
 
 const CATEGORY_TO_DISCIPLINE: Record<PortfolioCategory, Discipline> = {
   portraits: "Portraits",
   athletics: "Sports",
   automotive: "Automotive",
   events: "Events",
+  commercial: "Commercial",
 }
 
-const filters: (Discipline | "All")[] = ["All", "Portraits", "Sports", "Automotive", "Events"]
+const filters: (Discipline | "All")[] = ["All", "Portraits", "Sports", "Automotive", "Events", "Commercial"]
 
 export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
   const searchParams = useSearchParams()
@@ -27,7 +29,7 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
 
   const filtered = useMemo(() => {
     if (active === "All") return items
-    return items.filter((item) => CATEGORY_TO_DISCIPLINE[item.category] === active)
+    return items.filter((item) => itemCategories(item).some((category) => CATEGORY_TO_DISCIPLINE[category] === active))
   }, [items, active])
 
   const [openIndex, setOpenIndex] = useState<number | null>(null)
@@ -36,7 +38,9 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
       filtered.map((item) => ({
         src: item.image_url,
         title: item.title,
-        category: CATEGORY_TO_DISCIPLINE[item.category],
+        category: CATEGORY_TO_DISCIPLINE[
+          itemCategories(item).find((category) => CATEGORY_TO_DISCIPLINE[category] === active) ?? itemCategories(item)[0]
+        ],
         shooter: item.shooter,
         camera: item.camera,
         lens: item.lens,

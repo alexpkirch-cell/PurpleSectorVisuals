@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import { saveRosterMember } from "@/app/actions/crew-roster"
+import { MultiSelect } from "@/components/admin/multi-select"
 import { TagInput } from "@/components/admin/tag-input"
 import { CutoutUploader, HighlightMediaUploader } from "@/components/admin/crew/team-media-uploaders"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   SUGGESTED_ROLES,
-  SUGGESTED_SPECIALTIES,
+  SPECIALTY_OPTIONS,
   slugify,
   type DirectoryMember,
 } from "@/lib/team-directory"
@@ -124,12 +125,12 @@ export function RosterEditorForm({ member }: { member: DirectoryMember | null })
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="roster-specialties">Specialties</Label>
-            <TagInput
+            <MultiSelect
               id="roster-specialties"
+              options={SPECIALTY_OPTIONS}
               value={specialties}
               onChange={setSpecialties}
-              suggestions={SUGGESTED_SPECIALTIES}
-              placeholder="Automotive, Operations"
+              placeholder="Choose specialties"
               max={12}
             />
           </div>
