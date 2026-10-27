@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useRef } from "react"
+import { useMemo, useRef, useSyncExternalStore } from "react"
 import Image from "next/image"
 import { Camera } from "lucide-react"
 import { motion, useReducedMotion } from "framer-motion"
@@ -51,38 +51,56 @@ const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh
 
 const MAX_TILES = 12
 const MIN_TILES = 8
-const WARP_DURATION = 10
 const GOLDEN_ANGLE = 137.508
+const SPAWN_BOX_VW = 15
+const SPAWN_BOX_VH = 15
+const MIN_DURATION = 15
+const DURATION_SPREAD = 10
+const MAX_TILT = 6
 
 type Trajectory = {
+  startX: string
+  startY: string
   midX: string
   midY: string
   endX: string
   endY: string
   tilt: number
   delay: number
+  duration: number
 }
 
+const between = (min: number, max: number) => min + Math.random() * (max - min)
+const vw = (value: number) => `${value.toFixed(1)}vw`
+const vh = (value: number) => `${value.toFixed(1)}vh`
+
 /**
- * Every tile starts at the dead center and flies outward along its own angle. Angles walk the circle by the
- * golden angle so consecutive tiles fan out to different edges, and the values are derived from the index
- * (not Math.random) so the paths stay stable across re-renders.
+ * Each tile spawns at a random point inside a central box and flies outward from that point along its own angle
+ * (angles walk the circle by the golden angle so tiles fan out to different edges). Speed and tilt are random
+ * per tile; this uses Math.random, so it must only run on the client after hydration.
  */
-function trajectoryFor(index: number, total: number): Trajectory {
-  const jitter = Math.sin(index * 12.9898) * 14
-  const angle = ((index * GOLDEN_ANGLE + jitter) * Math.PI) / 180
-  const reach = 0.85 + ((Math.sin(index * 78.233) + 1) / 2) * 0.35
-  const endX = Math.cos(angle) * 58 * reach
-  const endY = Math.sin(angle) * 44 * reach
+function randomTrajectory(index: number, total: number): Trajectory {
+  const startX = between(-SPAWN_BOX_VW, SPAWN_BOX_VW)
+  const startY = between(-SPAWN_BOX_VH, SPAWN_BOX_VH)
+  const angle = ((index * GOLDEN_ANGLE + between(-14, 14)) * Math.PI) / 180
+  const reach = between(0.85, 1.2)
+  const travelX = Math.cos(angle) * 58 * reach
+  const travelY = Math.sin(angle) * 44 * reach
+  const duration = MIN_DURATION + Math.random() * DURATION_SPREAD
   return {
-    midX: `${(endX * 0.32).toFixed(1)}vw`,
-    midY: `${(endY * 0.32).toFixed(1)}vh`,
-    endX: `${endX.toFixed(1)}vw`,
-    endY: `${endY.toFixed(1)}vh`,
-    tilt: Math.sin(index * 4.1414) * 10,
-    delay: (index * WARP_DURATION) / total,
+    startX: vw(startX),
+    startY: vh(startY),
+    midX: vw(startX + travelX * 0.32),
+    midY: vh(startY + travelY * 0.32),
+    endX: vw(startX + travelX),
+    endY: vh(startY + travelY),
+    tilt: between(-MAX_TILT, MAX_TILT),
+    delay: (index / total) * MIN_DURATION * 0.8,
+    duration,
   }
 }
+
+const subscribeNoop = () => () => {}
 
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
 
@@ -167,6 +185,14 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
 
   const showSkeleton = !isEditing && tiles.length === 0 && isLoading
 
+  // False during SSR and hydration, true afterwards, so the random paths never cause a hydration mismatch.
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
+  const flyingCount = Math.min(tiles.length, MAX_TILES)
+  const paths = useMemo(
+    () => (mounted && !isEditing ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i, flyingCount)) : []),
+    [mounted, isEditing, flyingCount],
+  )
+
   return (
     <div
       ref={sectionRef}
@@ -201,19 +227,20 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       ) : showSkeleton ? (
         <div className={`absolute inset-0 m-auto aspect-[3/2] h-fit animate-pulse bg-zinc-800 ${TILE_WIDTH}`} role="status" aria-label="Loading photo" />
       ) : (
-        tiles.slice(0, MAX_TILES).map((tile, index, visible) => {
-          const path = trajectoryFor(index, visible.length)
+        tiles.slice(0, MAX_TILES).map((tile, index) => {
+          const path = paths[index]
+          if (!path) return null
           return (
             <motion.div
               key={tile.key}
               className={`absolute inset-0 m-auto h-fit will-change-transform ${TILE_WIDTH}`}
-              initial={{ x: 0, y: 0, scale: 0, opacity: 0, rotate: path.tilt }}
+              initial={{ x: path.startX, y: path.startY, scale: 0, opacity: 0, rotate: path.tilt }}
               animate={
                 reduceMotion
                   ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
                   : {
-                      x: [0, path.midX, path.endX],
-                      y: [0, path.midY, path.endY],
+                      x: [path.startX, path.midX, path.endX],
+                      y: [path.startY, path.midY, path.endY],
                       scale: [0, 1, 3.2],
                       opacity: [0, 1, 1, 0],
                       rotate: path.tilt,
@@ -223,12 +250,12 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
                 reduceMotion
                   ? { duration: 0 }
                   : {
-                      duration: WARP_DURATION,
+                      duration: path.duration,
                       delay: path.delay,
                       ease: "linear",
                       repeat: Infinity,
                       times: [0, 0.5, 1],
-                      opacity: { duration: WARP_DURATION, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.12, 0.72, 1] },
+                      opacity: { duration: path.duration, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.12, 0.72, 1] },
                     }
               }
             >
