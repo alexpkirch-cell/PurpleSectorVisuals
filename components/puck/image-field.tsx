@@ -1,8 +1,9 @@
 "use client"
 
 import { useRef, useState, type DragEvent } from "react"
-import { ImagePlus, Link2, Loader2, Trash2, Upload } from "lucide-react"
+import { ImagePlus, Images, Link2, Loader2, Trash2, Upload } from "lucide-react"
 
+import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { PUBLIC_SITE_ASSETS_BUCKET } from "@/lib/storage-buckets"
@@ -112,9 +113,19 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       />
 
       <div className="flex items-center gap-2">
+        <MediaPickerDialog
+          selectedUrl={value}
+          onSelect={onChange}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading}>
+              <Images className="size-4" />
+              Portfolio
+            </Button>
+          }
+        />
         <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading} onClick={openPicker}>
           <Upload className="size-4" />
-          {value ? "Replace image" : "Upload from computer"}
+          Upload new
         </Button>
         <Button
           type="button"

@@ -3,7 +3,7 @@
 import { randomInt } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
-import { isBookingStatus, nextBookingStatus } from "@/lib/booking-statuses"
+import { isBookingStatus } from "@/lib/booking-statuses"
 import { createClient } from "@/lib/supabase/server"
 import { slugify } from "@/lib/team-directory"
 
@@ -32,8 +32,9 @@ function refreshBoard() {
   revalidatePath("/admin")
 }
 
-export async function advanceBooking(id: string): Promise<ActionResult> {
+export async function moveBooking(id: string, status: string): Promise<ActionResult> {
   if (!UUID_PATTERN.test(id)) return { ok: false, error: "Invalid booking." }
+  if (!isBookingStatus(status)) return { ok: false, error: "Unknown stage." }
 
   const supabase = await getAdminClient()
   if (!supabase) return { ok: false, error: "Not authorized." }
@@ -45,20 +46,17 @@ export async function advanceBooking(id: string): Promise<ActionResult> {
     .eq("is_archived", false)
     .maybeSingle()
 
-  if (readError || !booking || !isBookingStatus(booking.status)) {
-    return { ok: false, error: "Booking not found." }
-  }
-
-  const next = nextBookingStatus(booking.status)
-  if (!next) return { ok: false, error: "This booking is already completed." }
+  if (readError || !booking) return { ok: false, error: "Booking not found." }
+  if (booking.status === status) return { ok: true }
 
   let createdVaultId: string | null = null
-  if (next === VAULT_STAGE) {
+  if (status === VAULT_STAGE) {
     const vault = await ensureVaultForBooking(supabase, id, booking.client_name)
     if (!vault.ok) return { ok: false, error: vault.error }
     createdVaultId = vault.createdId
   }
 
+  const next = status
   const { error } = await supabase.from("bookings").update({ status: next }).eq("id", id)
   if (error) {
     if (createdVaultId) await supabase.from("vaults").delete().eq("id", createdVaultId)
@@ -126,9 +124,10 @@ export async function deleteBooking(id: string): Promise<ActionResult> {
   const supabase = await getAdminClient()
   if (!supabase) return { ok: false, error: "Not authorized." }
 
-  const { error } = await supabase.from("bookings").delete().eq("id", id)
+  const { error } = await supabase.rpc("delete_booking_cascade", { p_booking_id: id })
   if (error) return { ok: false, error: "Could not delete this booking." }
 
   refreshBoard()
+  revalidatePath("/admin/vaults")
   return { ok: true }
 }

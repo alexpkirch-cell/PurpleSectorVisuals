@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useRef, useState, useTransition } from "react"
-import { Loader2, Plus, Trash2, UploadCloud } from "lucide-react"
+import { Images, Loader2, Plus, Trash2, UploadCloud } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -11,6 +11,7 @@ import {
   saveSiteContentText,
   type SiteContentRow,
 } from "@/app/actions/site-editor"
+import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -247,6 +248,19 @@ function ImageBlock({
     }
   }
 
+  async function handlePick(url: string) {
+    setBusy(true)
+    try {
+      await saveSiteContentImage(row.section_key, url)
+      onChange(url)
+      toast.success("Image updated")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update image")
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleClear() {
     setBusy(true)
     try {
@@ -301,11 +315,27 @@ function ImageBlock({
           onChange={(e) => handleUpload(e.target.files?.[0] ?? null)}
         />
       </label>
-      {row.image_url && (
-        <Button type="button" variant="outline" size="sm" onClick={handleClear} disabled={busy}>
-          Remove image
+      <div className="flex items-center gap-2">
+        <MediaPickerDialog
+          selectedUrl={row.image_url ?? undefined}
+          onSelect={handlePick}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="flex-1" disabled={busy}>
+              <Images className="size-4" />
+              Portfolio
+            </Button>
+          }
+        />
+        <Button type="button" variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => inputRef.current?.click()}>
+          <UploadCloud className="size-4" />
+          Upload new
         </Button>
-      )}
+        {row.image_url && (
+          <Button type="button" variant="ghost" size="sm" onClick={handleClear} disabled={busy}>
+            Remove
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

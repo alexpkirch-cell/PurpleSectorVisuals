@@ -2,6 +2,7 @@
 
 import { useRef } from "react"
 import { Camera } from "lucide-react"
+import useSWR from "swr"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { useEditMode } from "@/components/puck/edit-mode"
@@ -52,13 +53,25 @@ const CLUSTER_SLOTS: ClusterSlot[] = [
 
 const CYCLE_SECONDS = 30
 
+const fetcher = (url: string) => fetch(url).then((response) => response.json())
+
 export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: HeroText }) {
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
   const sectionRef = useRef<HTMLDivElement>(null)
 
+  // The editor keeps its empty placeholders; visitors get random portfolio shots in any slot left empty.
+  const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>(isEditing ? null : "/api/portfolio/random", fetcher, {
+    revalidateOnFocus: false,
+    revalidateOnReconnect: false,
+    shouldRetryOnError: false,
+  })
+  const portfolioPhotos = data?.photos ?? []
+  let nextPortfolioPhoto = 0
+
   const allSlots = HERO_SLOT_LABELS.map((label, i) => {
-    const photo = photos?.[i]
+    let photo = photos?.[i]
+    if (!photo?.src?.trim() && !isEditing) photo = portfolioPhotos[nextPortfolioPhoto++]
     return { label, photo, src: photo?.src?.trim() || "" }
   })
   const filled = allSlots.filter((slot) => slot.src)
@@ -120,11 +133,13 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={src} alt={photo?.title || label} className="size-full object-cover" />
                     </LightboxTrigger>
+                  ) : isLoading ? (
+                    <div className="absolute inset-0 animate-pulse bg-zinc-800" role="status" aria-label="Loading photo" />
                   ) : (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 text-center text-zinc-300">
                       <Camera className="size-6 sm:size-8" aria-hidden="true" />
                       <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{label}</span>
-                      <span className="text-[10px] text-zinc-400">Click to upload</span>
+                      {isEditing && <span className="text-[10px] text-zinc-400">Click to upload</span>}
                     </div>
                   )}
                 </div>
