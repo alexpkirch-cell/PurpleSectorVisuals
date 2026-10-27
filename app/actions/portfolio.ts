@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
 import { isPortfolioCategory, type PortfolioCategory } from "@/lib/portfolio-categories"
+import { withPublicImageUrl } from "@/lib/portfolio-image-url"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
 import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
 
@@ -49,10 +50,22 @@ async function requireAdmin() {
 
 /** Public read of every portfolio item, newest-featured first, for the /work page. */
 export async function listPortfolioItems(): Promise<PortfolioItem[]> {
-  const { rows } = await sql<PortfolioItem>`
-    SELECT * FROM portfolio_items ORDER BY sort_order ASC, created_at DESC
-  `
-  return rows
+  try {
+    const { rows } = await sql<PortfolioItem>`
+      SELECT * FROM portfolio_items ORDER BY sort_order ASC, created_at DESC
+    `
+    return rows.map(withPublicImageUrl)
+  } catch (error) {
+    console.error("[portfolio] direct query failed, falling back to Supabase client:", error)
+    const supabase = await createClient()
+    const { data, error: restError } = await supabase
+      .from("portfolio_items")
+      .select("*")
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: false })
+    if (restError) throw new Error(`Could not load portfolio: ${restError.message}`)
+    return ((data ?? []) as PortfolioItem[]).map(withPublicImageUrl)
+  }
 }
 
 /** Admin-only version, same shape, used by the Portfolio Content Manager. */
