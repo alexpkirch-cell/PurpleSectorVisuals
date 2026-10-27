@@ -46,17 +46,28 @@ type Tile = {
   galleryIndex: number
 }
 
-const MIN_TILES = 10
-const SKELETON_ASPECTS = ["aspect-[3/2]", "aspect-[4/5]", "aspect-[4/3]", "aspect-[3/4]", "aspect-[3/2]", "aspect-[4/5]"]
-const PLACEHOLDER_ASPECTS = ["aspect-[4/3]", "aspect-[3/4]"]
+/**
+ * Percentage-only scatter positions (top / left / width), so the collage scales with the hero box.
+ * Every left + width stays under 100% at its breakpoint, which keeps tiles inside a phone screen.
+ * The first six tiles show on mobile, eight from md, ten from lg.
+ */
+const SCATTER_SLOTS = [
+  "top-[4%] left-[3%] w-[44%] -rotate-2 md:top-[6%] md:left-[3%] md:w-[28%] lg:top-[8%] lg:left-[2%] lg:w-[19%]",
+  "top-[10%] left-[50%] w-[44%] rotate-2 md:top-[4%] md:left-[36%] md:w-[28%] lg:top-[4%] lg:left-[22%] lg:w-[19%]",
+  "top-[32%] left-[24%] w-[44%] rotate-1 md:top-[8%] md:left-[68%] md:w-[28%] lg:top-[10%] lg:left-[43%] lg:w-[19%]",
+  "top-[52%] left-[4%] w-[44%] -rotate-1 md:top-[40%] md:left-[6%] md:w-[28%] lg:top-[6%] lg:left-[63%] lg:w-[19%]",
+  "top-[56%] left-[50%] w-[44%] rotate-2 md:top-[42%] md:left-[38%] md:w-[28%] lg:top-[12%] lg:left-[79%] lg:w-[19%]",
+  "top-[72%] left-[26%] w-[44%] -rotate-2 md:top-[48%] md:left-[68%] md:w-[28%] lg:top-[46%] lg:left-[3%] lg:w-[19%]",
+  "hidden md:block md:top-[60%] md:left-[10%] md:w-[28%] md:rotate-1 lg:top-[44%] lg:left-[22%] lg:w-[19%] lg:-rotate-1",
+  "hidden md:block md:top-[62%] md:left-[48%] md:w-[28%] md:-rotate-2 lg:top-[50%] lg:left-[43%] lg:w-[19%] lg:rotate-2",
+  "hidden lg:block lg:top-[44%] lg:left-[63%] lg:w-[19%] lg:-rotate-2",
+  "hidden lg:block lg:top-[50%] lg:left-[79%] lg:w-[19%] lg:rotate-1",
+]
 
-/** Tiles past these indices are hidden on narrower screens so every breakpoint ends with a full row of photos. */
-function visibilityClass(index: number) {
-  if (index >= 16) return "hidden 2xl:block"
-  if (index >= 12) return "hidden lg:block"
-  if (index >= 8) return "hidden sm:block"
-  return ""
-}
+const MAX_TILES = SCATTER_SLOTS.length
+const MIN_TILES = MAX_TILES
+const PLACEHOLDER_ASPECTS = ["aspect-[4/3]", "aspect-[3/4]"]
+const SKELETON_ASPECTS = ["aspect-[3/2]", "aspect-[4/5]", "aspect-[4/3]", "aspect-[3/4]", "aspect-[3/2]", "aspect-[4/5]"]
 
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
 
@@ -130,7 +141,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
 
     // With a tiny library, repeat photos so the wall still reaches the edges instead of leaving black gaps.
     const result: Tile[] = []
-    const count = unique.length === 0 ? 0 : Math.max(unique.length, MIN_TILES)
+    const count = unique.length === 0 ? 0 : Math.max(Math.min(unique.length, MAX_TILES), MIN_TILES)
     for (let i = 0; i < count; i++) {
       const item = unique[i % unique.length]
       result.push({ key: `${item.src}-${i}`, label: item.label, src: item.src, photo: item.photo, galleryIndex: i % unique.length })
@@ -143,50 +154,51 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   return (
     <div
       ref={sectionRef}
-      className="relative w-full overflow-hidden bg-zinc-950"
+      className="relative min-h-[100svh] w-full overflow-hidden bg-zinc-950 md:min-h-[80vh]"
       aria-label="Purple Sector Visuals showcase"
     >
-      <div className="columns-2 gap-1 sm:columns-3 lg:columns-4 2xl:columns-5">
-        {showSkeleton
-          ? Array.from({ length: 8 }, (_, i) => (
-              <div
-                key={i}
-                className={`mb-1 w-full break-inside-avoid animate-pulse bg-zinc-800 ${SKELETON_ASPECTS[i % SKELETON_ASPECTS.length]}`}
-                role="status"
-                aria-label="Loading photo"
-              />
-            ))
-          : tiles.map((tile, index) => (
-              <div key={tile.key} className={`mb-1 break-inside-avoid ${isEditing ? "" : visibilityClass(index)}`}>
-                {tile.src ? (
-                  <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
-                    <Image
-                      src={tile.src}
-                      alt={tile.photo?.title || tile.label}
-                      width={0}
-                      height={0}
-                      sizes="(min-width: 1536px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 34vw, 50vw"
-                      unoptimized={!isOptimizable(tile.src)}
-                      style={{ width: "100%", height: "auto" }}
-                      className="block"
-                    />
-                  </LightboxTrigger>
-                ) : (
-                  <div
-                    className={`flex w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 p-2 text-center text-zinc-300 ${
-                      PLACEHOLDER_ASPECTS[index % PLACEHOLDER_ASPECTS.length]
-                    }`}
-                  >
-                    <Camera className="size-6 sm:size-8" aria-hidden="true" />
-                    <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{tile.label}</span>
-                    {isEditing && <span className="text-[10px] text-zinc-400">Click to upload</span>}
-                  </div>
-                )}
-              </div>
-            ))}
-      </div>
+      {showSkeleton
+        ? SCATTER_SLOTS.map((slot, i) => (
+            <div
+              key={i}
+              className={`absolute animate-pulse bg-zinc-800 ${slot} ${SKELETON_ASPECTS[i % SKELETON_ASPECTS.length]}`}
+              role="status"
+              aria-label="Loading photo"
+            />
+          ))
+        : tiles.slice(0, MAX_TILES).map((tile, index) => (
+            <div
+              key={tile.key}
+              className={`absolute transition-transform duration-300 hover:z-30 hover:scale-[1.03] ${SCATTER_SLOTS[index]}`}
+              style={{ zIndex: 10 + (index % 3) }}
+            >
+              {tile.src ? (
+                <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
+                  <Image
+                    src={tile.src}
+                    alt={tile.photo?.title || tile.label}
+                    width={0}
+                    height={0}
+                    sizes="(min-width: 1024px) 19vw, (min-width: 768px) 28vw, 44vw"
+                    unoptimized={!isOptimizable(tile.src)}
+                    className="block h-auto w-full shadow-2xl shadow-black/60"
+                  />
+                </LightboxTrigger>
+              ) : (
+                <div
+                  className={`flex w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 p-2 text-center text-zinc-300 ${
+                    PLACEHOLDER_ASPECTS[index % PLACEHOLDER_ASPECTS.length]
+                  }`}
+                >
+                  <Camera className="size-6 sm:size-8" aria-hidden="true" />
+                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{tile.label}</span>
+                  {isEditing && <span className="text-[10px] text-zinc-400">Click to upload</span>}
+                </div>
+              )}
+            </div>
+          ))}
 
-      <div className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-zinc-950/40 via-transparent to-zinc-950/80" />
+      <div className="pointer-events-none absolute inset-0 z-40 bg-gradient-to-b from-zinc-950/30 via-transparent to-zinc-950/80" />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8">
         <button
