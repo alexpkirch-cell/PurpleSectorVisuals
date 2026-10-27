@@ -1,6 +1,5 @@
 export const BOOKING_STATUSES = [
-  "Event Leads",
-  "Inbound Leads",
+  "Leads",
   "Discovery",
   "Vault & Onboarding",
   "Ready to Shoot",
@@ -23,6 +22,11 @@ export interface PipelineBooking {
 
 export function isBookingStatus(value: string): value is BookingPipelineStatus {
   return (BOOKING_STATUSES as readonly string[]).includes(value)
+}
+
+export function previousBookingStatus(status: BookingPipelineStatus): BookingPipelineStatus | null {
+  const index = BOOKING_STATUSES.indexOf(status)
+  return index > 0 ? BOOKING_STATUSES[index - 1] : null
 }
 
 export function nextBookingStatus(status: BookingPipelineStatus): BookingPipelineStatus | null {

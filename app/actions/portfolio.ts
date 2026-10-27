@@ -6,6 +6,7 @@ import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
 import { isPortfolioCategory, type PortfolioCategory } from "@/lib/portfolio-categories"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
+import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
 
 
 const MAX_BATCH_SIZE = 100
@@ -22,6 +23,8 @@ export interface PortfolioItem {
   sort_order: number
   created_at: string
   shooter?: string | null
+  shot_by?: string | null
+  edited_by?: string | null
   camera?: string | null
   lens?: string | null
   settings?: string | null
@@ -65,6 +68,7 @@ export async function listPortfolioItemsAdmin(): Promise<PortfolioItem[]> {
 export async function createPortfolioBatch(input: {
   imageUrls: string[]
   photographer: string | null
+  editedBy?: string | null
   title: string
   categories: PortfolioCategory[]
 }): Promise<PortfolioItem[]> {
@@ -83,6 +87,7 @@ export async function createPortfolioBatch(input: {
 
   const title = (input.title ?? "").trim().slice(0, MAX_TITLE_LENGTH)
   const photographer = input.photographer?.trim().slice(0, MAX_PHOTOGRAPHER_LENGTH) || null
+  const editor = input.editedBy?.trim().slice(0, MAX_PHOTOGRAPHER_LENGTH) || null
 
   const { rows: orderRows } = await sql<{ max_order: number | null }>`
     SELECT MAX(sort_order) AS max_order FROM portfolio_items
@@ -90,8 +95,9 @@ export async function createPortfolioBatch(input: {
   const startOrder = (orderRows[0]?.max_order ?? -1) + 1
 
   const { rows } = await sql<PortfolioItem>`
-    INSERT INTO portfolio_items (title, category, categories, shooter, image_url, featured, sort_order)
+    INSERT INTO portfolio_items (title, category, categories, shooter, shot_by, edited_by, image_url, featured, sort_order)
     SELECT ${title}::text, ${categories[0]}::text, ${categories}::text[], ${photographer}::text,
+           ${photographer}::text, ${editor}::text,
            u.url, false, ${startOrder}::int + (u.ord - 1)::int
     FROM unnest(${input.imageUrls}::text[]) WITH ORDINALITY AS u(url, ord)
     RETURNING *
@@ -111,6 +117,8 @@ export async function updatePortfolioItem(
     categories?: PortfolioCategory[]
     featured?: boolean
     shooter?: string | null
+    shot_by?: string | null
+    edited_by?: string | null
     camera?: string | null
     lens?: string | null
     settings?: string | null
@@ -135,6 +143,8 @@ export async function updatePortfolioItem(
         categories = ${categories}::text[],
         featured = ${patch.featured ?? current.featured},
         shooter = ${patch.shooter !== undefined ? patch.shooter || null : (current.shooter ?? null)},
+        shot_by = ${patch.shot_by !== undefined ? patch.shot_by || null : (current.shot_by ?? null)},
+        edited_by = ${patch.edited_by !== undefined ? patch.edited_by || null : (current.edited_by ?? null)},
         camera = ${patch.camera !== undefined ? patch.camera || null : (current.camera ?? null)},
         lens = ${patch.lens !== undefined ? patch.lens || null : (current.lens ?? null)},
         settings = ${patch.settings !== undefined ? patch.settings || null : (current.settings ?? null)}
@@ -144,6 +154,13 @@ export async function updatePortfolioItem(
   revalidatePath("/admin/portfolio")
   revalidatePath("/work")
   revalidatePath("/")
+}
+
+/** Active crew names for the Shot By and Edited By dropdowns. */
+export async function listCrewNamesAdmin(): Promise<string[]> {
+  await requireAdmin()
+  const crew = await getActiveDirectoryMembers()
+  return crew.map((member) => member.name)
 }
 
 /** Persists a full drag-and-drop reorder in one pass. `orderedIds` is the new top-to-bottom order. */
