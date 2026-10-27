@@ -41,9 +41,11 @@ export function PortfolioLightbox({
     getIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false))
   }, [])
 
-  useEffect(() => {
+  const [shownIndex, setShownIndex] = useState(activeIndex)
+  if (shownIndex !== activeIndex) {
+    setShownIndex(activeIndex)
     setEditing(false)
-  }, [activeIndex])
+  }
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {

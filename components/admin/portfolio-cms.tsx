@@ -1,41 +1,27 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { GripVertical, ImagePlus, Loader2, Star, Trash2 } from "lucide-react"
+import { useState } from "react"
+import { GripVertical, Star, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { MultiSelect } from "@/components/admin/multi-select"
+import { BatchUploader } from "@/components/admin/portfolio/batch-uploader"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
-import {
-  createPortfolioItem,
   deletePortfolioItem,
   reorderPortfolioItems,
   updatePortfolioItem,
-  type PortfolioCategory,
   type PortfolioItem,
 } from "@/app/actions/portfolio"
-import { createClient } from "@/lib/supabase/client"
+import {
+  PORTFOLIO_CATEGORY_LABELS,
+  PORTFOLIO_CATEGORY_OPTIONS,
+  isPortfolioCategory,
+  itemCategories,
+} from "@/lib/portfolio-categories"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
 import { cn } from "@/lib/utils"
-
-const CATEGORY_LABELS: Record<PortfolioCategory, string> = {
-  portraits: "Portraits",
-  athletics: "Athletics",
-  automotive: "Automotive",
-  events: "Events",
-}
-
-const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [PortfolioCategory, string][]
 
 function storagePathFromUrl(url: string): string | null {
   const marker = `/${PORTFOLIO_IMAGES_BUCKET}/`
@@ -43,67 +29,37 @@ function storagePathFromUrl(url: string): string | null {
   return index === -1 ? null : url.slice(index + marker.length)
 }
 
-export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }) {
+function CategoryEditor({ item, onCommit }: { item: PortfolioItem; onCommit: (selected: string[]) => void }) {
+  const [draft, setDraft] = useState<string[]>(itemCategories(item))
+
+  return (
+    <div onClick={(e) => e.stopPropagation()} className="w-full">
+      <MultiSelect
+        options={PORTFOLIO_CATEGORY_OPTIONS}
+        value={draft}
+        onChange={setDraft}
+        showSelected={false}
+        defaultOpen
+        onOpenChange={(open) => {
+          if (!open) onCommit(draft)
+        }}
+      />
+    </div>
+  )
+}
+
+export function PortfolioCms({
+  initialItems,
+  photographers,
+}: {
+  initialItems: PortfolioItem[]
+  photographers: string[]
+}) {
   const [items, setItems] = useState(initialItems)
-  const [title, setTitle] = useState("")
-  const [category, setCategory] = useState<PortfolioCategory>("portraits")
-  const [featured, setFeatured] = useState(false)
-  const [uploading, setUploading] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  async function handleUpload(file: File) {
-    if (!title.trim()) {
-      toast.error("Give the piece a title before uploading its image")
-      return
-    }
-
-    setUploading(true)
-    try {
-      const supabase = createClient()
-      const extension = file.name.split(".").pop() ?? "jpg"
-      const storagePath = `${category}/${crypto.randomUUID()}.${extension}`
-
-      const { error: uploadError } = await supabase.storage
-        .from(PORTFOLIO_IMAGES_BUCKET)
-        .upload(storagePath, file, { contentType: file.type, upsert: true })
-
-      if (uploadError) throw new Error(uploadError.message)
-
-      const { data: publicUrlData } = supabase.storage.from(PORTFOLIO_IMAGES_BUCKET).getPublicUrl(storagePath)
-
-      await createPortfolioItem({
-        title: title.trim(),
-        category,
-        imageUrl: publicUrlData.publicUrl,
-        featured,
-      })
-
-      setItems((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          title: title.trim(),
-          category,
-          image_url: publicUrlData.publicUrl,
-          featured,
-          sort_order: prev.length,
-          created_at: new Date().toISOString(),
-        },
-      ])
-      setTitle("")
-      setFeatured(false)
-      toast.success("Portfolio piece published — now live in the grid below")
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed")
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ""
-    }
-  }
 
   async function handleToggleFeatured(item: PortfolioItem) {
     setPendingId(item.id)
@@ -119,17 +75,29 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
     }
   }
 
-  async function handleCategoryChange(item: PortfolioItem, nextCategory: PortfolioCategory) {
+  async function handleCategoriesChange(item: PortfolioItem, selected: string[]) {
     setEditingCategoryId(null)
-    if (nextCategory === item.category) return
-    const previousCategory = item.category
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, category: nextCategory } : i)))
+    const nextCategories = selected.filter(isPortfolioCategory)
+    const previousCategories = itemCategories(item)
+
+    if (nextCategories.length === 0) {
+      toast.error("An item needs at least one category")
+      return
+    }
+    if (nextCategories.join() === previousCategories.join()) return
+
+    const previousPrimary = item.category
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, category: nextCategories[0], categories: nextCategories } : i))
+    )
     try {
-      await updatePortfolioItem(item.id, { category: nextCategory })
-      toast.success("Category updated")
+      await updatePortfolioItem(item.id, { categories: nextCategories })
+      toast.success("Categories updated")
     } catch (error) {
-      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, category: previousCategory } : i)))
-      toast.error(error instanceof Error ? error.message : "Failed to update category")
+      setItems((prev) =>
+        prev.map((i) => (i.id === item.id ? { ...i, category: previousPrimary, categories: previousCategories } : i))
+      )
+      toast.error(error instanceof Error ? error.message : "Failed to update categories")
     }
   }
 
@@ -177,63 +145,10 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-end sm:gap-3">
-        <div className="flex-1">
-          <Label htmlFor="portfolio-title" className="text-xs text-muted-foreground">
-            Title
-          </Label>
-          <Input
-            id="portfolio-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Apex Sprint"
-            className="mt-1.5"
-          />
-        </div>
-
-        <div className="w-full sm:w-44">
-          <Label className="text-xs text-muted-foreground">Category</Label>
-          <Select value={category} onValueChange={(v) => setCategory(v as PortfolioCategory)}>
-            <SelectTrigger className="mt-1.5">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORY_OPTIONS.map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex items-center gap-2 sm:pb-2.5">
-          <Switch id="portfolio-featured" checked={featured} onCheckedChange={setFeatured} />
-          <Label htmlFor="portfolio-featured" className="text-xs text-muted-foreground">
-            Featured
-          </Label>
-        </div>
-
-        <Button
-          type="button"
-          disabled={uploading}
-          onClick={() => fileInputRef.current?.click()}
-          className="gap-2"
-        >
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />}
-          Upload image
-        </Button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) handleUpload(file)
-          }}
-        />
-      </div>
+      <BatchUploader
+        photographers={photographers}
+        onUploaded={(created) => setItems((prev) => [...prev, ...created])}
+      />
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
@@ -275,7 +190,7 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
                   {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are uploaded to the public portfolio-images bucket */}
                   <img
                     src={item.image_url || "/placeholder.svg"}
-                    alt={item.title}
+                    alt={item.title || "Portfolio photo"}
                     crossOrigin="anonymous"
                     className="size-full object-cover"
                   />
@@ -284,7 +199,12 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
                     <GripVertical className="size-3.5" />
                   </div>
 
-                  <div className="absolute inset-0 flex flex-col justify-between bg-black/0 p-3 opacity-0 transition-opacity group-hover:bg-black/65 group-hover:opacity-100">
+                  <div
+                    className={cn(
+                      "absolute inset-0 flex flex-col justify-between bg-black/0 p-3 opacity-0 transition-opacity group-hover:bg-black/65 group-hover:opacity-100",
+                      editingCategoryId === item.id && "bg-black/65 opacity-100"
+                    )}
+                  >
                     <div className="flex justify-end gap-1.5">
                       <Button
                         type="button"
@@ -310,28 +230,9 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
                       </Button>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <p className="text-sm font-medium text-white">{item.title}</p>
+                      <p className="text-sm font-medium text-white">{item.title || "Untitled"}</p>
                       {editingCategoryId === item.id ? (
-                        <Select
-                          value={item.category}
-                          onValueChange={(v) => handleCategoryChange(item, v as PortfolioCategory)}
-                          onOpenChange={(open) => !open && setEditingCategoryId(null)}
-                          defaultOpen
-                        >
-                          <SelectTrigger
-                            className="h-6 w-fit border-white/20 bg-white/10 px-2 text-[0.65rem] text-white"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CATEGORY_OPTIONS.map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <CategoryEditor item={item} onCommit={(selected) => handleCategoriesChange(item, selected)} />
                       ) : (
                         <button
                           type="button"
@@ -339,11 +240,14 @@ export function PortfolioCms({ initialItems }: { initialItems: PortfolioItem[] }
                             e.stopPropagation()
                             setEditingCategoryId(item.id)
                           }}
-                          className="w-fit"
+                          className="flex w-fit flex-wrap gap-1"
+                          aria-label={`Edit categories for ${item.title || "this photo"}`}
                         >
-                          <Badge variant="secondary" className="text-[0.65rem] transition-colors hover:bg-secondary/70">
-                            {CATEGORY_LABELS[item.category]}
-                          </Badge>
+                          {itemCategories(item).map((value) => (
+                            <Badge key={value} variant="secondary" className="text-[0.65rem] transition-colors hover:bg-secondary/70">
+                              {PORTFOLIO_CATEGORY_LABELS[value]}
+                            </Badge>
+                          ))}
                         </button>
                       )}
                     </div>

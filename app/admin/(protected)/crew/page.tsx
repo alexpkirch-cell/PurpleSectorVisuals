@@ -1,60 +1,56 @@
 import type { Metadata } from "next"
+import Link from "next/link"
+import { Plus } from "lucide-react"
 
-import { listApplications, listCrew } from "@/app/actions/crew"
-import { listDirectoryMembers } from "@/app/actions/team-directory"
-import { CrewList } from "@/components/admin/crew/crew-list"
-import { RecruitmentPipeline } from "@/components/admin/crew/recruitment-pipeline"
-import { TeamRosterManager } from "@/components/admin/crew/team-roster-manager"
+import { listRosterMembers } from "@/app/actions/crew-roster"
+import { PendingApplications } from "@/components/admin/crew/pending-applications"
+import { RosterGrid } from "@/components/admin/crew/roster-grid"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export const metadata: Metadata = {
-  title: "1099 Crew Hub | Purple Sector Visuals",
+  title: "Crew & Roster | Purple Sector Visuals",
   robots: { index: false, follow: false },
 }
 
-export default async function CrewHubPage() {
-  const [applications, active, archived, directoryMembers] = await Promise.all([
-    listApplications(),
-    listCrew(true),
-    listCrew(false),
-    listDirectoryMembers(),
-  ])
+export default async function CrewRosterPage() {
+  const members = await listRosterMembers()
+  const activeCount = members.filter((member) => member.is_active).length
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="font-heading text-2xl font-medium text-foreground">1099 Crew Hub</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Recruit, onboard, and manage independent contractors. Founders are managed under Roster &amp; Teams.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-medium text-foreground">Crew &amp; Roster</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage the team shown on the public Team page and review incoming applications.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" render={<Link href="/admin/crew/contractors" />}>
+            1099 Contractor Hub
+          </Button>
+          <Button render={<Link href="/admin/crew/new" />}>
+            <Plus data-icon="inline-start" />
+            Create New Member
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="pipeline" className="gap-6">
+      <Tabs defaultValue="roster" className="gap-6">
         <TabsList className="h-auto flex-wrap">
-          <TabsTrigger value="pipeline" className="px-4">
-            Recruitment Pipeline
-          </TabsTrigger>
-          <TabsTrigger value="active" className="px-4">
-            Active 1099s ({active.length})
-          </TabsTrigger>
-          <TabsTrigger value="archived" className="px-4">
-            Archived ({archived.length})
-          </TabsTrigger>
           <TabsTrigger value="roster" className="px-4">
-            Manage Roster ({directoryMembers.length})
+            Active Roster ({activeCount})
+          </TabsTrigger>
+          <TabsTrigger value="applications" className="px-4">
+            Pending Applications
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="pipeline">
-          <RecruitmentPipeline initialApplications={applications} />
-        </TabsContent>
-        <TabsContent value="active">
-          <CrewList initialMembers={active} />
-        </TabsContent>
-        <TabsContent value="archived">
-          <CrewList initialMembers={archived} archived />
-        </TabsContent>
         <TabsContent value="roster">
-          <TeamRosterManager initialMembers={directoryMembers} />
+          <RosterGrid members={members} />
+        </TabsContent>
+        <TabsContent value="applications">
+          <PendingApplications />
         </TabsContent>
       </Tabs>
     </div>

@@ -39,14 +39,17 @@ export function DisciplinesBlock({
 }: {
   images: DisciplineImages
   hrefs?: DisciplineHrefs
-  heading?: string
+  heading?: ReactNode
 }) {
+  // Puck passes contentEditable text fields as React elements inside the editor, so only strings can be trimmed.
+  const hasHeading = typeof heading === "string" ? heading.trim() !== "" : Boolean(heading)
+
   return (
     <DisciplinesSection
       overrides={useContext(SiteSlotsContext)}
       images={images}
       hrefs={hrefs}
-      text={heading?.trim() ? { heading } : undefined}
+      text={hasHeading ? { heading } : undefined}
     />
   )
 }

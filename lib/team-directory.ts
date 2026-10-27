@@ -24,6 +24,7 @@ export interface DirectoryMemberInput {
 
 export const SUGGESTED_ROLES = ["Shooter", "Editor", "Admin"]
 export const SUGGESTED_SPECIALTIES = ["Automotive", "Sports", "Portraits", "Events", "Commercial", "Operations"]
+export const SPECIALTY_OPTIONS = SUGGESTED_SPECIALTIES.map((value) => ({ value, label: value }))
 
 const VIDEO_URL_PATTERN = /\.(mp4|webm|mov)(?:[?#].*)?$/i
 

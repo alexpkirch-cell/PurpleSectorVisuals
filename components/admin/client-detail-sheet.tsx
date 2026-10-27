@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
@@ -103,7 +103,9 @@ export function ClientDetailSheet({
   const [editingScenario, setEditingScenario] = useState<EditingScenario>("single")
   const [singleEditor, setSingleEditor] = useState<Photographer>("Alex")
 
-  useEffect(() => {
+  const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
+  if (shoot !== syncedShoot) {
+    setSyncedShoot(shoot)
     if (shoot) {
       setAdminNotes(shoot.admin_notes ?? "")
       setPackageTier((shoot.package_tier as PackageTier) || "Base")
@@ -125,7 +127,7 @@ export function ClientDetailSheet({
       setEditors(shoot.assigned_editor ? shoot.assigned_editor.split(",").map((s) => s.trim()) : [])
       setPriceTouched(false)
     }
-  }, [shoot])
+  }
 
   const calculatedTotal = useMemo(() => {
     const addonsTotal = addonIds.reduce((sum, id) => {
@@ -136,11 +138,9 @@ export function ClientDetailSheet({
     return tierPrice + addonsTotal
   }, [packageTier, addonIds, bookingTiers, bookingAddons])
 
-  useEffect(() => {
-    if (!priceTouched) {
-      setTotalPrice(String(calculatedTotal))
-    }
-  }, [calculatedTotal, priceTouched])
+  if (!priceTouched && totalPrice !== String(calculatedTotal)) {
+    setTotalPrice(String(calculatedTotal))
+  }
 
   const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
 

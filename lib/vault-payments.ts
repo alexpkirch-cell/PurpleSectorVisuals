@@ -79,7 +79,7 @@ export async function chargeBalanceOffSession(vaultId: string): Promise<OffSessi
     SELECT v.balance_amount, v.balance_paid, v.deposit_paid, v.stripe_customer_id, v.stripe_payment_method_id,
            p.category AS service_category
     FROM vaults v
-    LEFT JOIN booking_requests b ON b.id = v.booking_id
+    LEFT JOIN booking_requests b ON b.id = v.booking_request_id
     LEFT JOIN packages p ON p.id = b.package_id
     WHERE v.id = ${vaultId}
   `

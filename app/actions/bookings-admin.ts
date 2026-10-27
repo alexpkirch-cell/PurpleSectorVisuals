@@ -73,7 +73,7 @@ export async function listBookingRequests(): Promise<BookingRequest[]> {
       v.balance_paid
     FROM booking_requests br
     LEFT JOIN packages p ON p.id = br.package_id
-    LEFT JOIN vaults v ON v.booking_id = br.id
+    LEFT JOIN vaults v ON v.booking_request_id = br.id
     ORDER BY br.created_at DESC
   `
 
@@ -110,7 +110,7 @@ export async function approveBooking(id: string) {
   const packagePrice = Number(booking.package_price ?? 0)
 
   const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-  let vaultAccessCode = `PS-${Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("")}`
+  const vaultAccessCode = `PS-${Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join("")}`
 
   const { rows: shootRows } = await sql<{ id: string }>`
     INSERT INTO shoots (
@@ -135,7 +135,7 @@ export async function approveBooking(id: string) {
   const { deposit: depositAmount, balance: balanceAmount } = splitTotal(packagePrice)
 
   await sql`
-    INSERT INTO vaults (booking_id, shoot_id, pin_code, status, deposit_amount, balance_amount, shoot_date)
+    INSERT INTO vaults (booking_request_id, shoot_id, pin_code, status, deposit_amount, balance_amount, shoot_date)
     VALUES (${id}, ${shootId}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${shootDate})
   `
 
@@ -185,7 +185,7 @@ export async function setFinalQuotedFee(bookingId: string, finalQuotedFee: numbe
     UPDATE vaults SET
       final_quoted_fee = ${finalQuotedFee},
       balance_amount = ${finalQuotedFee} - deposit_amount
-    WHERE booking_id = ${bookingId}
+    WHERE booking_request_id = ${bookingId}
   `
 
   revalidatePath("/admin/bookings")

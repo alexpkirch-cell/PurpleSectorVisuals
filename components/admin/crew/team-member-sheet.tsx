@@ -4,6 +4,7 @@ import { useState, useTransition } from "react"
 import { toast } from "sonner"
 
 import { saveDirectoryMember } from "@/app/actions/team-directory"
+import { MultiSelect } from "@/components/admin/multi-select"
 import { TagInput } from "@/components/admin/tag-input"
 import { CutoutUploader, HighlightMediaUploader } from "@/components/admin/crew/team-media-uploaders"
 import { Button } from "@/components/ui/button"
@@ -14,7 +15,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   SUGGESTED_ROLES,
-  SUGGESTED_SPECIALTIES,
+  SPECIALTY_OPTIONS,
   type DirectoryMember,
 } from "@/lib/team-directory"
 
@@ -111,12 +112,12 @@ function MemberForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="team-specialties">Specialties</Label>
-          <TagInput
+          <MultiSelect
             id="team-specialties"
+            options={SPECIALTY_OPTIONS}
             value={specialties}
             onChange={setSpecialties}
-            suggestions={SUGGESTED_SPECIALTIES}
-            placeholder="Automotive, Operations"
+            placeholder="Choose specialties"
             max={12}
           />
         </div>

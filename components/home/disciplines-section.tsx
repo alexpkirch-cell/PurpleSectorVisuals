@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 import Link from "@/components/puck/edit-mode"
 
 import { ImageSlot } from "@/components/image-slot"
@@ -35,7 +37,9 @@ export const DISCIPLINES_TEXT_DEFAULTS = {
   commercialDescription: "Brand-ready imagery built to move product and perception.",
 }
 
-export type DisciplinesText = Partial<typeof DISCIPLINES_TEXT_DEFAULTS>
+export type DisciplinesText = Partial<Omit<typeof DISCIPLINES_TEXT_DEFAULTS, "heading">> & {
+  heading?: ReactNode
+}
 
 export function DisciplinesSection({
   overrides,

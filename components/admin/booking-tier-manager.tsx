@@ -207,7 +207,7 @@ export function BookingTierManager({
       <div>
         <h2 className="font-heading text-lg font-medium text-foreground">Booking Pipeline Pricing</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Drives the package tiers and add-ons shown in the booking pipeline's Client Detail sheet. Changes apply
+          Drives the package tiers and add-ons shown in the booking pipeline&apos;s Client Detail sheet. Changes apply
           globally — no code changes required.
         </p>
       </div>

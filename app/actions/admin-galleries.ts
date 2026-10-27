@@ -84,7 +84,7 @@ export async function createGallery(formData: FormData) {
     throw new Error(error.message)
   }
 
-  revalidatePath("/admin/galleries")
+  revalidatePath("/admin/vaults")
   return data.id as string
 }
 
@@ -100,7 +100,7 @@ export async function updateUsbStatus(galleryId: string, status: UsbStatus) {
     throw new Error(error.message)
   }
 
-  revalidatePath(`/admin/galleries/${galleryId}`)
+  revalidatePath(`/admin/vaults/${galleryId}`)
 }
 
 export async function deleteGallery(galleryId: string) {
@@ -135,7 +135,7 @@ export async function deleteGallery(galleryId: string) {
     throw new Error(error.message)
   }
 
-  revalidatePath("/admin/galleries")
+  revalidatePath("/admin/vaults")
 }
 
 /** Records a completed direct-to-storage upload as a gallery_photos row. */
@@ -163,7 +163,7 @@ export async function recordGalleryPhoto(
     throw new Error(error.message)
   }
 
-  revalidatePath(`/admin/galleries/${galleryId}`)
+  revalidatePath(`/admin/vaults/${galleryId}`)
 }
 
 export async function deleteGalleryPhoto(photoId: string, galleryId: string) {
@@ -185,5 +185,5 @@ export async function deleteGalleryPhoto(photoId: string, galleryId: string) {
     await supabase.storage.from(GALLERY_PHOTOS_BUCKET).remove([photo.storage_path])
   }
 
-  revalidatePath(`/admin/galleries/${galleryId}`)
+  revalidatePath(`/admin/vaults/${galleryId}`)
 }

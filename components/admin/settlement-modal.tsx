@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -36,13 +36,15 @@ export function SettlementModal({
   const [addons, setAddons] = useState<SettlementItem[]>([])
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
+  const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
+  if (shoot !== syncedShoot) {
+    setSyncedShoot(shoot)
     if (shoot) {
       setBasePrice(shoot.base_price)
       setTravelFee(shoot.travel_fee)
       setAddons(shoot.settlement_items ?? [])
     }
-  }, [shoot])
+  }
 
   const addonsTotal = addons.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
   const settledBasePrice = (Number(basePrice) || 0) + addonsTotal

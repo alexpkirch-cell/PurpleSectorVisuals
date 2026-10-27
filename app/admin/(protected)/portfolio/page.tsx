@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 
 import { listPortfolioItemsAdmin } from "@/app/actions/portfolio"
 import { PortfolioCms } from "@/components/admin/portfolio-cms"
+import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
 
 export const metadata: Metadata = {
   title: "Portfolio | Purple Sector Visuals",
@@ -9,7 +10,8 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminPortfolioPage() {
-  const items = await listPortfolioItemsAdmin()
+  const [items, crew] = await Promise.all([listPortfolioItemsAdmin(), getActiveDirectoryMembers()])
+  const photographers = crew.map((member) => member.name)
 
   return (
     <div className="flex flex-col gap-8">
@@ -20,7 +22,7 @@ export default async function AdminPortfolioPage() {
         </p>
       </div>
 
-      <PortfolioCms initialItems={items} />
+      <PortfolioCms initialItems={items} photographers={photographers} />
     </div>
   )
 }

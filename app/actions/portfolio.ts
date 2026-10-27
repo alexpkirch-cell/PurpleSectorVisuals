@@ -4,14 +4,19 @@ import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
+import { isPortfolioCategory, type PortfolioCategory } from "@/lib/portfolio-categories"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
 
-export type PortfolioCategory = "portraits" | "athletics" | "automotive" | "events"
+
+const MAX_BATCH_SIZE = 100
+const MAX_TITLE_LENGTH = 200
+const MAX_PHOTOGRAPHER_LENGTH = 80
 
 export interface PortfolioItem {
   id: string
   title: string
   category: PortfolioCategory
+  categories: PortfolioCategory[]
   image_url: string
   featured: boolean
   sort_order: number
@@ -53,34 +58,57 @@ export async function listPortfolioItemsAdmin(): Promise<PortfolioItem[]> {
   return listPortfolioItems()
 }
 
-export async function createPortfolioItem(input: {
+/**
+ * Inserts one row per already-uploaded image, sharing the same photographer, title and categories.
+ * A blank title is stored as an empty string. The first category becomes the primary `category`.
+ */
+export async function createPortfolioBatch(input: {
+  imageUrls: string[]
+  photographer: string | null
   title: string
-  category: PortfolioCategory
-  imageUrl: string
-  featured: boolean
-}): Promise<void> {
+  categories: PortfolioCategory[]
+}): Promise<PortfolioItem[]> {
   await requireAdmin()
 
-  const { rows } = await sql<{ max_order: number | null }>`
+  const categories = [...new Set(input.categories)].filter(isPortfolioCategory)
+  if (categories.length === 0) throw new Error("Choose at least one category")
+
+  if (input.imageUrls.length === 0) throw new Error("No images to save")
+  if (input.imageUrls.length > MAX_BATCH_SIZE) throw new Error(`Upload at most ${MAX_BATCH_SIZE} photos at a time`)
+
+  const publicPrefix = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${PORTFOLIO_IMAGES_BUCKET}/`
+  if (!input.imageUrls.every((url) => typeof url === "string" && url.startsWith(publicPrefix))) {
+    throw new Error("Images must be uploaded to the portfolio bucket")
+  }
+
+  const title = (input.title ?? "").trim().slice(0, MAX_TITLE_LENGTH)
+  const photographer = input.photographer?.trim().slice(0, MAX_PHOTOGRAPHER_LENGTH) || null
+
+  const { rows: orderRows } = await sql<{ max_order: number | null }>`
     SELECT MAX(sort_order) AS max_order FROM portfolio_items
   `
-  const nextOrder = (rows[0]?.max_order ?? -1) + 1
+  const startOrder = (orderRows[0]?.max_order ?? -1) + 1
 
-  await sql`
-    INSERT INTO portfolio_items (title, category, image_url, featured, sort_order)
-    VALUES (${input.title}, ${input.category}, ${input.imageUrl}, ${input.featured}, ${nextOrder})
+  const { rows } = await sql<PortfolioItem>`
+    INSERT INTO portfolio_items (title, category, categories, shooter, image_url, featured, sort_order)
+    SELECT ${title}::text, ${categories[0]}::text, ${categories}::text[], ${photographer}::text,
+           u.url, false, ${startOrder}::int + (u.ord - 1)::int
+    FROM unnest(${input.imageUrls}::text[]) WITH ORDINALITY AS u(url, ord)
+    RETURNING *
   `
 
   revalidatePath("/admin/portfolio")
   revalidatePath("/work")
   revalidatePath("/")
+
+  return rows.sort((a, b) => a.sort_order - b.sort_order)
 }
 
 export async function updatePortfolioItem(
   id: string,
   patch: {
     title?: string
-    category?: PortfolioCategory
+    categories?: PortfolioCategory[]
     featured?: boolean
     shooter?: string | null
     camera?: string | null
@@ -94,10 +122,17 @@ export async function updatePortfolioItem(
   const current = rows[0]
   if (!current) throw new Error("Portfolio item not found")
 
+  let categories = current.categories
+  if (patch.categories !== undefined) {
+    categories = [...new Set(patch.categories)].filter(isPortfolioCategory)
+    if (categories.length === 0) throw new Error("An item needs at least one category")
+  }
+
   await sql`
     UPDATE portfolio_items
     SET title = ${patch.title ?? current.title},
-        category = ${patch.category ?? current.category},
+        category = ${categories[0] ?? current.category},
+        categories = ${categories}::text[],
         featured = ${patch.featured ?? current.featured},
         shooter = ${patch.shooter !== undefined ? patch.shooter || null : (current.shooter ?? null)},
         camera = ${patch.camera !== undefined ? patch.camera || null : (current.camera ?? null)},

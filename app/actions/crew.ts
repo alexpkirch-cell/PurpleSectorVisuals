@@ -78,13 +78,13 @@ export async function updateApplicationStatus(id: string, status: ApplicationSta
   await requireAdmin()
   if (!APPLICATION_STATUSES.includes(status)) throw new Error("Invalid status")
   await sql`UPDATE roster_applications SET status = ${status} WHERE id = ${id}`
-  revalidatePath("/admin/crew")
+  revalidatePath("/admin/crew/contractors")
 }
 
 export async function deleteApplication(id: string): Promise<void> {
   await requireAdmin()
   await sql`DELETE FROM roster_applications WHERE id = ${id}`
-  revalidatePath("/admin/crew")
+  revalidatePath("/admin/crew/contractors")
 }
 
 /** Active or archived 1099 contractors. The founders are never contractors, so they are always excluded. */
@@ -164,8 +164,8 @@ export async function updateCrewProfile(
         split_tier = ${input.splitTier}::contractor_split_tier
     WHERE id = ${id}
   `
-  revalidatePath("/admin/crew")
-  revalidatePath(`/admin/crew/${id}`)
+  revalidatePath("/admin/crew/contractors")
+  revalidatePath(`/admin/crew/contractors/${id}`)
   revalidatePath(`/team/${id}`)
 }
 
@@ -176,15 +176,15 @@ export async function setCrewActive(id: string, active: boolean): Promise<void> 
     SET is_active = ${active}, archived_at = ${active ? null : new Date().toISOString()}
     WHERE id = ${id}
   `
-  revalidatePath("/admin/crew")
-  revalidatePath(`/admin/crew/${id}`)
+  revalidatePath("/admin/crew/contractors")
+  revalidatePath(`/admin/crew/contractors/${id}`)
 }
 
 /** Stores the storage path (bucket is private) after the browser uploads the signed PDF directly. */
 export async function setCrewContractPath(id: string, path: string | null): Promise<void> {
   await requireAdmin()
   await sql`UPDATE contractors SET contract_pdf_path = ${path} WHERE id = ${id}`
-  revalidatePath(`/admin/crew/${id}`)
+  revalidatePath(`/admin/crew/contractors/${id}`)
 }
 
 /** Turns an accepted applicant into a contractor record so they appear under Active 1099s. */
@@ -201,6 +201,6 @@ export async function promoteApplication(id: string): Promise<{ contractorId: st
   `
   await sql`UPDATE roster_applications SET status = 'accepted' WHERE id = ${id}`
 
-  revalidatePath("/admin/crew")
+  revalidatePath("/admin/crew/contractors")
   return { contractorId: created[0].id }
 }

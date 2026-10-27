@@ -7,7 +7,7 @@ import { KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { authenticateVaultAccessKey, type VaultAuthState } from "@/app/vault/actions"
+import { authenticateVaultAccessKey, type VaultAuthState } from "@/app/(public)/vault/actions"
 
 // Lets anyone preview the vault gallery flow without a real booking.
 const DEMO_NAME = "test test"

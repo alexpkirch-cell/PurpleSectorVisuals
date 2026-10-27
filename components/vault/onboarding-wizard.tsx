@@ -226,7 +226,7 @@ export function OnboardingWizard({
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="guardianSignature" className="text-sm text-muted-foreground">
-                  Type guardian's full legal name to countersign
+                  Type guardian&apos;s full legal name to countersign
                 </Label>
                 <Input
                   id="guardianSignature"

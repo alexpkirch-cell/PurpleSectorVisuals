@@ -58,7 +58,7 @@ export function CrewList({ initialMembers, archived = false }: { initialMembers:
               Restore
             </Button>
           ) : null}
-          <Button variant="ghost" size="sm" render={<Link href={`/admin/crew/${member.id}`} />}>
+          <Button variant="ghost" size="sm" render={<Link href={`/admin/crew/contractors/${member.id}`} />}>
             Open
             <ChevronRight />
           </Button>

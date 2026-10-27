@@ -121,7 +121,7 @@ export async function listSignedContracts(): Promise<SignedContract[]> {
       p.title AS package_title
     FROM contracts c
     JOIN vaults v ON v.id = c.vault_id
-    LEFT JOIN booking_requests br ON br.id = v.booking_id
+    LEFT JOIN booking_requests br ON br.id = v.booking_request_id
     LEFT JOIN packages p ON p.id = br.package_id
     ORDER BY c.signed_at DESC NULLS LAST, c.created_at DESC
   `
