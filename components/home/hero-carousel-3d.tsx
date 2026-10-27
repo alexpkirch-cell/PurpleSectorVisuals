@@ -49,13 +49,16 @@ type Tile = {
 
 const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh)]"
 
-const MAX_TILES = 12
-const MIN_TILES = 8
+const MAX_TILES = 8
+const MIN_TILES = 6
 const GOLDEN_ANGLE = 137.508
 const SPAWN_BOX_VW = 15
 const SPAWN_BOX_VH = 15
-const MIN_DURATION = 15
-const DURATION_SPREAD = 10
+const MIN_DURATION = 35
+const DURATION_SPREAD = 20
+const SPAWN_STAGGER = 4
+const SCALE_START = 0.2
+const SCALE_END = 2.5
 const MAX_TILT = 6
 
 type Trajectory = {
@@ -79,7 +82,7 @@ const vh = (value: number) => `${value.toFixed(1)}vh`
  * (angles walk the circle by the golden angle so tiles fan out to different edges). Speed and tilt are random
  * per tile; this uses Math.random, so it must only run on the client after hydration.
  */
-function randomTrajectory(index: number, total: number): Trajectory {
+function randomTrajectory(index: number): Trajectory {
   const startX = between(-SPAWN_BOX_VW, SPAWN_BOX_VW)
   const startY = between(-SPAWN_BOX_VH, SPAWN_BOX_VH)
   const angle = ((index * GOLDEN_ANGLE + between(-14, 14)) * Math.PI) / 180
@@ -95,7 +98,7 @@ function randomTrajectory(index: number, total: number): Trajectory {
     endX: vw(startX + travelX),
     endY: vh(startY + travelY),
     tilt: between(-MAX_TILT, MAX_TILT),
-    delay: (index / total) * MIN_DURATION * 0.8,
+    delay: index * SPAWN_STAGGER,
     duration,
   }
 }
@@ -189,14 +192,14 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
   const flyingCount = Math.min(tiles.length, MAX_TILES)
   const paths = useMemo(
-    () => (mounted && !isEditing ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i, flyingCount)) : []),
+    () => (mounted && !isEditing ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i)) : []),
     [mounted, isEditing, flyingCount],
   )
 
   return (
     <div
       ref={sectionRef}
-      className="relative flex h-[80vh] w-full items-center justify-center overflow-hidden bg-black"
+      className="relative isolate flex h-[80vh] w-full items-center justify-center overflow-hidden bg-black"
       aria-label="Purple Sector Visuals showcase"
     >
       {isEditing ? (
@@ -233,15 +236,16 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
           return (
             <motion.div
               key={tile.key}
-              className={`absolute inset-0 m-auto h-fit will-change-transform ${TILE_WIDTH}`}
-              initial={{ x: path.startX, y: path.startY, scale: 0, opacity: 0, rotate: path.tilt }}
+              className={`pointer-events-auto absolute inset-0 m-auto h-fit cursor-pointer will-change-transform ${TILE_WIDTH}`}
+              style={{ zIndex: index + 1 }}
+              initial={{ x: path.startX, y: path.startY, scale: SCALE_START, opacity: 0, rotate: path.tilt }}
               animate={
                 reduceMotion
                   ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
                   : {
-                      x: [path.startX, path.midX, path.endX],
-                      y: [path.startY, path.midY, path.endY],
-                      scale: [0, 1, 3.2],
+                      x: [path.startX, path.endX],
+                      y: [path.startY, path.endY],
+                      scale: [SCALE_START, SCALE_END],
                       opacity: [0, 1, 1, 0],
                       rotate: path.tilt,
                     }
@@ -254,23 +258,26 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
                       delay: path.delay,
                       ease: "linear",
                       repeat: Infinity,
-                      times: [0, 0.5, 1],
-                      opacity: { duration: path.duration, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.12, 0.72, 1] },
+                      opacity: { duration: path.duration, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.06, 0.85, 1] },
                     }
               }
+              whileHover={{ zIndex: 100, transition: { duration: 0 } }}
             >
-              <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
-                <Image
-                  src={tile.src}
-                  alt={tile.photo?.title || tile.label}
-                  width={0}
-                  height={0}
-                  sizes="(min-width: 1024px) 18vw, (min-width: 768px) 26vw, 42vw"
-                  unoptimized={!isOptimizable(tile.src)}
-                  style={{ width: "100%", height: "auto" }}
-                  className="block h-auto w-full object-contain shadow-2xl shadow-black/60"
-                />
-              </LightboxTrigger>
+              {/* Scale lives on an inner layer so the hover grow never fights the flight keyframes on the outer one. */}
+              <motion.div whileHover={{ scale: 1.05 }} transition={{ type: "spring", stiffness: 300, damping: 24 }}>
+                <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full cursor-pointer">
+                  <Image
+                    src={tile.src}
+                    alt={tile.photo?.title || tile.label}
+                    width={0}
+                    height={0}
+                    sizes="(min-width: 1024px) 18vw, (min-width: 768px) 26vw, 42vw"
+                    unoptimized={!isOptimizable(tile.src)}
+                    style={{ width: "100%", height: "auto" }}
+                    className="block h-auto w-full object-contain shadow-2xl shadow-black/60"
+                  />
+                </LightboxTrigger>
+              </motion.div>
             </motion.div>
           )
         })
