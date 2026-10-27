@@ -3,6 +3,7 @@
 import { useMemo, useRef } from "react"
 import Image from "next/image"
 import { Camera } from "lucide-react"
+import { motion, useReducedMotion } from "framer-motion"
 import useSWR from "swr"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
@@ -46,31 +47,42 @@ type Tile = {
   galleryIndex: number
 }
 
-const TILE_WIDTH = "w-[min(46vw,28vh)] md:w-[min(30vw,26vh)] lg:w-[min(18vw,34vh)]"
+const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh)]"
+
+const MAX_TILES = 12
+const MIN_TILES = 8
+const WARP_DURATION = 10
+const GOLDEN_ANGLE = 137.508
+
+type Trajectory = {
+  midX: string
+  midY: string
+  endX: string
+  endY: string
+  tilt: number
+  delay: number
+}
 
 /**
- * Absolute scatter positions as percentages of the 80vh hero box, with a tilt per tile.
- * Phones show the first six tiles, tablets nine, desktops ten. Lower tiles are anchored with
- * bottom-* so tall photos stay inside the box, and widths are capped by viewport height too.
+ * Every tile starts at the dead center and flies outward along its own angle. Angles walk the circle by the
+ * golden angle so consecutive tiles fan out to different edges, and the values are derived from the index
+ * (not Math.random) so the paths stay stable across re-renders.
  */
-const SCATTER_SLOTS = [
-  `${TILE_WIDTH} top-[2%] left-[3%] -rotate-3 md:top-[3%] md:left-[2%] md:-rotate-6 lg:top-[2%] lg:left-[2%] lg:-rotate-3`,
-  `${TILE_WIDTH} top-[6%] left-[51%] rotate-6 md:top-[6%] md:left-[35%] md:rotate-3 lg:top-[8%] lg:left-[21%] lg:rotate-6`,
-  `${TILE_WIDTH} top-[30%] left-[4%] -rotate-6 md:top-[2%] md:left-[68%] md:-rotate-3 lg:top-[3%] lg:left-[40%] lg:-rotate-12`,
-  `${TILE_WIDTH} top-[34%] left-[50%] rotate-3 md:top-[34%] md:left-[4%] md:rotate-6 lg:top-[10%] lg:left-[59%] lg:rotate-3`,
-  `${TILE_WIDTH} top-[58%] left-[3%] rotate-6 md:top-[38%] md:left-[34%] md:-rotate-6 lg:top-[5%] lg:left-[79%] lg:-rotate-6`,
-  `${TILE_WIDTH} top-[60%] left-[52%] -rotate-3 md:top-[33%] md:left-[66%] md:rotate-3 lg:top-auto lg:bottom-[3%] lg:left-[1%] lg:rotate-6`,
-  `${TILE_WIDTH} hidden md:block md:bottom-[3%] md:left-[2%] md:rotate-6 lg:bottom-[9%] lg:left-[20%] lg:-rotate-6`,
-  `${TILE_WIDTH} hidden md:block md:bottom-[6%] md:left-[36%] md:-rotate-3 lg:bottom-[2%] lg:left-[40%] lg:rotate-3`,
-  `${TILE_WIDTH} hidden md:block md:bottom-[2%] md:left-[68%] md:rotate-6 lg:bottom-[8%] lg:left-[60%] lg:-rotate-12`,
-  `${TILE_WIDTH} hidden lg:block lg:bottom-[4%] lg:left-[80%] lg:rotate-6`,
-]
-const SCATTER_Z = [12, 15, 11, 14, 13, 16, 11, 15, 12, 14]
-
-const MAX_TILES = SCATTER_SLOTS.length
-const MIN_TILES = MAX_TILES
-const PLACEHOLDER_ASPECTS = ["aspect-[4/3]", "aspect-[3/4]"]
-const SKELETON_ASPECTS = ["aspect-[3/2]", "aspect-[4/5]", "aspect-[4/3]", "aspect-[3/4]", "aspect-[3/2]", "aspect-[4/5]"]
+function trajectoryFor(index: number, total: number): Trajectory {
+  const jitter = Math.sin(index * 12.9898) * 14
+  const angle = ((index * GOLDEN_ANGLE + jitter) * Math.PI) / 180
+  const reach = 0.85 + ((Math.sin(index * 78.233) + 1) / 2) * 0.35
+  const endX = Math.cos(angle) * 58 * reach
+  const endY = Math.sin(angle) * 44 * reach
+  return {
+    midX: `${(endX * 0.32).toFixed(1)}vw`,
+    midY: `${(endY * 0.32).toFixed(1)}vh`,
+    endX: `${endX.toFixed(1)}vw`,
+    endY: `${endY.toFixed(1)}vh`,
+    tilt: Math.sin(index * 4.1414) * 10,
+    delay: (index * WARP_DURATION) / total,
+  }
+}
 
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
 
@@ -102,6 +114,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
   const sectionRef = useRef<HTMLDivElement>(null)
+  const reduceMotion = useReducedMotion()
 
   // The server shuffles the portfolio on every request; the editor skips it so its slots stay editable.
   const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>(isEditing ? null : "/api/portfolio/random", fetcher, {
@@ -142,7 +155,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       settings: photo?.settings || null,
     }))
 
-    // With a tiny library, repeat photos so the wall still reaches the edges instead of leaving black gaps.
+    // With a tiny library, repeat photos so the waves of flying photos never run dry.
     const result: Tile[] = []
     const count = unique.length === 0 ? 0 : Math.max(Math.min(unique.length, MAX_TILES), MIN_TILES)
     for (let i = 0; i < count; i++) {
@@ -157,52 +170,86 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   return (
     <div
       ref={sectionRef}
-      className="relative h-[80vh] w-full overflow-hidden bg-zinc-950"
+      className="relative flex h-[80vh] w-full items-center justify-center overflow-hidden bg-black"
       aria-label="Purple Sector Visuals showcase"
     >
-      {showSkeleton
-        ? SCATTER_SLOTS.map((slot, i) => (
-            <div
-              key={i}
-              className={`absolute animate-pulse bg-zinc-800 ${slot} ${SKELETON_ASPECTS[i % SKELETON_ASPECTS.length]}`}
-              role="status"
-              aria-label="Loading photo"
-            />
-          ))
-        : tiles.slice(0, MAX_TILES).map((tile, index) => (
-            <div
-              key={tile.key}
-              className={`absolute transition-transform duration-300 hover:z-30 hover:scale-[1.03] ${SCATTER_SLOTS[index]}`}
-              style={{ zIndex: SCATTER_Z[index] }}
-            >
+      {isEditing ? (
+        <div className="absolute inset-0 z-10 grid grid-cols-2 content-center gap-3 p-4 sm:grid-cols-4">
+          {tiles.map((tile) => (
+            <div key={tile.key} className="flex flex-col items-center justify-center gap-2">
               {tile.src ? (
-                <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
-                  <Image
-                    src={tile.src}
-                    alt={tile.photo?.title || tile.label}
-                    width={0}
-                    height={0}
-                    sizes="(min-width: 1024px) 18vw, (min-width: 768px) 30vw, 46vw"
-                    unoptimized={!isOptimizable(tile.src)}
-                    style={{ width: "100%", height: "auto" }}
-                    className="block shadow-2xl shadow-black/60"
-                  />
-                </LightboxTrigger>
+                <Image
+                  src={tile.src}
+                  alt={tile.photo?.title || tile.label}
+                  width={0}
+                  height={0}
+                  sizes="25vw"
+                  unoptimized={!isOptimizable(tile.src)}
+                  style={{ width: "100%", height: "auto" }}
+                  className="max-h-[30vh] w-full object-contain"
+                />
               ) : (
-                <div
-                  className={`flex w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 p-2 text-center text-zinc-300 ${
-                    PLACEHOLDER_ASPECTS[index % PLACEHOLDER_ASPECTS.length]
-                  }`}
-                >
+                <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 p-2 text-center text-zinc-300">
                   <Camera className="size-6 sm:size-8" aria-hidden="true" />
                   <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{tile.label}</span>
-                  {isEditing && <span className="text-[10px] text-zinc-400">Click to upload</span>}
+                  <span className="text-[10px] text-zinc-400">Click to upload</span>
                 </div>
               )}
             </div>
           ))}
+        </div>
+      ) : showSkeleton ? (
+        <div className={`absolute inset-0 m-auto aspect-[3/2] h-fit animate-pulse bg-zinc-800 ${TILE_WIDTH}`} role="status" aria-label="Loading photo" />
+      ) : (
+        tiles.slice(0, MAX_TILES).map((tile, index, visible) => {
+          const path = trajectoryFor(index, visible.length)
+          return (
+            <motion.div
+              key={tile.key}
+              className={`absolute inset-0 m-auto h-fit will-change-transform ${TILE_WIDTH}`}
+              initial={{ x: 0, y: 0, scale: 0, opacity: 0, rotate: path.tilt }}
+              animate={
+                reduceMotion
+                  ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
+                  : {
+                      x: [0, path.midX, path.endX],
+                      y: [0, path.midY, path.endY],
+                      scale: [0, 1, 3.2],
+                      opacity: [0, 1, 1, 0],
+                      rotate: path.tilt,
+                    }
+              }
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : {
+                      duration: WARP_DURATION,
+                      delay: path.delay,
+                      ease: "linear",
+                      repeat: Infinity,
+                      times: [0, 0.5, 1],
+                      opacity: { duration: WARP_DURATION, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.12, 0.72, 1] },
+                    }
+              }
+            >
+              <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
+                <Image
+                  src={tile.src}
+                  alt={tile.photo?.title || tile.label}
+                  width={0}
+                  height={0}
+                  sizes="(min-width: 1024px) 18vw, (min-width: 768px) 26vw, 42vw"
+                  unoptimized={!isOptimizable(tile.src)}
+                  style={{ width: "100%", height: "auto" }}
+                  className="block h-auto w-full object-contain shadow-2xl shadow-black/60"
+                />
+              </LightboxTrigger>
+            </motion.div>
+          )
+        })
+      )}
 
-      <div className="pointer-events-none absolute inset-0 z-40 bg-gradient-to-b from-zinc-950/30 via-transparent to-zinc-950/80" />
+      <div className="pointer-events-none absolute inset-0 z-40 bg-gradient-to-b from-black/30 via-transparent to-black/80" />
 
       <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8">
         <button
