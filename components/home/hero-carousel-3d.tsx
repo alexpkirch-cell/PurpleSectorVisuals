@@ -46,23 +46,26 @@ type Tile = {
   galleryIndex: number
 }
 
+const TILE_WIDTH = "w-[min(46vw,28vh)] md:w-[min(30vw,26vh)] lg:w-[min(18vw,34vh)]"
+
 /**
- * Percentage-only scatter positions (top / left / width), so the collage scales with the hero box.
- * Every left + width stays under 100% at its breakpoint, which keeps tiles inside a phone screen.
- * The first six tiles show on mobile, eight from md, ten from lg.
+ * Absolute scatter positions as percentages of the 80vh hero box, with a tilt per tile.
+ * Phones show the first six tiles, tablets nine, desktops ten. Lower tiles are anchored with
+ * bottom-* so tall photos stay inside the box, and widths are capped by viewport height too.
  */
 const SCATTER_SLOTS = [
-  "top-[4%] left-[3%] w-[44%] -rotate-2 md:top-[6%] md:left-[3%] md:w-[28%] lg:top-[8%] lg:left-[2%] lg:w-[19%]",
-  "top-[10%] left-[50%] w-[44%] rotate-2 md:top-[4%] md:left-[36%] md:w-[28%] lg:top-[4%] lg:left-[22%] lg:w-[19%]",
-  "top-[32%] left-[24%] w-[44%] rotate-1 md:top-[8%] md:left-[68%] md:w-[28%] lg:top-[10%] lg:left-[43%] lg:w-[19%]",
-  "top-[52%] left-[4%] w-[44%] -rotate-1 md:top-[40%] md:left-[6%] md:w-[28%] lg:top-[6%] lg:left-[63%] lg:w-[19%]",
-  "top-[56%] left-[50%] w-[44%] rotate-2 md:top-[42%] md:left-[38%] md:w-[28%] lg:top-[12%] lg:left-[79%] lg:w-[19%]",
-  "top-[72%] left-[26%] w-[44%] -rotate-2 md:top-[48%] md:left-[68%] md:w-[28%] lg:top-[46%] lg:left-[3%] lg:w-[19%]",
-  "hidden md:block md:top-[60%] md:left-[10%] md:w-[28%] md:rotate-1 lg:top-[44%] lg:left-[22%] lg:w-[19%] lg:-rotate-1",
-  "hidden md:block md:top-[62%] md:left-[48%] md:w-[28%] md:-rotate-2 lg:top-[50%] lg:left-[43%] lg:w-[19%] lg:rotate-2",
-  "hidden lg:block lg:top-[44%] lg:left-[63%] lg:w-[19%] lg:-rotate-2",
-  "hidden lg:block lg:top-[50%] lg:left-[79%] lg:w-[19%] lg:rotate-1",
+  `${TILE_WIDTH} top-[2%] left-[3%] -rotate-3 md:top-[3%] md:left-[2%] md:-rotate-6 lg:top-[2%] lg:left-[2%] lg:-rotate-3`,
+  `${TILE_WIDTH} top-[6%] left-[51%] rotate-6 md:top-[6%] md:left-[35%] md:rotate-3 lg:top-[8%] lg:left-[21%] lg:rotate-6`,
+  `${TILE_WIDTH} top-[30%] left-[4%] -rotate-6 md:top-[2%] md:left-[68%] md:-rotate-3 lg:top-[3%] lg:left-[40%] lg:-rotate-12`,
+  `${TILE_WIDTH} top-[34%] left-[50%] rotate-3 md:top-[34%] md:left-[4%] md:rotate-6 lg:top-[10%] lg:left-[59%] lg:rotate-3`,
+  `${TILE_WIDTH} top-[58%] left-[3%] rotate-6 md:top-[38%] md:left-[34%] md:-rotate-6 lg:top-[5%] lg:left-[79%] lg:-rotate-6`,
+  `${TILE_WIDTH} top-[60%] left-[52%] -rotate-3 md:top-[33%] md:left-[66%] md:rotate-3 lg:top-auto lg:bottom-[3%] lg:left-[1%] lg:rotate-6`,
+  `${TILE_WIDTH} hidden md:block md:bottom-[3%] md:left-[2%] md:rotate-6 lg:bottom-[9%] lg:left-[20%] lg:-rotate-6`,
+  `${TILE_WIDTH} hidden md:block md:bottom-[6%] md:left-[36%] md:-rotate-3 lg:bottom-[2%] lg:left-[40%] lg:rotate-3`,
+  `${TILE_WIDTH} hidden md:block md:bottom-[2%] md:left-[68%] md:rotate-6 lg:bottom-[8%] lg:left-[60%] lg:-rotate-12`,
+  `${TILE_WIDTH} hidden lg:block lg:bottom-[4%] lg:left-[80%] lg:rotate-6`,
 ]
+const SCATTER_Z = [12, 15, 11, 14, 13, 16, 11, 15, 12, 14]
 
 const MAX_TILES = SCATTER_SLOTS.length
 const MIN_TILES = MAX_TILES
@@ -154,7 +157,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   return (
     <div
       ref={sectionRef}
-      className="relative min-h-[100svh] w-full overflow-hidden bg-zinc-950 md:min-h-[80vh]"
+      className="relative h-[80vh] w-full overflow-hidden bg-zinc-950"
       aria-label="Purple Sector Visuals showcase"
     >
       {showSkeleton
@@ -170,7 +173,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
             <div
               key={tile.key}
               className={`absolute transition-transform duration-300 hover:z-30 hover:scale-[1.03] ${SCATTER_SLOTS[index]}`}
-              style={{ zIndex: 10 + (index % 3) }}
+              style={{ zIndex: SCATTER_Z[index] }}
             >
               {tile.src ? (
                 <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full">
@@ -179,9 +182,10 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
                     alt={tile.photo?.title || tile.label}
                     width={0}
                     height={0}
-                    sizes="(min-width: 1024px) 19vw, (min-width: 768px) 28vw, 44vw"
+                    sizes="(min-width: 1024px) 18vw, (min-width: 768px) 30vw, 46vw"
                     unoptimized={!isOptimizable(tile.src)}
-                    className="block h-auto w-full shadow-2xl shadow-black/60"
+                    style={{ width: "100%", height: "auto" }}
+                    className="block shadow-2xl shadow-black/60"
                   />
                 </LightboxTrigger>
               ) : (
