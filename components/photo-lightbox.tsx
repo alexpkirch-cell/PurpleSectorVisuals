@@ -1,10 +1,10 @@
 "use client"
 
-import Link from "next/link"
 import { useCallback, useEffect, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { ChevronLeft, ChevronRight, X } from "lucide-react"
 
+import { PhotoAttribution } from "@/components/photo-attribution"
 import { useEditMode } from "@/components/puck/edit-mode"
 import { shooterHref } from "@/lib/shooter-link"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ export type LightboxImage = {
   title?: string
   category?: string
   shooter?: string | null
+  editedBy?: string | null
   camera?: string | null
   lens?: string | null
   settings?: string | null
@@ -120,18 +121,13 @@ export function PhotoLightbox({ images, index, onClose, onIndexChange }: PhotoLi
             <p className="font-heading text-xl font-semibold tracking-tight text-zinc-50">{image.title}</p>
           ) : null}
           {meta ? <p className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-400">{meta}</p> : null}
-          {image.shooter ? (
-            <p className="text-sm text-zinc-300">
-              Shot by{" "}
-              <Link
-                href={shooterHref(image.shooter)}
-                onClick={onClose}
-                className="font-medium text-[#FF00FF] underline-offset-4 hover:underline"
-              >
-                {image.shooter}
-              </Link>
-            </p>
-          ) : null}
+          <PhotoAttribution
+            shotBy={image.shooter}
+            editedBy={image.editedBy}
+            shotByHref={image.shooter ? shooterHref(image.shooter) : undefined}
+            onNavigate={onClose}
+            className="justify-center text-sm"
+          />
           {exif.length > 0 ? (
             <p className="font-mono text-xs text-zinc-500">{exif.join("  |  ")}</p>
           ) : null}
