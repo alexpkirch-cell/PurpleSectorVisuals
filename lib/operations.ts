@@ -118,14 +118,46 @@ export function computeKpis(shoots: readonly Shoot[], monthKey: string): Operati
   }
 }
 
-/** Shoots dated today or later that are still open, soonest first. */
-export function upcomingShoots(shoots: readonly Shoot[], todayKey: string): Shoot[] {
-  return shoots
-    .filter((shoot) => {
-      const key = dayKey(shoot.shoot_date)
-      return key !== null && key >= todayKey && !CLOSED_STATUSES.includes(shoot.status)
-    })
-    .sort((a, b) => (dayKey(a.shoot_date) ?? "").localeCompare(dayKey(b.shoot_date) ?? ""))
+export type CalendarStatus = "tentative" | "confirmed" | "completed"
+
+export const CALENDAR_STATUS_META: Record<CalendarStatus, { label: string; chipClass: string; dotClass: string }> = {
+  tentative: {
+    label: "Tentative",
+    chipClass: "bg-calendar-tentative text-calendar-foreground",
+    dotClass: "bg-calendar-tentative",
+  },
+  confirmed: {
+    label: "Confirmed",
+    chipClass: "bg-calendar-confirmed text-calendar-foreground",
+    dotClass: "bg-calendar-confirmed",
+  },
+  completed: {
+    label: "Completed",
+    chipClass: "bg-calendar-completed text-calendar-foreground ring-1 ring-border",
+    dotClass: "bg-calendar-completed ring-1 ring-border",
+  },
+}
+
+/**
+ * Past shoots are completed. Upcoming shoots are confirmed only once the client has signed
+ * and the deposit is in (a comped shoot has no deposit to wait for); everything else is tentative.
+ */
+export function calendarStatusOf(shoot: Shoot, todayKey: string): CalendarStatus {
+  const key = dayKey(shoot.shoot_date)
+  if (key !== null && key < todayKey) return "completed"
+  const depositCleared = Boolean(shoot.vault_deposit_paid) || Boolean(shoot.is_comped)
+  return shoot.vault_contract_signed && depositCleared ? "confirmed" : "tentative"
+}
+
+/** Shoots keyed by their UTC calendar day, so the grid can look up a cell in O(1). */
+export function groupShootsByDay(shoots: readonly Shoot[]): Map<string, Shoot[]> {
+  const byDay = new Map<string, Shoot[]>()
+  for (const shoot of shoots) {
+    const key = dayKey(shoot.shoot_date)
+    if (key === null) continue
+    byDay.set(key, [...(byDay.get(key) ?? []), shoot])
+  }
+  return byDay
 }
 
 export function formatShootDate(value: string | Date | null, withWeekday = false) {

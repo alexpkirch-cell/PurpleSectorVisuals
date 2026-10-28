@@ -3,6 +3,7 @@
 import { cookies } from "next/headers"
 import { Pool } from "pg"
 
+import type { InvoiceData } from "@/lib/vault-documents"
 import { vaultCookieName } from "@/lib/vault"
 
 const GALLERY_LIFESPAN_DAYS = 180
@@ -33,6 +34,9 @@ export type VaultRecord = {
   finalQuotedFee: number | null
   deliveredAt: string | null
   expiresAt: string | null
+  contractHtml: string | null
+  invoiceData: InvoiceData | null
+  isComped: boolean
 }
 
 export async function activateVaultIfReady(vaultId: string) {
@@ -105,8 +109,10 @@ export async function lookupVaultByPin(
         v.is_minor, v.portfolio_consent, v.balance_amount, v.balance_paid, v.final_quoted_fee,
         b.first_name, b.last_name, b.subject,
         p.title as package_title,
+        v.contract_html, v.invoice_data, COALESCE(s.is_comped, false) AS is_comped,
         (SELECT MIN(gp.created_at) FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) as delivered_at
        FROM vaults v
+       LEFT JOIN shoots s ON s.id = v.shoot_id
        LEFT JOIN booking_requests b ON b.id = v.booking_request_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.pin_code = $1
@@ -152,6 +158,9 @@ export async function lookupVaultByPin(
         finalQuotedFee: row.final_quoted_fee ? Number(row.final_quoted_fee) : null,
         deliveredAt: deliveredAt ? deliveredAt.toISOString() : null,
         expiresAt: computedExpiresAt ? computedExpiresAt.toISOString() : null,
+        contractHtml: row.contract_html ?? null,
+        invoiceData: row.invoice_data && Object.keys(row.invoice_data).length > 0 ? row.invoice_data : null,
+        isComped: Boolean(row.is_comped),
       },
     }
   } finally {

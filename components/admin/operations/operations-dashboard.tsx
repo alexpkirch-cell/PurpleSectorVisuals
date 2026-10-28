@@ -22,11 +22,12 @@ import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 import { SettlementModal } from "@/components/admin/settlement-modal"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
+import { CountersignAlert } from "@/components/admin/operations/countersign-alert"
 import { KpiRow } from "@/components/admin/operations/kpi-row"
 import { ManualBookingDialog } from "@/components/admin/operations/manual-booking-dialog"
 import { PipelineBoard } from "@/components/admin/operations/pipeline-board"
-import { UpcomingSchedule } from "@/components/admin/operations/upcoming-schedule"
-import { computeKpis, stageForStatus, upcomingShoots, type PipelineStage } from "@/lib/operations"
+import { RollingCalendar } from "@/components/admin/operations/rolling-calendar"
+import { computeKpis, stageForStatus, type PipelineStage } from "@/lib/operations"
 
 interface OperationsDashboardProps {
   initialShoots: Shoot[]
@@ -65,7 +66,6 @@ export function OperationsDashboard({
 
   const activeShoots = useMemo(() => shoots.filter((s) => s.status !== "declined"), [shoots])
   const kpis = useMemo(() => computeKpis(activeShoots, monthKey), [activeShoots, monthKey])
-  const upcoming = useMemo(() => upcomingShoots(activeShoots, todayKey), [activeShoots, todayKey])
 
   function replaceShoot(updated: Shoot) {
     setShoots((current) => current.map((s) => (s.id === updated.id ? updated : s)))
@@ -143,6 +143,8 @@ export function OperationsDashboard({
         </div>
       </header>
 
+      <CountersignAlert shoots={activeShoots} onOpen={setSelectedShoot} onCountersigned={replaceShoot} />
+
       <KpiRow kpis={kpis} monthLabel={monthLabel} />
 
       <PipelineBoard
@@ -154,15 +156,14 @@ export function OperationsDashboard({
         onGenerateVault={setGeneratingVaultShoot}
       />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <UpcomingSchedule shoots={upcoming} onOpen={setSelectedShoot} />
-        <section aria-labelledby="print-queue-heading" className="flex flex-col gap-3 lg:col-span-2">
-          <h2 id="print-queue-heading" className="font-heading text-base font-medium text-foreground">
-            Print Fulfillment Queue
-          </h2>
-          {printQueue}
-        </section>
-      </div>
+      <RollingCalendar shoots={activeShoots} todayKey={todayKey} onOpen={setSelectedShoot} />
+
+      <section aria-labelledby="print-queue-heading" className="flex flex-col gap-3">
+        <h2 id="print-queue-heading" className="font-heading text-base font-medium text-foreground">
+          Print Fulfillment Queue
+        </h2>
+        {printQueue}
+      </section>
 
       <ManualBookingDialog
         open={isBookingOpen}

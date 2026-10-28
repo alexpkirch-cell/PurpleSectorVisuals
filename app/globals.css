@@ -21,6 +21,10 @@
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
+    --color-calendar-tentative: var(--calendar-tentative);
+    --color-calendar-confirmed: var(--calendar-confirmed);
+    --color-calendar-completed: var(--calendar-completed);
+    --color-calendar-foreground: var(--calendar-foreground);
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
@@ -81,6 +85,10 @@
     --sidebar-accent-foreground: #f4f4f5;
     --sidebar-border: rgba(39, 39, 42, 0.8);
     --sidebar-ring: #e829f1;
+    --calendar-tentative: #64748b;
+    --calendar-confirmed: #a855f7;
+    --calendar-completed: #1e293b;
+    --calendar-foreground: #f8fafc;
 }
 
 .dark {
@@ -194,4 +202,10 @@
 
 .psv-fade-up {
   animation: psv-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@theme {
+  --color-cal-tentative: #64748b;
+  --color-cal-confirmed: #a855f7;
+  --color-cal-completed: #1e293b;
 }

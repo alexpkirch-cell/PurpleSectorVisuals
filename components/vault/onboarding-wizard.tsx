@@ -11,8 +11,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DepositCheckout } from "@/components/vault/deposit-checkout"
+import { InvoiceSummary } from "@/components/vault/invoice-summary"
+import { SignaturePad } from "@/components/vault/signature-pad"
 import { LIABILITY_RELEASE_TEXT, MINOR_ADDENDUM_TEXT } from "@/lib/contract-text"
 import { cn } from "@/lib/utils"
+import type { InvoiceData } from "@/lib/vault-documents"
 
 const PREP_GUIDES: Record<string, { title: string; tips: string[] }> = {
   Portraits: {
@@ -60,16 +63,23 @@ export function OnboardingWizard({
   category,
   contractSigned,
   depositPaid,
+  contractHtml,
+  invoice,
+  isComped,
 }: {
   vaultId: string
   category: string | null
   contractSigned: boolean
   depositPaid: boolean
+  contractHtml: string | null
+  invoice: InvoiceData | null
+  isComped: boolean
 }) {
-  const steps: Step[] = ["contract", "deposit", "prep", "unlock"]
-  const initialStep = !contractSigned ? "contract" : !depositPaid ? "deposit" : "prep"
+  const steps: Step[] = isComped ? ["contract", "prep", "unlock"] : ["contract", "deposit", "prep", "unlock"]
+  const initialStep: Step = !contractSigned ? "contract" : !depositPaid && !isComped ? "deposit" : "prep"
   const [step, setStep] = useState<Step>(initialStep)
   const [signature, setSignature] = useState("")
+  const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [isMinor, setIsMinor] = useState(false)
   const [guardianName, setGuardianName] = useState("")
   const [guardianRelationship, setGuardianRelationship] = useState("")
@@ -86,13 +96,16 @@ export function OnboardingWizard({
   const currentIndex = steps.indexOf(step)
 
   const canSign =
-    signature.trim().length >= 2 && (!isMinor || (guardianName.trim().length >= 2 && guardianSignature.trim().length >= 2))
+    signature.trim().length >= 2 &&
+    signatureImage !== null &&
+    (!isMinor || (guardianName.trim().length >= 2 && guardianSignature.trim().length >= 2))
 
   async function handleSign() {
     setError(null)
     setSigning(true)
     const result = await submitContract(vaultId, {
       signature,
+      signatureImage,
       isMinor,
       guardianName,
       guardianRelationship,
@@ -105,6 +118,11 @@ export function OnboardingWizard({
       return
     }
     setSigned(true)
+    if (isComped) {
+      setPaid(true)
+      setStep("prep")
+      return
+    }
     setStep("deposit")
   }
 
@@ -155,15 +173,27 @@ export function OnboardingWizard({
             <FileSignature className="h-5 w-5" />
             <h2 className="font-serif text-lg text-foreground">Sign Your Session Agreement</h2>
           </div>
-          <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
-            {LIABILITY_RELEASE_TEXT}
-            {isMinor && (
-              <>
-                {"\n\n"}
-                {MINOR_ADDENDUM_TEXT}
-              </>
-            )}
-          </div>
+          {invoice && <InvoiceSummary invoice={invoice} />}
+
+          {contractHtml ? (
+            <div className="max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed text-muted-foreground">
+              <div
+                className="[&_dd]:text-foreground [&_dl]:mb-4 [&_dl]:grid [&_dl]:gap-2 [&_dt]:text-xs [&_dt]:uppercase [&_h3]:mt-4 [&_h3]:font-medium [&_h3]:text-foreground [&_h4]:mt-4 [&_h4]:font-medium [&_h4]:text-foreground [&_p]:mt-2"
+                dangerouslySetInnerHTML={{ __html: contractHtml }}
+              />
+              {isMinor && <p className="mt-4 whitespace-pre-line">{MINOR_ADDENDUM_TEXT}</p>}
+            </div>
+          ) : (
+            <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
+              {LIABILITY_RELEASE_TEXT}
+              {isMinor && (
+                <>
+                  {"\n\n"}
+                  {MINOR_ADDENDUM_TEXT}
+                </>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5">
             <Checkbox id="isMinor" checked={isMinor} onCheckedChange={(checked) => setIsMinor(checked === true)} />
@@ -195,6 +225,11 @@ export function OnboardingWizard({
               placeholder="Jane Doe"
               className="font-serif text-lg"
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm text-muted-foreground">Draw your signature</Label>
+            <SignaturePad onChange={setSignatureImage} />
           </div>
 
           {isMinor && (
@@ -241,7 +276,13 @@ export function OnboardingWizard({
 
           {error && <p className="text-sm text-destructive">{error}</p>}
           <Button onClick={handleSign} disabled={!canSign || signing} className="w-full">
-            {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign & Continue"}
+            {signing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isComped ? (
+              "Sign & Confirm Booking"
+            ) : (
+              "Sign & Continue"
+            )}
           </Button>
         </div>
       )}
