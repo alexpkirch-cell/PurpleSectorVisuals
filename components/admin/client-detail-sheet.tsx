@@ -13,7 +13,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { type Shoot } from "@/app/actions/shoots"
 import { generateVaultAndSendLink } from "@/app/actions/pipeline"
-import { isMockShoot } from "@/lib/mock-lead"
 import { STUDIO_EDITORS, STUDIO_SHOOTERS } from "@/lib/booking-config"
 import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
 import {
@@ -182,11 +181,6 @@ export function ClientDetailSheet({
         const addon = bookingAddons.find((a) => a.id === id)!
         return { label: addon.name, amount: addon.price }
       })
-
-      if (isMockShoot(shoot.id)) {
-        toast.info("This is the demo test lead — finalizing is disabled here to keep the pipeline sample intact.")
-        return
-      }
 
       const { shoot: updated, pinCode } = await generateVaultAndSendLink(shoot.id, {
         adminNotes: adminNotes || null,

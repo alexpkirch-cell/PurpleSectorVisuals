@@ -42,7 +42,6 @@ import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-term
 import { moveShootStage, updateShoot, type Shoot } from "@/app/actions/shoots"
 import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
-import { isMockShoot } from "@/lib/mock-lead"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -131,7 +130,7 @@ export function ShootDetailSheet({
     return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
   }, [shoot, bookingTiers])
 
-  const shouldLoadLedger = !!shoot && shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)
+  const shouldLoadLedger = !!shoot && shoot.status !== "new_inquiry"
 
   const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
   if (shoot !== syncedShoot) {
@@ -190,15 +189,13 @@ export function ShootDetailSheet({
     if (!shoot) return
     setIsSaving(true)
     try {
-      if (!isMockShoot(shoot.id)) {
-        await updateShoot(shoot.id, {
-          basePrice: Number(totalPrice) || 0,
-          travelFee: 0,
-          assignedShooter: assignedShooter || null,
-          assignedEditor: assignedEditor || null,
-          notes: notes || null,
-        })
-      }
+      await updateShoot(shoot.id, {
+        basePrice: Number(totalPrice) || 0,
+        travelFee: 0,
+        assignedShooter: assignedShooter || null,
+        assignedEditor: assignedEditor || null,
+        notes: notes || null,
+      })
       onUpdated({
         ...shoot,
         base_price: totalPrice,
@@ -219,10 +216,8 @@ export function ShootDetailSheet({
     if (!shoot) return
     setIsConfirmingLead(true)
     try {
-      if (!isMockShoot(shoot.id)) {
-        await updateShoot(shoot.id, { notes: notes || null })
-        await moveShootStage(shoot.id, "quoted")
-      }
+      await updateShoot(shoot.id, { notes: notes || null })
+      await moveShootStage(shoot.id, "quoted")
       onUpdated({ ...shoot, notes: notes || null, status: "quoted" })
       toast.success(`${shoot.client_name} confirmed — quote the shoot to generate their vault`)
     } catch (error) {

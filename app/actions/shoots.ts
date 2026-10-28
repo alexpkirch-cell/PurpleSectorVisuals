@@ -139,6 +139,81 @@ export async function createShootInquiry(formData: {
   return { shootId: rows[0].id, vaultAccessCode }
 }
 
+/**
+ * Admin-side intake for leads that arrive outside the public booking form
+ * (a phone call, a DM, a referral). Creates the shoot as a New Inquiry so it
+ * enters the same pipeline as every other lead.
+ */
+export async function createManualBooking(input: {
+  clientName: string
+  clientEmail: string
+  clientPhone?: string
+  shootType: string
+  packageTier?: "Base" | "Standard"
+  shootDate?: string
+  location?: string
+  leadShooter?: string
+  notes?: string
+}): Promise<Shoot> {
+  await requireAdmin()
+
+  const clientName = input.clientName?.trim()
+  const clientEmail = input.clientEmail?.trim()
+  const shootType = input.shootType?.trim()
+  if (!clientName || !clientEmail || !shootType) {
+    throw new Error("Client name, email, and shoot type are required")
+  }
+
+  const shootDate = input.shootDate ? `${input.shootDate}T12:00:00Z` : null
+  const leadShooter = input.leadShooter?.trim() || null
+
+  let vaultAccessCode = generateVaultCode()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { rows } = await sql<{ id: string }>`
+      SELECT id FROM shoots WHERE vault_access_code = ${vaultAccessCode}
+    `
+    if (rows.length === 0) break
+    vaultAccessCode = generateVaultCode()
+  }
+
+  const { rows: inserted } = await sql<{ id: string }>`
+    INSERT INTO shoots (
+      client_name, client_email, client_phone, shoot_type, package_tier, shoot_date,
+      location, preferred_shooter, assigned_shooter, notes, vault_access_code
+    )
+    VALUES (
+      ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
+      ${input.packageTier ?? null}, ${shootDate}, ${input.location?.trim() || null},
+      ${leadShooter}, ${leadShooter}, ${input.notes?.trim() || null}, ${vaultAccessCode}
+    )
+    RETURNING id
+  `
+
+  revalidatePath("/admin/operations")
+
+  const { rows } = await sql<Shoot>`
+    SELECT
+      s.*,
+      v.pin_code AS vault_pin,
+      v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed,
+      v.deposit_paid AS vault_deposit_paid,
+      v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid,
+      v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at,
+      v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name,
+      v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone,
+      v.guardian_email AS vault_guardian_email
+    FROM shoots s
+    LEFT JOIN vaults v ON v.shoot_id = s.id
+    WHERE s.id = ${inserted[0].id}
+  `
+  return rows[0]
+}
+
 export async function listShoots(): Promise<Shoot[]> {
   await requireAdmin()
 
@@ -228,6 +303,7 @@ export async function moveShootStage(id: string, status: ShootStatus) {
   }
 
   revalidatePath("/admin")
+  revalidatePath("/admin/operations")
 }
 
 /**
