@@ -223,8 +223,8 @@ export function ShootDetailSheet({
     setIsConfirmingLead(true)
     try {
       await updateShoot(shoot.id, { notes: notes || null })
-      await moveShootStage(shoot.id, "call_scheduled")
-      onUpdated({ ...shoot, notes: notes || null, status: "call_scheduled" })
+      await moveShootStage(shoot.id, "in_discussion")
+      onUpdated({ ...shoot, notes: notes || null, status: "in_discussion" })
       toast.success(`${shoot.client_name} confirmed — quote the shoot to generate their vault`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to confirm lead")

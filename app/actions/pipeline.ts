@@ -78,7 +78,7 @@ export async function generateVaultAndSendLink(
     throw new Error("Shoot not found")
   }
 
-  if (shoot.status !== "new_inquiry" && shoot.status !== "call_scheduled") {
+  if (shoot.status !== "new_inquiry" && shoot.status !== "in_discussion") {
     throw new Error("Only New Inquiry or Call / In Discussion shoots can generate a vault from this action")
   }
 

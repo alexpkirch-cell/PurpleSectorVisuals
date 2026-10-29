@@ -2,7 +2,7 @@ import type { Shoot, ShootStatus } from "@/app/actions/shoots"
 
 export type StageId =
   | "new_inquiry"
-  | "call_scheduled"
+  | "in_discussion"
   | "awaiting_signature"
   | "booked"
   | "post_production"
@@ -27,11 +27,11 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
     dropStatus: "new_inquiry",
   },
   {
-    id: "call_scheduled",
-    label: "Call / In Discussion",
-    hint: "Discovery call or direct conversation",
-    statuses: ["call_scheduled"],
-    dropStatus: "call_scheduled",
+    id: "in_discussion",
+    label: "Quote & Documents",
+    hint: "Build the quote and create the vault",
+    statuses: ["in_discussion"],
+    dropStatus: "in_discussion",
   },
   {
     id: "awaiting_signature",
@@ -42,10 +42,10 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
   },
   {
     id: "booked",
-    label: "Booked & Retainer Paid",
+    label: "Booked & Paid",
     hint: "Signed, paid, and on the calendar",
-    statuses: ["booked_retainer_paid"],
-    dropStatus: "booked_retainer_paid",
+    statuses: ["booked_paid"],
+    dropStatus: "booked_paid",
   },
   {
     id: "post_production",
@@ -65,17 +65,17 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
 
 export const STATUS_LABELS: Record<ShootStatus, string> = {
   new_inquiry: "New Inquiry",
-  call_scheduled: "Call / In Discussion",
+  in_discussion: "Quote & Documents",
   awaiting_signature: "Awaiting Signature & Retainer",
-  booked_retainer_paid: "Booked & Retainer Paid",
+  booked_paid: "Booked & Paid",
   post_production: "Post-Production / Editing",
   delivered_settled: "Delivered & Settled",
   declined: "Declined",
 }
 
-const CONFIRMED_STATUSES: readonly ShootStatus[] = ["booked_retainer_paid", "post_production", "delivered_settled"]
+const CONFIRMED_STATUSES: readonly ShootStatus[] = ["booked_paid", "post_production", "delivered_settled"]
 
-const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "call_scheduled", "awaiting_signature"]
+const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "in_discussion", "awaiting_signature"]
 
 const CLOSED_STATUSES: readonly ShootStatus[] = ["delivered_settled", "declined"]
 

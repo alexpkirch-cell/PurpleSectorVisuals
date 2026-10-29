@@ -16,9 +16,9 @@ import { generateLedgerForShoot } from "@/app/actions/ledger"
 
 export type ShootStatus =
   | "new_inquiry"
-  | "call_scheduled"
+  | "in_discussion"
   | "awaiting_signature"
-  | "booked_retainer_paid"
+  | "booked_paid"
   | "post_production"
   | "delivered_settled"
   | "declined"
@@ -395,7 +395,7 @@ export async function moveShootStage(id: string, status: ShootStatus) {
   `
 
   // Booked shoots land on the Studio Calendar and the agency Google Calendar immediately.
-  if (status === "booked_retainer_paid") {
+  if (status === "booked_paid") {
     await finalizeBookedShoot(id)
   }
 

@@ -32,10 +32,10 @@ export async function finalizeBookedShoot(shootId: string) {
 export async function advanceShootToBooked(shootId: string) {
   const { rows } = await sql<{ id: string }>`
     UPDATE shoots SET
-      status = 'booked_retainer_paid',
+      status = 'booked_paid',
       client_signed_at = COALESCE(client_signed_at, now())
     WHERE id = ${shootId}
-      AND status IN ('new_inquiry', 'call_scheduled', 'awaiting_signature')
+      AND status IN ('new_inquiry', 'in_discussion', 'awaiting_signature')
     RETURNING id
   `
   if (rows.length === 0) return false

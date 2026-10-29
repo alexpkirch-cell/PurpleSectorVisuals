@@ -174,7 +174,7 @@ export function PipelineBoard({ shoots, onMove, onOpen, onDecline, onDelete, onG
                         </Badge>
                       )}
 
-                      {shoot.status === "call_scheduled" && (
+                      {shoot.status === "in_discussion" && (
                         <Button
                           type="button"
                           size="sm"
