@@ -452,13 +452,14 @@ export async function generateVaultAndAdvance(
 ): Promise<Shoot> {
   await requireAdmin()
 
-  const isComped = Boolean(input.isComped)
-  const totalQuote = isComped ? 0 : input.totalQuote
-
-  if (!isComped && (!Number.isFinite(totalQuote) || totalQuote <= 0)) {
-    throw new Error("Enter a valid total quote before generating the vault")
+  if (!Number.isFinite(input.totalQuote) || input.totalQuote < 0) {
+  throw new Error("Enter a valid total quote before generating the vault")
   }
-
+  
+  // A $0 total has nothing to charge, so it takes the comped path.
+  const isComped = Boolean(input.isComped) || input.totalQuote === 0
+  const totalQuote = isComped ? 0 : input.totalQuote
+  
   const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
   const shoot = shootRows[0]
   if (!shoot) {
