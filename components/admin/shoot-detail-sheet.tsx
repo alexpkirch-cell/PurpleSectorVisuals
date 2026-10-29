@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Baby,
+  CalendarPlus,
   Check,
   Copy,
+  ExternalLink,
   FileSignature,
   KeyRound,
   Mail,
+  MapPin,
   MoreVertical,
   Phone,
   RotateCcw,
@@ -22,7 +25,6 @@ import { Button, buttonVariants } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Sheet,
@@ -37,12 +39,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ShootPayoutBadge } from "@/components/admin/shoot-payout-badge"
+import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
+import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
+import { mapsUrlFor } from "@/lib/maps"
+import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
+import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
-import { moveShootStage, updateShoot, type Shoot } from "@/app/actions/shoots"
-import { listLedgerEntries, markLedgerEntryPaid, type LedgerEntry } from "@/app/actions/ledger"
+import { editorsOf, shootersOf } from "@/lib/shoot-team"
+import type { AssignedShooter } from "@/lib/settlement"
+import { moveShootStage, updateShoot, updateShootTeam, type Shoot } from "@/app/actions/shoots"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
-import { isMockShoot } from "@/lib/mock-lead"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -51,13 +57,6 @@ function formatCurrency(value: number) {
 function formatDate(iso: string | null) {
   if (!iso) return "Not set"
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })
-}
-
-const ROLE_LABELS: Record<LedgerEntry["role"], string> = {
-  labor: "Labor pool",
-  house: "House fund",
-  team_pool: "Team pool",
-  driver: "Driver reimbursement",
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -114,14 +113,15 @@ export function ShootDetailSheet({
 }) {
   const [totalPrice, setTotalPrice] = useState("0")
   const [priceTouched, setPriceTouched] = useState(false)
-  const [assignedShooter, setAssignedShooter] = useState("")
-  const [assignedEditor, setAssignedEditor] = useState("")
+  const [shooters, setShooters] = useState<AssignedShooter[]>([])
+  const [editors, setEditors] = useState<string[]>([])
+  const [driverReimbursement, setDriverReimbursement] = useState("0")
   const [notes, setNotes] = useState("")
+  const [location, setLocation] = useState("")
+  const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([])
-  const [isLoadingLedger, setIsLoadingLedger] = useState(false)
 
   const calculatedTotal = useMemo(() => {
     if (!shoot) return 0
@@ -131,54 +131,35 @@ export function ShootDetailSheet({
     return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
   }, [shoot, bookingTiers])
 
-  const shouldLoadLedger = !!shoot && shoot.status !== "new_inquiry" && !isMockShoot(shoot.id)
-
   const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
   if (shoot !== syncedShoot) {
     setSyncedShoot(shoot)
-    setLedgerEntries([])
-    setIsLoadingLedger(shouldLoadLedger)
     if (shoot) {
-      setTotalPrice(String(calculatedTotal))
+      setTotalPrice(String(shoot.is_comped ? 0 : calculatedTotal))
       setPriceTouched(false)
-      setAssignedShooter(shoot.assigned_shooter ?? "")
-      setAssignedEditor(shoot.assigned_editor ?? "")
+      setShooters(shootersOf(shoot))
+      setEditors(editorsOf(shoot))
+      setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
       setNotes(shoot.notes ?? "")
+      setLocation(shoot.location ?? "")
+      setLocationMapsUrl(shoot.location_maps_url)
     }
   }
-
-  useEffect(() => {
-    if (!shoot || !shouldLoadLedger) return
-    let cancelled = false
-    listLedgerEntries(shoot.id)
-      .then((entries) => {
-        if (!cancelled) setLedgerEntries(entries)
-      })
-      .catch(() => {
-        if (!cancelled) setLedgerEntries([])
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingLedger(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [shoot, shouldLoadLedger])
 
   const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
 
-  async function handleTogglePaid(entry: LedgerEntry, paid: boolean) {
-    const previous = ledgerEntries
-    setLedgerEntries((current) =>
-      current.map((e) => (e.id === entry.id ? { ...e, status: paid ? "PAID" : "PENDING" } : e)),
-    )
-    try {
-      await markLedgerEntryPaid(entry.id, paid)
-    } catch (error) {
-      setLedgerEntries(previous)
-      toast.error(error instanceof Error ? error.message : "Failed to update ledger entry")
-    }
-  }
+  const ledgerRevision = shoot
+    ? [
+        shoot.total_price,
+        shoot.base_price,
+        shoot.is_comped,
+        shoot.driver_reimbursement,
+        JSON.stringify(shoot.assigned_shooters),
+        JSON.stringify(shoot.assigned_editors),
+        shoot.assigned_shooter,
+        shoot.assigned_editor,
+      ].join("|")
+    : ""
 
   const legacyVaultLink =
     typeof window !== "undefined" ? `${window.location.origin}/shoot-vault` : "/shoot-vault"
@@ -190,22 +171,44 @@ export function ShootDetailSheet({
     if (!shoot) return
     setIsSaving(true)
     try {
-      if (!isMockShoot(shoot.id)) {
-        await updateShoot(shoot.id, {
-          basePrice: Number(totalPrice) || 0,
-          travelFee: 0,
-          assignedShooter: assignedShooter || null,
-          assignedEditor: assignedEditor || null,
-          notes: notes || null,
-        })
-      }
+      const cleanShooters = shooters.filter((s) => s.name.trim())
+      const cleanEditors = editors.filter((name) => name.trim())
+      const reimbursement = Math.max(0, Number(driverReimbursement) || 0)
+      const price = Math.max(0, Number(totalPrice) || 0)
+
+      const trimmedLocation = location.trim()
+      const locationChanged = trimmedLocation !== (shoot.location ?? "")
+      await updateShoot(shoot.id, {
+        basePrice: price,
+        travelFee: 0,
+        notes: notes || null,
+        ...(locationChanged
+          ? { location: trimmedLocation || null, locationMapsUrl: locationMapsUrl ?? undefined }
+          : {}),
+      })
+      await updateShootTeam(shoot.id, {
+        shooters: cleanShooters,
+        editors: cleanEditors,
+        driverReimbursement: reimbursement,
+      })
       onUpdated({
         ...shoot,
-        base_price: totalPrice,
+        base_price: String(price),
         travel_fee: "0",
-        assigned_shooter: assignedShooter || null,
-        assigned_editor: assignedEditor || null,
+        total_price: String(price),
+        is_comped: price === 0 ? true : shoot.is_comped && price === 0,
+        assigned_shooters: cleanShooters,
+        assigned_editors: cleanEditors,
+        assigned_shooter: cleanShooters.find((s) => s.role === "lead")?.name ?? cleanShooters[0]?.name ?? null,
+        assigned_editor: cleanEditors.join(", ") || null,
+        driver_reimbursement: String(reimbursement),
         notes: notes || null,
+        ...(locationChanged
+          ? {
+              location: trimmedLocation || null,
+              location_maps_url: trimmedLocation ? locationMapsUrl : null,
+            }
+          : {}),
       })
       toast.success("Shoot updated")
     } catch (error) {
@@ -219,11 +222,9 @@ export function ShootDetailSheet({
     if (!shoot) return
     setIsConfirmingLead(true)
     try {
-      if (!isMockShoot(shoot.id)) {
-        await updateShoot(shoot.id, { notes: notes || null })
-        await moveShootStage(shoot.id, "quoted")
-      }
-      onUpdated({ ...shoot, notes: notes || null, status: "quoted" })
+      await updateShoot(shoot.id, { notes: notes || null })
+      await moveShootStage(shoot.id, "in_discussion")
+      onUpdated({ ...shoot, notes: notes || null, status: "in_discussion" })
       toast.success(`${shoot.client_name} confirmed — quote the shoot to generate their vault`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to confirm lead")
@@ -357,8 +358,46 @@ export function ShootDetailSheet({
                     <InfoRow label="Phone" value={shoot.client_phone ?? "Not provided"} />
                     <InfoRow label="Package selected" value={shoot.shoot_type} />
                     <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
-                    <InfoRow label="Location" value={shoot.location ?? "Not set"} />
                   </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="shoot-location">Location</Label>
+                      {mapsUrlFor(shoot) && (
+                        <a
+                          href={mapsUrlFor(shoot) ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <MapPin className="size-3" aria-hidden="true" />
+                          Open in Maps
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                    <LocationAutocomplete
+                      id="shoot-location"
+                      value={location}
+                      onChange={(selection) => {
+                        setLocation(selection.location)
+                        setLocationMapsUrl(selection.mapsUrl)
+                      }}
+                      placeholder="Search a venue or address"
+                    />
+                  </div>
+
+                  {shoot.shoot_date && (
+                    <a
+                      href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
+                    >
+                      <CalendarPlus className="size-3.5" />
+                      Add to Google Calendar
+                    </a>
+                  )}
 
                   <div className="flex flex-col gap-2 rounded-md border border-border p-3">
                     <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
@@ -406,6 +445,11 @@ export function ShootDetailSheet({
                           Override active
                         </Badge>
                       )}
+                      {(shoot.is_comped || Number(totalPrice) === 0) && (
+                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                          Comped
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Input
@@ -440,8 +484,6 @@ export function ShootDetailSheet({
                     </p>
                   </div>
 
-                  <ShootPayoutBadge basePrice={Number(totalPrice) || 0} travelFee={0} defaultOpen />
-
                   {shoot.vault_pin && (
                     <div className="grid grid-cols-2 gap-2">
                       <PaymentStatusPill
@@ -457,65 +499,29 @@ export function ShootDetailSheet({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="assignedShooter">Assigned shooter</Label>
-                      <Input
-                        id="assignedShooter"
-                        value={assignedShooter}
-                        onChange={(e) => setAssignedShooter(e.target.value)}
-                        placeholder="Alex"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="assignedEditor">Assigned editor</Label>
-                      <Input
-                        id="assignedEditor"
-                        value={assignedEditor}
-                        onChange={(e) => setAssignedEditor(e.target.value)}
-                        placeholder="Gabe"
-                      />
-                    </div>
+                  <TeamAssignment
+                    shooters={shooters}
+                    editors={editors}
+                    onShootersChange={setShooters}
+                    onEditorsChange={setEditors}
+                  />
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="driverReimbursement">Driver / travel reimbursement</Label>
+                    <Input
+                      id="driverReimbursement"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={driverReimbursement}
+                      onChange={(e) => setDriverReimbursement(e.target.value)}
+                    />
+                    <p className="text-[0.65rem] text-muted-foreground">
+                      Paid out first, before the shooter, editor, admin and house splits.
+                    </p>
                   </div>
 
-                  <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                    <span className="text-xs font-medium text-foreground">Settlement ledger</span>
-
-                    {isLoadingLedger ? (
-                      <p className="text-[0.7rem] text-muted-foreground">Loading ledger…</p>
-                    ) : ledgerEntries.length === 0 ? (
-                      <p className="text-[0.7rem] text-muted-foreground">
-                        No settlement yet. Drag this shoot&apos;s card into Sent/Finished on the pipeline board
-                        to finalize the charge and generate payouts.
-                      </p>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {ledgerEntries.map((entry) => (
-                          <div
-                            key={entry.id}
-                            className="flex items-center justify-between gap-2 rounded-md bg-accent/30 px-2.5 py-1.5"
-                          >
-                            <div className="flex flex-col">
-                              <span className="text-[0.7rem] font-medium text-foreground">
-                                {entry.recipient}
-                              </span>
-                              <span className="text-[0.65rem] text-muted-foreground">
-                                {ROLE_LABELS[entry.role]} &middot; {formatCurrency(Number(entry.amount))}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[0.65rem] text-muted-foreground">Paid</span>
-                              <Switch
-                                checked={entry.status === "PAID"}
-                                onCheckedChange={(checked) => handleTogglePaid(entry, checked)}
-                                aria-label={`Mark ${entry.recipient} as paid`}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <SettlementLedger shootId={shoot.id} revision={ledgerRevision} />
 
                   <Button type="button" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? "Saving…" : "Save changes"}

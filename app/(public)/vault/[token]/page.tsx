@@ -94,6 +94,9 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
           category={vault.category}
           contractSigned={vault.contractSigned}
           depositPaid={vault.depositPaid}
+          contractHtml={vault.contractHtml}
+          invoice={vault.invoiceData}
+          isComped={vault.isComped}
         />
       </VaultShell>
     )

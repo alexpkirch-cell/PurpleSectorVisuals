@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: "/admin/operations/pipeline",
+        destination: "/admin/operations",
+        permanent: true,
+      },
+      {
+        source: "/admin/bookings",
+        destination: "/admin/operations",
+        permanent: true,
+      },
+      {
         source: "/admin/galleries/:path*",
         destination: "/admin/vaults/:path*",
         permanent: true,

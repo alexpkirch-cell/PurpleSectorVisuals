@@ -43,6 +43,7 @@ export function GenerateVaultModal({
   }
 
   const total = Number(totalQuote) || 0
+  const isComped = total === 0
   const { deposit: depositAmount, balance: balanceAmount } = splitTotal(total)
 
   async function handleConfirm() {
@@ -88,11 +89,15 @@ export function GenerateVaultModal({
               <div className="flex flex-col gap-2 rounded-md border border-border p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Deposit due now ({DEPOSIT_PERCENT_LABEL})</span>
-                  <span className="font-medium text-foreground">{formatCurrency(depositAmount)}</span>
+                  <span className="font-medium text-foreground">
+                    {isComped ? "$0.00 (Waived)" : formatCurrency(depositAmount)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-muted-foreground">Balance due later ({BALANCE_PERCENT_LABEL})</span>
-                  <span className="font-medium text-foreground">{formatCurrency(balanceAmount)}</span>
+                  <span className="font-medium text-foreground">
+                    {isComped ? "$0.00 (Waived)" : formatCurrency(balanceAmount)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -101,7 +106,7 @@ export function GenerateVaultModal({
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={isSaving || total <= 0}>
+              <Button type="button" onClick={handleConfirm} disabled={isSaving || total < 0}>
                 {isSaving ? "Generating…" : "Generate vault & advance"}
               </Button>
             </DialogFooter>

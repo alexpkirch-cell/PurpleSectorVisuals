@@ -4,7 +4,6 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Briefcase,
-  CalendarCheck,
   GalleryVerticalEnd,
   Images,
   LayoutGrid,
@@ -23,7 +22,6 @@ type NavLink = { href: string; label: string; icon: LucideIcon }
 
 const navLinks: NavLink[] = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
-  { href: "/admin/bookings", label: "Bookings", icon: CalendarCheck },
   { href: "/admin/vaults", label: "Vaults", icon: Images },
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/site-editor", label: "Site Editor", icon: PanelsTopLeft },

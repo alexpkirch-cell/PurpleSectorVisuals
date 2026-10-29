@@ -3,6 +3,7 @@
 import { Pool } from "pg"
 
 import { buildContractBody } from "@/lib/contract-text"
+import { advanceShootForVault } from "@/lib/shoot-booking"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -10,8 +11,11 @@ function getPool() {
   return new Pool({ connectionString: url.toString(), ssl: { rejectUnauthorized: false } })
 }
 
+const MAX_SIGNATURE_IMAGE_LENGTH = 400_000
+
 export interface ContractSubmission {
   signature: string
+  signatureImage?: string | null
   isMinor: boolean
   guardianName?: string
   guardianRelationship?: string
@@ -40,18 +44,36 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     }
   }
 
-  const contractBody = buildContractBody({ isMinor: input.isMinor, portfolioOptOut: input.portfolioOptOut })
+  const signatureImage = input.signatureImage ?? null
+  if (
+    signatureImage &&
+    (!signatureImage.startsWith("data:image/png;base64,") || signatureImage.length > MAX_SIGNATURE_IMAGE_LENGTH)
+  ) {
+    return { success: false, error: "That signature could not be read. Please clear it and sign again." }
+  }
 
   const pool = getPool()
   const client = await pool.connect()
   try {
     await client.query("BEGIN")
 
-    const vault = await client.query(`SELECT id FROM vaults WHERE id = $1`, [vaultId])
+    const vault = await client.query(
+      `SELECT v.id, v.contract_html, COALESCE(s.is_comped, false) AS is_comped
+       FROM vaults v
+       LEFT JOIN shoots s ON s.id = v.shoot_id
+       WHERE v.id = $1`,
+      [vaultId]
+    )
     if (vault.rowCount === 0) {
       await client.query("ROLLBACK")
       return { success: false, error: "Vault not found." }
     }
+
+    const isComped = Boolean(vault.rows[0].is_comped)
+    // Prefer the pre-populated agreement stored on the vault; legacy vaults fall back to the generic template.
+    const contractBody =
+      (vault.rows[0].contract_html as string | null) ??
+      buildContractBody({ isMinor: input.isMinor, portfolioOptOut: input.portfolioOptOut })
 
     await client.query(
       `INSERT INTO contracts (vault_id, contract_body, client_signature, signed_at)
@@ -62,6 +84,10 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     await client.query(
       `UPDATE vaults SET
         contract_signed = true,
+        client_signature = $9,
+        client_signed_at = now(),
+        requires_countersign = true,
+        deposit_paid = CASE WHEN $10 THEN true ELSE deposit_paid END,
         is_minor = $2,
         guardian_name = $3,
         guardian_relationship = $4,
@@ -79,11 +105,12 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
         input.isMinor ? (input.guardianEmail?.trim() ?? null) : null,
         input.isMinor ? (input.guardianSignature?.trim() ?? null) : null,
         !input.portfolioOptOut,
+        signatureImage ?? signature,
+        isComped,
       ]
     )
 
     await client.query("COMMIT")
-    return { success: true }
   } catch (error) {
     await client.query("ROLLBACK")
     console.error("[v0] submitContract failed:", error)
@@ -92,4 +119,14 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     client.release()
     await pool.end()
   }
+
+  // A signed contract with nothing left to pay (comped or $0) books the shoot immediately;
+  // otherwise the deposit payment books it. A calendar or revalidation hiccup must not undo the signature.
+  try {
+    await advanceShootForVault(vaultId)
+  } catch (error) {
+    console.error("[v0] advanceShootForVault failed after signing:", error)
+  }
+
+  return { success: true }
 }

@@ -21,6 +21,10 @@
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
     --color-ring: var(--ring);
+    --color-calendar-tentative: var(--calendar-tentative);
+    --color-calendar-confirmed: var(--calendar-confirmed);
+    --color-calendar-completed: var(--calendar-completed);
+    --color-calendar-foreground: var(--calendar-foreground);
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
@@ -81,6 +85,10 @@
     --sidebar-accent-foreground: #f4f4f5;
     --sidebar-border: rgba(39, 39, 42, 0.8);
     --sidebar-ring: #e829f1;
+    --calendar-tentative: #64748b;
+    --calendar-confirmed: #a855f7;
+    --calendar-completed: #1e293b;
+    --calendar-foreground: #f8fafc;
 }
 
 .dark {
@@ -127,40 +135,6 @@
   html {
     @apply font-sans;
     }
-}
-
-/* Konami-code easter egg: swaps electric purple for motorsport papaya orange. */
-.theme-papaya {
-  --background: #140d08;
-  --foreground: #fdf3e7;
-  --card: #1f140a;
-  --card-foreground: #fdf3e7;
-  --popover: #1f140a;
-  --popover-foreground: #fdf3e7;
-  --primary: #ff8000;
-  --primary-foreground: #140d08;
-  --secondary: #2b1c0e;
-  --secondary-foreground: #fdf3e7;
-  --muted: #1f140a;
-  --muted-foreground: #d9b48f;
-  --accent: #2b1c0e;
-  --accent-foreground: #fdf3e7;
-  --border: rgba(255, 128, 0, 0.25);
-  --input: rgba(255, 128, 0, 0.18);
-  --ring: #ff8000;
-  --chart-1: #ff8000;
-  --chart-2: #ffa733;
-  --chart-3: #d9b48f;
-  --chart-4: #8a5a2b;
-  --chart-5: #3a2712;
-  --sidebar: #1f140a;
-  --sidebar-foreground: #fdf3e7;
-  --sidebar-primary: #ff8000;
-  --sidebar-primary-foreground: #140d08;
-  --sidebar-accent: #2b1c0e;
-  --sidebar-accent-foreground: #fdf3e7;
-  --sidebar-border: rgba(255, 128, 0, 0.25);
-  --sidebar-ring: #ff8000;
 }
 
 /* Dark skin for the Puck editor chrome (sidebars, fields, header). Scoped so the canvas iframe is untouched. */
@@ -228,4 +202,10 @@
 
 .psv-fade-up {
   animation: psv-fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@theme {
+  --color-cal-tentative: #64748b;
+  --color-cal-confirmed: #a855f7;
+  --color-cal-completed: #1e293b;
 }

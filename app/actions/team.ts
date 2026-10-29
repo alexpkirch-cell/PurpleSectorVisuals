@@ -53,9 +53,9 @@ async function statsForMember(name: string): Promise<TeamMemberStats> {
     avg_turnaround_days: string | null
   }>`
     SELECT
-      COUNT(*) FILTER (WHERE status = 'fulfilled') AS shoots_completed,
-      COALESCE(SUM(final_amount) FILTER (WHERE status = 'fulfilled'), 0) AS revenue_generated,
-      AVG(EXTRACT(DAY FROM (shoot_date - created_at))) FILTER (WHERE status = 'fulfilled' AND shoot_date IS NOT NULL) AS avg_turnaround_days
+      COUNT(*) FILTER (WHERE status = 'delivered_settled') AS shoots_completed,
+      COALESCE(SUM(final_amount) FILTER (WHERE status = 'delivered_settled'), 0) AS revenue_generated,
+      AVG(EXTRACT(DAY FROM (shoot_date - created_at))) FILTER (WHERE status = 'delivered_settled' AND shoot_date IS NOT NULL) AS avg_turnaround_days
     FROM shoots
     WHERE assigned_shooter = ${name} OR assigned_editor = ${name}
   `

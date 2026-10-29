@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react"
 import { Check, Loader2 } from "lucide-react"
 import useSWR from "swr"
 
-import { listPortfolioItemsAdmin } from "@/app/actions/portfolio"
+import { listPortfolioItems } from "@/app/actions/portfolio"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 
@@ -16,7 +16,7 @@ type MediaPickerDialogProps = {
 
 export function MediaPickerDialog({ selectedUrl, onSelect, trigger }: MediaPickerDialogProps) {
   const [open, setOpen] = useState(false)
-  const { data, error, isLoading } = useSWR(open ? "portfolio-media-picker" : null, () => listPortfolioItemsAdmin(), {
+  const { data, error, isLoading } = useSWR(open ? "portfolio-media-picker" : null, () => listPortfolioItems(), {
     revalidateOnFocus: false,
   })
 
