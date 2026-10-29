@@ -3,6 +3,7 @@ import "server-only"
 import type Stripe from "stripe"
 
 import { sql } from "@/lib/db"
+import { advanceShootForVault } from "@/lib/shoot-booking"
 import { getStripeClient } from "@/lib/stripe"
 
 /**
@@ -48,6 +49,13 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
       WHERE stripe_customer_id IS NULL
         AND id IN (SELECT client_id FROM projects WHERE vault_id = ${vaultId})
     `
+  }
+
+  // Signed + retainer paid books the shoot. A calendar failure must not make the paid checkout look failed.
+  try {
+    await advanceShootForVault(vaultId)
+  } catch (error) {
+    console.error("[v0] advanceShootForVault failed after deposit:", error)
   }
 }
 

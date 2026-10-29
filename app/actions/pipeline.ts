@@ -78,8 +78,8 @@ export async function generateVaultAndSendLink(
     throw new Error("Shoot not found")
   }
 
-  if (shoot.status !== "new_inquiry" && shoot.status !== "quoted") {
-    throw new Error("Only New Inquiry or Quoted shoots can generate a vault from this action")
+  if (shoot.status !== "new_inquiry" && shoot.status !== "call_scheduled") {
+    throw new Error("Only New Inquiry or Call / In Discussion shoots can generate a vault from this action")
   }
 
   const shootDate = input.confirmedDate
@@ -97,7 +97,7 @@ export async function generateVaultAndSendLink(
       travel_fee = 0,
       assigned_shooter = ${input.assignedShooters.join(", ") || null},
       assigned_editor = ${input.assignedEditors.join(", ") || null},
-      status = 'awaiting_retainer'
+      status = 'awaiting_signature'
     WHERE id = ${id}
   `
 

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { MultiSelect } from "@/components/admin/multi-select"
+import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { listBookingAddons } from "@/app/actions/booking-config"
 import { listActivePackages } from "@/app/actions/packages"
@@ -28,6 +29,15 @@ import type { AssignedShooter } from "@/lib/settlement"
 import { cn } from "@/lib/utils"
 
 const CUSTOM_PACKAGE = "custom"
+
+const SHOOT_TYPES = [
+  { label: "Senior Portraits", categories: ["Portraits"] },
+  { label: "Automotive / Rollers", categories: ["Automotive"] },
+  { label: "Sports / Athletics", categories: ["Athletics"] },
+  { label: "Individual / Creative Portraits", categories: ["Portraits"] },
+  { label: "Events / Commercial", categories: ["Events", "Commercial"] },
+  { label: "Other / Custom", categories: [] as string[] },
+] as const
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -48,6 +58,9 @@ export function ManualBookingDialog({
     revalidateOnFocus: false,
   })
 
+  const [shootType, setShootType] = useState("")
+  const [location, setLocation] = useState("")
+  const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [packageId, setPackageId] = useState("")
   const [customPackageName, setCustomPackageName] = useState("")
   const [customPrice, setCustomPrice] = useState("")
@@ -58,6 +71,10 @@ export function ManualBookingDialog({
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("")
   const [isSaving, setIsSaving] = useState(false)
+
+  const suggestedCategories: readonly string[] = SHOOT_TYPES.find((type) => type.label === shootType)?.categories ?? []
+  const suggestedPackages = packages.filter((pkg) => suggestedCategories.includes(pkg.category))
+  const otherPackages = packages.filter((pkg) => !suggestedCategories.includes(pkg.category))
 
   const selectedPackage = packages.find((pkg) => pkg.id === packageId) ?? null
   const isCustom = packageId === CUSTOM_PACKAGE
@@ -91,6 +108,9 @@ export function ManualBookingDialog({
   const hasPricing = packageId !== "" && (packagePrice > 0 || selectedAddons.length > 0)
 
   function resetForm() {
+    setShootType("")
+    setLocation("")
+    setLocationMapsUrl(null)
     setPackageId("")
     setCustomPackageName("")
     setCustomPrice("")
@@ -114,14 +134,15 @@ export function ManualBookingDialog({
         clientName: text("clientName"),
         clientEmail: text("clientEmail"),
         clientPhone: text("clientPhone"),
-        shootType: text("shootType"),
+        shootType,
         selectedPackage: packageName,
         packagePrice,
         selectedAddons,
         discountType,
         discountValue: Number(discountValue) || 0,
         shootDate: text("shootDate") || undefined,
-        location: text("location"),
+        location,
+        locationMapsUrl: locationMapsUrl ?? undefined,
         assignedShooters: shooters,
         assignedEditors: editors,
         driverReimbursement: Number(driverReimbursement) || 0,
@@ -167,7 +188,26 @@ export function ManualBookingDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-shoot-type">Shoot type</Label>
-                <Input id="mb-shoot-type" name="shootType" required placeholder="Car meet, senior session..." />
+                <select
+                  id="mb-shoot-type"
+                  value={shootType}
+                  onChange={(e) => {
+                    setShootType(e.target.value)
+                    setPackageId("")
+                    setAddonNames([])
+                  }}
+                  required
+                  className={selectClass}
+                >
+                  <option value="" disabled>
+                    Select a shoot type
+                  </option>
+                  {SHOOT_TYPES.map((type) => (
+                    <option key={type.label} value={type.label}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-shoot-date">Tentative date</Label>
@@ -175,7 +215,15 @@ export function ManualBookingDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-location">Location</Label>
-                <Input id="mb-location" name="location" autoComplete="off" />
+                <LocationAutocomplete
+                  id="mb-location"
+                  value={location}
+                  onChange={(selection) => {
+                    setLocation(selection.location)
+                    setLocationMapsUrl(selection.mapsUrl)
+                  }}
+                  placeholder="Search a venue or address"
+                />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -199,11 +247,22 @@ export function ManualBookingDialog({
                   className={selectClass}
                 >
                   <option value="">Decide later</option>
-                  {packages.map((pkg) => (
-                    <option key={pkg.id} value={pkg.id}>
-                      {pkg.category} &middot; {pkg.title} ({formatCurrency(Number(pkg.base_price) || 0)})
-                    </option>
-                  ))}
+                  {suggestedPackages.length > 0 && (
+                    <optgroup label={`Suggested for ${shootType}`}>
+                      {suggestedPackages.map((pkg) => (
+                        <option key={pkg.id} value={pkg.id}>
+                          {pkg.title} ({formatCurrency(Number(pkg.base_price) || 0)})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label={suggestedPackages.length > 0 ? "All other packages" : "All packages"}>
+                    {otherPackages.map((pkg) => (
+                      <option key={pkg.id} value={pkg.id}>
+                        {pkg.category} &middot; {pkg.title} ({formatCurrency(Number(pkg.base_price) || 0)})
+                      </option>
+                    ))}
+                  </optgroup>
                   <option value={CUSTOM_PACKAGE}>Custom</option>
                 </select>
               </div>

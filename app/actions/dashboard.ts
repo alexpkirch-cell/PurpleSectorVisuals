@@ -55,7 +55,7 @@ export async function getExecutiveMetrics(): Promise<ExecutiveMetrics> {
     sql<{ total: string; fulfilled: string; booked: string }>`
         SELECT
           COUNT(*) AS total,
-          COUNT(*) FILTER (WHERE status = 'fulfilled') AS fulfilled,
+          COUNT(*) FILTER (WHERE status = 'delivered_settled') AS fulfilled,
           COUNT(*) FILTER (WHERE status NOT IN ('new_inquiry', 'declined')) AS booked
         FROM shoots
       `,

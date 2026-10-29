@@ -123,7 +123,7 @@ export async function getCrewMember(id: string): Promise<{
         WHERE date_part('year', COALESCE(shoot_date, created_at)) = date_part('year', now())
       ), 0) AS ytd_gross
     FROM shoots
-    WHERE status = 'fulfilled' AND assigned_shooter = ${member.name}
+    WHERE status = 'delivered_settled' AND assigned_shooter = ${member.name}
   `
 
   const sharePercent = shareFor(member.split_tier) * 100

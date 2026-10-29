@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   Baby,
+  CalendarPlus,
   Check,
   Copy,
+  ExternalLink,
   FileSignature,
   KeyRound,
   Mail,
+  MapPin,
   MoreVertical,
   Phone,
   RotateCcw,
@@ -36,6 +39,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
+import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
+import { mapsUrlFor } from "@/lib/maps"
 import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
@@ -111,6 +117,8 @@ export function ShootDetailSheet({
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("0")
   const [notes, setNotes] = useState("")
+  const [location, setLocation] = useState("")
+  const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
@@ -133,6 +141,8 @@ export function ShootDetailSheet({
       setEditors(editorsOf(shoot))
       setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
       setNotes(shoot.notes ?? "")
+      setLocation(shoot.location ?? "")
+      setLocationMapsUrl(shoot.location_maps_url)
     }
   }
 
@@ -166,10 +176,15 @@ export function ShootDetailSheet({
       const reimbursement = Math.max(0, Number(driverReimbursement) || 0)
       const price = Math.max(0, Number(totalPrice) || 0)
 
+      const trimmedLocation = location.trim()
+      const locationChanged = trimmedLocation !== (shoot.location ?? "")
       await updateShoot(shoot.id, {
         basePrice: price,
         travelFee: 0,
         notes: notes || null,
+        ...(locationChanged
+          ? { location: trimmedLocation || null, locationMapsUrl: locationMapsUrl ?? undefined }
+          : {}),
       })
       await updateShootTeam(shoot.id, {
         shooters: cleanShooters,
@@ -188,6 +203,12 @@ export function ShootDetailSheet({
         assigned_editor: cleanEditors.join(", ") || null,
         driver_reimbursement: String(reimbursement),
         notes: notes || null,
+        ...(locationChanged
+          ? {
+              location: trimmedLocation || null,
+              location_maps_url: trimmedLocation ? locationMapsUrl : null,
+            }
+          : {}),
       })
       toast.success("Shoot updated")
     } catch (error) {
@@ -202,8 +223,8 @@ export function ShootDetailSheet({
     setIsConfirmingLead(true)
     try {
       await updateShoot(shoot.id, { notes: notes || null })
-      await moveShootStage(shoot.id, "quoted")
-      onUpdated({ ...shoot, notes: notes || null, status: "quoted" })
+      await moveShootStage(shoot.id, "call_scheduled")
+      onUpdated({ ...shoot, notes: notes || null, status: "call_scheduled" })
       toast.success(`${shoot.client_name} confirmed — quote the shoot to generate their vault`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to confirm lead")
@@ -337,8 +358,46 @@ export function ShootDetailSheet({
                     <InfoRow label="Phone" value={shoot.client_phone ?? "Not provided"} />
                     <InfoRow label="Package selected" value={shoot.shoot_type} />
                     <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
-                    <InfoRow label="Location" value={shoot.location ?? "Not set"} />
                   </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="shoot-location">Location</Label>
+                      {mapsUrlFor(shoot) && (
+                        <a
+                          href={mapsUrlFor(shoot) ?? undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                        >
+                          <MapPin className="size-3" aria-hidden="true" />
+                          Open in Maps
+                          <ExternalLink className="size-3" aria-hidden="true" />
+                        </a>
+                      )}
+                    </div>
+                    <LocationAutocomplete
+                      id="shoot-location"
+                      value={location}
+                      onChange={(selection) => {
+                        setLocation(selection.location)
+                        setLocationMapsUrl(selection.mapsUrl)
+                      }}
+                      placeholder="Search a venue or address"
+                    />
+                  </div>
+
+                  {shoot.shoot_date && (
+                    <a
+                      href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
+                    >
+                      <CalendarPlus className="size-3.5" />
+                      Add to Google Calendar
+                    </a>
+                  )}
 
                   <div className="flex flex-col gap-2 rounded-md border border-border p-3">
                     <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">

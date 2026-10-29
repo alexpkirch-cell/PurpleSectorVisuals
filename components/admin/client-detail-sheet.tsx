@@ -61,8 +61,8 @@ function buildActivityFeed(shoot: Shoot): ActivityEntry[] {
   if (shoot.vault_balance_paid) {
     entries.push({ label: "Final balance paid", timestamp: shoot.created_at })
   }
-  if (shoot.status === "fulfilled") {
-    entries.push({ label: "Shoot fulfilled", timestamp: shoot.created_at })
+  if (shoot.status === "delivered_settled") {
+    entries.push({ label: "Delivered & settled", timestamp: shoot.created_at })
   }
 
   return entries

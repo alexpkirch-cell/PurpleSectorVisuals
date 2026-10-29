@@ -1,6 +1,12 @@
 import type { Shoot, ShootStatus } from "@/app/actions/shoots"
 
-export type StageId = "new_inquiry" | "call_set" | "booked" | "shoot_complete" | "vault_delivered"
+export type StageId =
+  | "new_inquiry"
+  | "call_scheduled"
+  | "awaiting_signature"
+  | "booked"
+  | "post_production"
+  | "delivered_settled"
 
 export interface PipelineStage {
   id: StageId
@@ -21,58 +27,57 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
     dropStatus: "new_inquiry",
   },
   {
-    id: "call_set",
-    label: "Call Set",
-    hint: "Quoted and awaiting retainer",
-    statuses: ["quoted", "awaiting_retainer"],
-    dropStatus: "quoted",
+    id: "call_scheduled",
+    label: "Call / In Discussion",
+    hint: "Discovery call or direct conversation",
+    statuses: ["call_scheduled"],
+    dropStatus: "call_scheduled",
+  },
+  {
+    id: "awaiting_signature",
+    label: "Awaiting Signature & Retainer",
+    hint: "Vault sent, pending signature and retainer",
+    statuses: ["awaiting_signature"],
+    dropStatus: "awaiting_signature",
   },
   {
     id: "booked",
     label: "Booked & Retainer Paid",
-    hint: "Locked on the calendar",
-    statuses: ["booked_scheduled"],
-    dropStatus: "booked_scheduled",
+    hint: "Signed, paid, and on the calendar",
+    statuses: ["booked_retainer_paid"],
+    dropStatus: "booked_retainer_paid",
   },
   {
-    id: "shoot_complete",
-    label: "Shoot Complete",
-    hint: "Editing and final balance",
-    statuses: ["in_post_production", "vault_locked", "pending_balance"],
-    dropStatus: "in_post_production",
+    id: "post_production",
+    label: "Post-Production / Editing",
+    hint: "Culling and color grading",
+    statuses: ["post_production"],
+    dropStatus: "post_production",
   },
   {
-    id: "vault_delivered",
-    label: "Vault Delivered",
-    hint: "Fulfilled and settled",
-    statuses: ["fulfilled"],
-    dropStatus: "fulfilled",
+    id: "delivered_settled",
+    label: "Delivered & Settled",
+    hint: "Gallery released, payouts recorded",
+    statuses: ["delivered_settled"],
+    dropStatus: "delivered_settled",
   },
 ]
 
 export const STATUS_LABELS: Record<ShootStatus, string> = {
   new_inquiry: "New Inquiry",
-  quoted: "Quoted",
-  awaiting_retainer: "Awaiting Retainer",
-  booked_scheduled: "Booked & Scheduled",
-  in_post_production: "In Post-Production",
-  vault_locked: "Vault Locked",
-  pending_balance: "Pending Balance",
-  fulfilled: "Fulfilled",
+  call_scheduled: "Call / In Discussion",
+  awaiting_signature: "Awaiting Signature & Retainer",
+  booked_retainer_paid: "Booked & Retainer Paid",
+  post_production: "Post-Production / Editing",
+  delivered_settled: "Delivered & Settled",
   declined: "Declined",
 }
 
-const CONFIRMED_STATUSES: readonly ShootStatus[] = [
-  "booked_scheduled",
-  "in_post_production",
-  "vault_locked",
-  "pending_balance",
-  "fulfilled",
-]
+const CONFIRMED_STATUSES: readonly ShootStatus[] = ["booked_retainer_paid", "post_production", "delivered_settled"]
 
-const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "quoted", "awaiting_retainer"]
+const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "call_scheduled", "awaiting_signature"]
 
-const CLOSED_STATUSES: readonly ShootStatus[] = ["fulfilled", "declined"]
+const CLOSED_STATUSES: readonly ShootStatus[] = ["delivered_settled", "declined"]
 
 export function stageForStatus(status: ShootStatus): PipelineStage | null {
   return PIPELINE_STAGES.find((stage) => stage.statuses.includes(status)) ?? null
@@ -113,7 +118,7 @@ export function computeKpis(shoots: readonly Shoot[], monthKey: string): Operati
   return {
     activeLeads: shoots.filter((shoot) => LEAD_STATUSES.includes(shoot.status)).length,
     confirmedThisMonth: confirmedThisMonth.length,
-    inPostProduction: shoots.filter((shoot) => shoot.status === "in_post_production").length,
+    inPostProduction: shoots.filter((shoot) => shoot.status === "post_production").length,
     invoicedThisMonth: confirmedThisMonth.reduce((sum, shoot) => sum + shootValue(shoot), 0),
   }
 }

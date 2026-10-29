@@ -3,6 +3,7 @@
 import { Pool } from "pg"
 
 import { buildContractBody } from "@/lib/contract-text"
+import { advanceShootForVault } from "@/lib/shoot-booking"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -110,7 +111,6 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     )
 
     await client.query("COMMIT")
-    return { success: true }
   } catch (error) {
     await client.query("ROLLBACK")
     console.error("[v0] submitContract failed:", error)
@@ -119,4 +119,14 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     client.release()
     await pool.end()
   }
+
+  // A signed contract with nothing left to pay (comped or $0) books the shoot immediately;
+  // otherwise the deposit payment books it. A calendar or revalidation hiccup must not undo the signature.
+  try {
+    await advanceShootForVault(vaultId)
+  } catch (error) {
+    console.error("[v0] advanceShootForVault failed after signing:", error)
+  }
+
+  return { success: true }
 }

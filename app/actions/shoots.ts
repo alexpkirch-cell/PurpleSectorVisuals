@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import { deleteGoogleCalendarEvent, syncShootToGoogleCalendar } from "@/lib/google-calendar"
+import { buildMapsUrl } from "@/lib/maps"
+import { finalizeBookedShoot } from "@/lib/shoot-booking"
 import { splitTotal } from "@/lib/payment-terms"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
 import { contractTotalOf, editorsOf, leadShooterName, shootersOf } from "@/lib/shoot-team"
@@ -13,13 +16,11 @@ import { generateLedgerForShoot } from "@/app/actions/ledger"
 
 export type ShootStatus =
   | "new_inquiry"
-  | "quoted"
-  | "awaiting_retainer"
-  | "booked_scheduled"
-  | "in_post_production"
-  | "vault_locked"
-  | "pending_balance"
-  | "fulfilled"
+  | "call_scheduled"
+  | "awaiting_signature"
+  | "booked_retainer_paid"
+  | "post_production"
+  | "delivered_settled"
   | "declined"
 
 export interface SettlementItem {
@@ -35,6 +36,9 @@ export interface Shoot {
   shoot_type: string
   shoot_date: string | null
   location: string | null
+  location_maps_url: string | null
+  google_calendar_event_id: string | null
+  client_signed_at: string | null
   preferred_shooter: string | null
   assigned_shooter: string | null
   assigned_editor: string | null
@@ -173,6 +177,7 @@ export async function createManualBooking(input: {
   discountValue: number
   shootDate?: string
   location?: string
+  locationMapsUrl?: string
   assignedShooters: AssignedShooter[]
   assignedEditors: string[]
   driverReimbursement?: number
@@ -188,6 +193,8 @@ export async function createManualBooking(input: {
   }
 
   const shootDate = input.shootDate ? `${input.shootDate}T12:00:00Z` : null
+  const location = input.location?.trim() || null
+  const locationMapsUrl = location ? input.locationMapsUrl?.trim() || buildMapsUrl(location) : null
   const shooters = input.assignedShooters.filter((s) => s.name.trim())
   const editors = input.assignedEditors.filter((name) => name.trim())
   const addons = input.selectedAddons.map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
@@ -210,7 +217,7 @@ export async function createManualBooking(input: {
 
   const { rows: inserted } = await sql<{ id: string }>`
     INSERT INTO shoots (
-      client_name, client_email, client_phone, shoot_type, shoot_date, location,
+      client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
       preferred_shooter, assigned_shooter, assigned_editor, notes, vault_access_code,
       selected_package, package_price, selected_addons, discount_type, discount_value,
       total_price, base_price, deposit_amount, balance_amount, is_comped, driver_reimbursement,
@@ -218,7 +225,7 @@ export async function createManualBooking(input: {
     )
     VALUES (
       ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
-      ${shootDate}, ${input.location?.trim() || null},
+      ${shootDate}, ${location}, ${locationMapsUrl},
       ${leadShooterName(shooters)}, ${leadShooterName(shooters)}, ${editors.join(", ") || null},
       ${input.notes?.trim() || null}, ${vaultAccessCode},
       ${input.selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
@@ -343,12 +350,20 @@ export async function updateShoot(
     assignedEditor: string | null
     isPaid: boolean
     notes: string | null
+    location: string | null
+    locationMapsUrl: string | null
   }>,
 ) {
   await requireAdmin()
 
+  const locationChanged = fields.location !== undefined
+  const location = fields.location?.trim() || null
+  const locationMapsUrl = location ? fields.locationMapsUrl?.trim() || buildMapsUrl(location) : null
+
   await sql`
     UPDATE shoots SET
+      location = CASE WHEN ${locationChanged}::boolean THEN ${location} ELSE location END,
+      location_maps_url = CASE WHEN ${locationChanged}::boolean THEN ${locationMapsUrl} ELSE location_maps_url END,
       base_price = COALESCE(${fields.basePrice ?? null}, base_price),
       total_price = COALESCE(${fields.basePrice ?? null}, total_price),
       travel_fee = COALESCE(${fields.travelFee ?? null}, travel_fee),
@@ -359,41 +374,29 @@ export async function updateShoot(
     WHERE id = ${id}
   `
 
+  if (locationChanged) await syncShootToGoogleCalendar(id)
+
   revalidatePath("/admin")
 }
 
 export async function moveShootStage(id: string, status: ShootStatus) {
   await requireAdmin()
 
-  if (status === "awaiting_retainer") {
-    throw new Error("Moving to Awaiting Retainer requires confirming the total quote and generating the vault")
+  if (status === "awaiting_signature") {
+    throw new Error("Moving to Awaiting Signature & Retainer requires confirming the total quote and generating the vault")
   }
 
-  if (status === "fulfilled") {
-    throw new Error("Moving to Fulfilled requires finalizing a settlement")
+  if (status === "delivered_settled") {
+    throw new Error("Moving to Delivered & Settled requires finalizing a settlement")
   }
 
   await sql`
     UPDATE shoots SET status = ${status} WHERE id = ${id}
   `
 
-  // Booked & Scheduled shoots should immediately reflect on the Studio Calendar
-  // so shooters/editors see the confirmed date without a manual calendar entry.
-  if (status === "booked_scheduled") {
-    const { rows } = await sql<{ client_name: string; shoot_date: string | null }>`
-      SELECT client_name, shoot_date FROM shoots WHERE id = ${id}
-    `
-    const shoot = rows[0]
-    if (shoot?.shoot_date) {
-      const day = new Date(shoot.shoot_date).toISOString().slice(0, 10)
-      await sql`
-        INSERT INTO calendar_blocks (start_date, end_date, type, label)
-        SELECT ${day}, ${day}, 'booking', ${shoot.client_name}
-        WHERE NOT EXISTS (
-          SELECT 1 FROM calendar_blocks WHERE start_date = ${day} AND type = 'booking' AND label = ${shoot.client_name}
-        )
-      `
-    }
+  // Booked shoots land on the Studio Calendar and the agency Google Calendar immediately.
+  if (status === "booked_retainer_paid") {
+    await finalizeBookedShoot(id)
   }
 
   revalidatePath("/admin")
@@ -496,7 +499,7 @@ export async function generateVaultAndAdvance(
 
   await sql`
     UPDATE shoots SET
-      status = 'awaiting_retainer',
+      status = 'awaiting_signature',
       base_price = ${totalQuote},
       total_price = ${totalQuote},
       is_comped = ${isComped},
@@ -561,7 +564,7 @@ export async function finalizeSettlement(
 
   await sql`
     UPDATE shoots SET
-      status = 'fulfilled',
+      status = 'delivered_settled',
       is_paid = true,
       base_price = ${settledBasePrice},
       travel_fee = ${settledTravelFee},
@@ -640,7 +643,7 @@ export async function finalizeBooking(
       travel_fee = 0,
       assigned_shooter = ${input.assignedShooters.join(", ") || null},
       assigned_editor = ${input.assignedEditors.join(", ") || null},
-      status = 'awaiting_retainer'
+      status = 'awaiting_signature'
     WHERE id = ${id}
   `
 
@@ -760,7 +763,12 @@ export async function updateShootTeam(
 export async function declineShoot(id: string) {
   await requireAdmin()
 
-  await sql`UPDATE shoots SET status = 'declined' WHERE id = ${id}`
+  const { rows } = await sql<{ google_calendar_event_id: string | null }>`
+    UPDATE shoots SET status = 'declined', google_calendar_event_id = NULL
+    WHERE id = ${id}
+    RETURNING (SELECT google_calendar_event_id FROM shoots WHERE id = ${id}) AS google_calendar_event_id
+  `
+  await deleteGoogleCalendarEvent(rows[0]?.google_calendar_event_id)
 
   revalidatePath("/admin")
 }
@@ -773,6 +781,11 @@ export async function declineShoot(id: string) {
  */
 export async function deleteShoot(id: string) {
   await requireAdmin()
+
+  const { rows } = await sql<{ google_calendar_event_id: string | null }>`
+    SELECT google_calendar_event_id FROM shoots WHERE id = ${id}
+  `
+  await deleteGoogleCalendarEvent(rows[0]?.google_calendar_event_id)
 
   await sql`UPDATE booking_requests SET shoot_id = NULL WHERE shoot_id = ${id}`
   await sql`DELETE FROM vaults WHERE shoot_id = ${id}`

@@ -84,8 +84,8 @@ export function OperationsDashboard({
 
   function handleMove(shoot: Shoot, stage: PipelineStage) {
     if (stageForStatus(shoot.status)?.id === stage.id) return
-    // Finishing a shoot requires an itemized settlement before it can be marked fulfilled.
-    if (stage.dropStatus === "fulfilled") {
+    // Finishing a shoot requires an itemized settlement before it can be marked delivered and settled.
+    if (stage.dropStatus === "delivered_settled") {
       setSettlingShoot(shoot)
       return
     }
