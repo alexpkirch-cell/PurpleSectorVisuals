@@ -60,6 +60,9 @@ export interface Shoot {
   vault_status: "Onboarding" | "Active" | "Expired" | null
   vault_contract_signed: boolean | null
   vault_deposit_paid: boolean | null
+  vault_must_have_shots: string | null
+  vault_mood_board_links: string | null
+  vault_prep_submitted_at: string | Date | null
   vault_deposit_amount: string | null
   vault_balance_paid: boolean | null
   vault_balance_amount: string | null
@@ -247,6 +250,9 @@ export async function createManualBooking(input: {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
@@ -277,6 +283,9 @@ export async function listShoots(): Promise<Shoot[]> {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
@@ -323,6 +332,9 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
@@ -535,6 +547,9 @@ export async function generateVaultAndAdvance(
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,
@@ -712,6 +727,9 @@ export async function finalizeBooking(
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
       v.balance_amount AS vault_balance_amount,

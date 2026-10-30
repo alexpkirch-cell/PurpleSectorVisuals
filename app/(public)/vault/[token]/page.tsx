@@ -6,9 +6,11 @@ import { getVaultGallery } from "@/app/actions/vault"
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
 import { BlooperReel } from "@/components/vault/blooper-reel"
 import { LockedGallery } from "@/components/vault/locked-gallery"
-import { OnboardingWizard } from "@/components/vault/onboarding-wizard"
+import { VaultPortal } from "@/components/vault/portal/vault-portal"
 import { VaultGallery } from "@/components/vault/vault-gallery"
+import { formatShootDate } from "@/lib/operations"
 import { createAdminClient } from "@/lib/supabase/server"
+import { isDeliveredStatus } from "@/lib/vault-progress"
 import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 export const metadata: Metadata = {
@@ -37,8 +39,15 @@ function isPin(token: string) {
   return /^\d{4,6}$/.test(token)
 }
 
-export default async function VaultTokenPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function VaultTokenPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ view?: string }>
+}) {
   const { token } = await params
+  const { view } = await searchParams
 
   if (!isPin(token)) {
     return <LegacyGalleryView galleryId={token} />
@@ -81,23 +90,37 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
     )
   }
 
-  if (vault.status === "Onboarding") {
+  const delivered = isDeliveredStatus(vault.shootStatus)
+  const balanceDue = vault.balanceAmount && vault.balanceAmount > 0 && !vault.balancePaid ? vault.balanceAmount : null
+
+  if (!(view === "gallery" && delivered)) {
     return (
       <VaultShell heading={`Welcome, ${vault.clientName}`}>
-        <OnboardingWizard
+        <VaultPortal
           vaultId={vault.id}
+          token={token}
           category={vault.category}
-          contractSigned={vault.contractSigned}
-          depositPaid={vault.depositPaid}
+          location={vault.location}
+          shootDateLabel={formatShootDate(vault.shootDate, true)}
           contractHtml={vault.contractHtml}
           invoice={vault.invoiceData}
           isComped={vault.isComped}
+          balanceDue={balanceDue}
+          mustHaveShots={vault.mustHaveShots}
+          moodBoardLinks={vault.moodBoardLinks}
+          prepSubmitted={vault.prepSubmittedAt !== null}
+          initialProgress={{
+            shootStatus: vault.shootStatus,
+            photoCount: vault.photoCount,
+            contractSigned: vault.contractSigned,
+            depositPaid: vault.depositPaid,
+          }}
         />
       </VaultShell>
     )
   }
 
-  // Active vault — reuse the existing gallery viewer, keyed by gallery_id.
+  // Delivered: the final gallery viewer, keyed by gallery_id.
   let photos: { id: string; file_name: string; storage_path: string; url: string | null; isFavorited: boolean }[] = []
 
   if (vault.galleryId) {

@@ -617,6 +617,28 @@ export function ShootDetailSheet({
                           {shoot.vault_balance_paid ? "paid" : "pending"}
                         </div>
                       </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Client prep notes</Label>
+                        {shoot.vault_prep_submitted_at ? (
+                          <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-xs">
+                            <div>
+                              <p className="font-medium text-foreground">Must-have shots</p>
+                              <p className="whitespace-pre-wrap text-muted-foreground">
+                                {shoot.vault_must_have_shots || "None provided"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">Mood board / inspiration</p>
+                              <p className="whitespace-pre-wrap break-words text-muted-foreground">
+                                {shoot.vault_mood_board_links || "None provided"}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Client has not submitted prep notes yet.</p>
+                        )}
+                      </div>
                     </div>
                   ) : (
                     <>

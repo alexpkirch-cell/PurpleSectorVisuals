@@ -37,6 +37,12 @@ export type VaultRecord = {
   contractHtml: string | null
   invoiceData: InvoiceData | null
   isComped: boolean
+  shootStatus: string | null
+  location: string | null
+  photoCount: number
+  mustHaveShots: string | null
+  moodBoardLinks: string | null
+  prepSubmittedAt: string | null
 }
 
 export async function activateVaultIfReady(vaultId: string) {
@@ -110,6 +116,10 @@ export async function lookupVaultByPin(
         b.first_name, b.last_name, b.subject,
         p.title as package_title,
         v.contract_html, v.invoice_data, COALESCE(s.is_comped, false) AS is_comped,
+        COALESCE(s.status, CASE WHEN v.status = 'Active' THEN 'delivered_settled' END) AS shoot_status,
+        s.location AS shoot_location,
+        v.must_have_shots, v.mood_board_links, v.prep_submitted_at,
+        (SELECT COUNT(*)::int FROM gallery_photos gp2 WHERE gp2.gallery_id = v.gallery_id) AS photo_count,
         (SELECT MIN(gp.created_at) FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) as delivered_at
        FROM vaults v
        LEFT JOIN shoots s ON s.id = v.shoot_id
@@ -161,6 +171,12 @@ export async function lookupVaultByPin(
         contractHtml: row.contract_html ?? null,
         invoiceData: row.invoice_data && Object.keys(row.invoice_data).length > 0 ? row.invoice_data : null,
         isComped: Boolean(row.is_comped),
+        shootStatus: row.shoot_status ?? null,
+        location: row.shoot_location ?? null,
+        photoCount: Number(row.photo_count) || 0,
+        mustHaveShots: row.must_have_shots ?? null,
+        moodBoardLinks: row.mood_board_links ?? null,
+        prepSubmittedAt: row.prep_submitted_at ? new Date(row.prep_submitted_at).toISOString() : null,
       },
     }
   } finally {
