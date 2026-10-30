@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 
 import { sql } from "@/lib/db"
 import { vaultCookieName } from "@/lib/vault"
+import { grantVaultSession } from "@/lib/vault-session"
 
 const VAULT_COOKIE_MAX_AGE = 60 * 60 * 24 // 24 hours
 
@@ -13,6 +14,44 @@ interface GalleryRow {
 }
 
 export type VaultAuthState = { error?: string }
+
+/**
+ * Client vault login: the booking email and the 6-digit PIN must both match the
+ * same vault. On success a signed session cookie is set and the client lands in
+ * their vault.
+ */
+export async function authenticateVaultWithEmailPin(
+  _prevState: VaultAuthState,
+  formData: FormData,
+): Promise<VaultAuthState> {
+  const email = String(formData.get("email") ?? "").trim()
+  const pin = String(formData.get("pin") ?? "").replace(/\s/g, "")
+
+  if (!email || !email.includes("@")) {
+    return { error: "Enter the email address on your booking." }
+  }
+  if (!/^\d{6}$/.test(pin)) {
+    return { error: "Your PIN is 6 digits." }
+  }
+
+  const { rows } = await sql<{ id: string }>`
+    SELECT v.id
+    FROM vaults v
+    LEFT JOIN shoots s ON s.id = v.shoot_id
+    LEFT JOIN booking_requests b ON b.id = v.booking_request_id
+    WHERE v.pin_code = ${pin}
+      AND (lower(s.client_email) = lower(${email}) OR lower(b.email) = lower(${email}))
+    LIMIT 1
+  `
+
+  const vault = rows[0]
+  if (!vault) {
+    return { error: "That email and PIN don't match a vault. Double-check and try again." }
+  }
+
+  await grantVaultSession(vault.id)
+  redirect(`/vault/${pin}`)
+}
 
 /**
  * Validates a client-entered access key against the real `galleries` table

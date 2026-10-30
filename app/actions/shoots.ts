@@ -12,6 +12,7 @@ import { contractTotalOf, editorsOf, leadShooterName, shootersOf } from "@/lib/s
 import type { AssignedShooter } from "@/lib/settlement"
 import { createClient } from "@/lib/supabase/server"
 import { buildContractHtml, buildInvoiceData } from "@/lib/vault-documents"
+import { allocateVaultPin } from "@/lib/vault-pin"
 import { generateLedgerForShoot } from "@/app/actions/ledger"
 
 export type ShootStatus =
@@ -379,11 +380,27 @@ export async function updateShoot(
   revalidatePath("/admin")
 }
 
-export async function moveShootStage(id: string, status: ShootStatus) {
+/**
+ * Moves a shoot to a new pipeline stage. Entering Awaiting Signature & Retainer
+ * automatically generates (or reuses) the client vault with its 6-digit PIN and
+ * returns the refreshed shoot so the board can show the PIN right away.
+ */
+export async function moveShootStage(id: string, status: ShootStatus): Promise<Shoot | null> {
   await requireAdmin()
 
   if (status === "awaiting_signature") {
-    throw new Error("Moving to Awaiting Signature & Retainer requires confirming the total quote and generating the vault")
+    const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
+    const shoot = rows[0]
+    if (!shoot) {
+      throw new Error("Shoot not found")
+    }
+
+    const total = contractTotalOf(shoot)
+    if (total <= 0 && !shoot.is_comped) {
+      throw new Error("Set the total price (or comp the shoot) before moving to Awaiting Signature & Retainer")
+    }
+
+    return generateVaultAndAdvance(id, { totalQuote: total, isComped: Boolean(shoot.is_comped) })
   }
 
   if (status === "delivered_settled") {
@@ -401,6 +418,7 @@ export async function moveShootStage(id: string, status: ShootStatus) {
 
   revalidatePath("/admin")
   revalidatePath("/admin/operations")
+  return null
 }
 
 /** Snapshots the invoice and pre-populated contract onto the shoot's vault from the current shoot data. */
@@ -485,12 +503,7 @@ export async function generateVaultAndAdvance(
       WHERE shoot_id = ${id}
     `
   } else {
-    let pinCode = ""
-    for (let attempt = 0; attempt < 5; attempt++) {
-      pinCode = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join("")
-      const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pinCode}`
-      if (rows.length === 0) break
-    }
+    const pinCode = await allocateVaultPin()
 
     await sql`
       INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
@@ -671,11 +684,7 @@ export async function finalizeBooking(
     const { rows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
     pinCode = rows[0].pin_code
   } else {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      pinCode = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join("")
-      const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pinCode}`
-      if (rows.length === 0) break
-    }
+    pinCode = await allocateVaultPin()
 
     await sql`
       INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)

@@ -5,19 +5,8 @@ import { revalidatePath } from "next/cache"
 import { sql } from "@/lib/db"
 import { splitTotal } from "@/lib/payment-terms"
 import { createClient } from "@/lib/supabase/server"
+import { allocateVaultPin } from "@/lib/vault-pin"
 import type { SettlementItem, Shoot } from "@/app/actions/shoots"
-
-// No ambiguous chars (0/O, 1/I/L) so a client typing the PIN off a screen or
-// printout can't confuse similar-looking characters.
-const PIN_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
-
-function generateAlphanumericPin(length = 6) {
-  let pin = ""
-  for (let i = 0; i < length; i++) {
-    pin += PIN_CHARS[Math.floor(Math.random() * PIN_CHARS.length)]
-  }
-  return pin
-}
 
 async function requireAdmin() {
   const supabase = await createClient()
@@ -56,8 +45,8 @@ export interface GenerateVaultAndSendLinkResult {
 /**
  * Pipeline automation behind the Client Detail Sheet's "Generate Vault &
  * Send Link" action. Persists the confirmed booking details, creates (or
- * refreshes) the shoot's vault with a secure random 6-character
- * alphanumeric PIN locked by default, and advances the shoot straight from
+ * refreshes) the shoot's vault with a secure random 6-digit
+ * PIN locked by default, and advances the shoot straight from
  * New Inquiry/Quoted into Awaiting Retainer. Retainer email + Stripe link
  * delivery is stubbed to a console log until email/Stripe delivery is wired
  * up.
@@ -107,16 +96,11 @@ export async function generateVaultAndSendLink(
     SELECT id FROM vaults WHERE shoot_id = ${id}
   `
 
-  let pinCode = generateAlphanumericPin()
+  let pinCode = ""
 
   if (existingVaultRows.length > 0) {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { rows } = await sql<{ id: string }>`
-        SELECT id FROM vaults WHERE pin_code = ${pinCode} AND shoot_id != ${id}
-      `
-      if (rows.length === 0) break
-      pinCode = generateAlphanumericPin()
-    }
+    const { rows: pinRows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
+    pinCode = /^\d{6}$/.test(pinRows[0]?.pin_code ?? "") ? pinRows[0].pin_code : await allocateVaultPin()
 
     await sql`
       UPDATE vaults SET
@@ -129,11 +113,7 @@ export async function generateVaultAndSendLink(
       WHERE shoot_id = ${id}
     `
   } else {
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pinCode}`
-      if (rows.length === 0) break
-      pinCode = generateAlphanumericPin()
-    }
+    pinCode = await allocateVaultPin()
 
     await sql`
       INSERT INTO vaults (

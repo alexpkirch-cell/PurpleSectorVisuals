@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Clock, KeyRound } from "lucide-react"
+import { Clock } from "lucide-react"
 
 import { getVaultGallery } from "@/app/actions/vault"
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
@@ -10,6 +9,7 @@ import { LockedGallery } from "@/components/vault/locked-gallery"
 import { OnboardingWizard } from "@/components/vault/onboarding-wizard"
 import { VaultGallery } from "@/components/vault/vault-gallery"
 import { createAdminClient } from "@/lib/supabase/server"
+import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 export const metadata: Metadata = {
   title: "Client Vault | Purple Sector Visuals",
@@ -46,20 +46,9 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
 
   const result = await lookupVaultByPin(token)
 
+  // Unknown PINs and unauthenticated visitors get the same redirect so PINs can't be probed via the URL.
   if (!result.found) {
-    return (
-      <VaultShell heading="Vault Not Found">
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 text-center">
-          <KeyRound className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            We couldn&apos;t find a vault with that PIN. Double-check the code your photographer sent you.
-          </p>
-          <Link href="/vault" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-            Back to Client Vault
-          </Link>
-        </div>
-      </VaultShell>
-    )
+    redirect("/vault")
   }
 
   if (result.secret) {
@@ -71,6 +60,12 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
   }
 
   const { vault } = result
+
+  // The PIN alone is never enough: the client must have signed in with their email + PIN.
+  const hasAccess = (await hasVaultSession(vault.id)) || (await isAdminViewer())
+  if (!hasAccess) {
+    redirect("/vault")
+  }
 
   if (vault.status === "Expired") {
     return (

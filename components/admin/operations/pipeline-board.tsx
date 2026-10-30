@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Calendar, Camera, MoreVertical, Package, Trash2, XCircle } from "lucide-react"
+import { Calendar, Camera, KeyRound, Link2, MoreVertical, Package, Trash2, XCircle } from "lucide-react"
+import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -22,6 +24,19 @@ import {
   type PipelineStage,
 } from "@/lib/operations"
 import { cn } from "@/lib/utils"
+
+function vaultLoginUrl() {
+  return `${window.location.origin}/vault`
+}
+
+async function copyToClipboard(text: string, successMessage: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success(successMessage)
+  } catch {
+    toast.error("Couldn't copy to the clipboard")
+  }
+}
 
 interface PipelineBoardProps {
   shoots: Shoot[]
@@ -130,6 +145,25 @@ export function PipelineBoard({ shoots, onMove, onOpen, onDecline, onDelete, onG
                             <MoreVertical className="size-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            {stage.id === "awaiting_signature" && shoot.vault_pin && (
+                              <>
+                                <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+                                  <span className="text-xs text-muted-foreground">Client vault PIN</span>
+                                  <span className="font-mono text-lg font-semibold tracking-[0.3em] text-foreground">
+                                    {shoot.vault_pin}
+                                  </span>
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => copyToClipboard(shoot.vault_pin ?? "", "PIN copied")}>
+                                  <KeyRound className="size-3.5" />
+                                  Copy PIN
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => copyToClipboard(vaultLoginUrl(), "Vault link copied")}>
+                                  <Link2 className="size-3.5" />
+                                  Copy Vault Link
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             {PIPELINE_STAGES.filter((s) => s.id !== stage.id).map((target) => (
                               <DropdownMenuItem key={target.id} onClick={() => onMove(shoot, target)}>
                                 Move to {target.label}

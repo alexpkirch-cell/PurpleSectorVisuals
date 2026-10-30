@@ -75,8 +75,14 @@ export function OperationsDashboard({
     const previous = shoots
     setShoots((current) => current.map((s) => (s.id === shoot.id ? { ...s, status: stage.dropStatus } : s)))
     try {
-      await moveShootStage(shoot.id, stage.dropStatus)
-    } catch (error) {
+  const updated = await moveShootStage(shoot.id, stage.dropStatus)
+  if (updated) {
+  replaceShoot(updated)
+  toast.success(`Vault ready. PIN ${updated.vault_pin}`, {
+  description: "Open the card menu to copy the vault link and PIN.",
+  })
+  }
+  } catch (error) {
       setShoots(previous)
       toast.error(error instanceof Error ? error.message : "Failed to move shoot")
     }
