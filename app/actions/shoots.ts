@@ -20,7 +20,8 @@ export type ShootStatus =
   | "in_discussion"
   | "awaiting_signature"
   | "booked_paid"
-  | "post_production"
+  | "culling"
+  | "color_grading"
   | "delivered_settled"
   | "declined"
 

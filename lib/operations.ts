@@ -5,7 +5,8 @@ export type StageId =
   | "in_discussion"
   | "awaiting_signature"
   | "booked"
-  | "post_production"
+  | "culling"
+  | "color_grading"
   | "delivered_settled"
 
 export interface PipelineStage {
@@ -48,11 +49,18 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
     dropStatus: "booked_paid",
   },
   {
-    id: "post_production",
-    label: "Post-Production / Editing",
-    hint: "Culling and color grading",
-    statuses: ["post_production"],
-    dropStatus: "post_production",
+    id: "culling",
+    label: "Culling",
+    hint: "Raw file selection",
+    statuses: ["culling"],
+    dropStatus: "culling",
+  },
+  {
+    id: "color_grading",
+    label: "Color Grading",
+    hint: "Lightroom / Photoshop editing",
+    statuses: ["color_grading"],
+    dropStatus: "color_grading",
   },
   {
     id: "delivered_settled",
@@ -68,12 +76,19 @@ export const STATUS_LABELS: Record<ShootStatus, string> = {
   in_discussion: "Quote & Documents",
   awaiting_signature: "Awaiting Signature & Retainer",
   booked_paid: "Booked & Paid",
-  post_production: "Post-Production / Editing",
+  culling: "Culling",
+  color_grading: "Color Grading",
   delivered_settled: "Delivered & Settled",
   declined: "Declined",
 }
 
-const CONFIRMED_STATUSES: readonly ShootStatus[] = ["booked_paid", "post_production", "delivered_settled"]
+const POST_PRODUCTION_STATUSES: readonly ShootStatus[] = ["culling", "color_grading"]
+
+const CONFIRMED_STATUSES: readonly ShootStatus[] = [
+  "booked_paid",
+  ...POST_PRODUCTION_STATUSES,
+  "delivered_settled",
+]
 
 const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "in_discussion", "awaiting_signature"]
 
@@ -118,7 +133,7 @@ export function computeKpis(shoots: readonly Shoot[], monthKey: string): Operati
   return {
     activeLeads: shoots.filter((shoot) => LEAD_STATUSES.includes(shoot.status)).length,
     confirmedThisMonth: confirmedThisMonth.length,
-    inPostProduction: shoots.filter((shoot) => shoot.status === "post_production").length,
+    inPostProduction: shoots.filter((shoot) => POST_PRODUCTION_STATUSES.includes(shoot.status)).length,
     invoicedThisMonth: confirmedThisMonth.reduce((sum, shoot) => sum + shootValue(shoot), 0),
   }
 }
