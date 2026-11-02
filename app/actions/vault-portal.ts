@@ -2,6 +2,7 @@
 
 import { Pool } from "pg"
 
+import { getConditionsFor, type ShootConditions } from "@/lib/shoot-conditions"
 import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 const MAX_FIELD_LENGTH = 2000
@@ -50,6 +51,31 @@ export async function getVaultProgress(vaultId: string): Promise<VaultProgress |
   } finally {
     await pool.end()
   }
+}
+
+/** Weather, golden hour and sunset for the shoot's saved location and date. */
+export async function getShootConditions(vaultId: string): Promise<ShootConditions | null> {
+  if (!(await canAccessVault(vaultId))) return null
+
+  const pool = getPool()
+  let location: string | null = null
+  let isoDate: string | null = null
+  try {
+    const result = await pool.query(
+      `SELECT s.location, COALESCE(v.shoot_date, s.shoot_date)::date::text AS shoot_date
+         FROM vaults v
+         LEFT JOIN shoots s ON s.id = v.shoot_id
+        WHERE v.id = $1`,
+      [vaultId]
+    )
+    if (result.rowCount === 0) return null
+    location = result.rows[0].location ?? null
+    isoDate = result.rows[0].shoot_date ?? null
+  } finally {
+    await pool.end()
+  }
+
+  return getConditionsFor(location, isoDate)
 }
 
 export async function submitPrepNotes(

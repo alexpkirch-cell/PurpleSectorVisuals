@@ -8,7 +8,11 @@ import { submitPrepNotes } from "@/app/actions/vault-portal"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ShootConditionsWidget } from "@/components/vault/portal/shoot-conditions-widget"
 import { prepGuideFor } from "@/lib/vault-prep-guides"
+
+const MINIMAL_FIELD =
+  "rounded-none border-0 border-b border-border bg-transparent px-0 shadow-none transition-colors focus-visible:border-primary focus-visible:ring-0 dark:bg-transparent"
 
 interface PrepTabProps {
   vaultId: string
@@ -54,6 +58,8 @@ export function PrepTab({
 
   return (
     <div className="flex flex-col gap-6">
+      <ShootConditionsWidget vaultId={vaultId} />
+
       <section aria-labelledby="location-heading" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -125,7 +131,7 @@ export function PrepTab({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="mustHaveShots" className="text-sm text-muted-foreground">
-            Must-have shots
+            Must-have shots <span className="text-muted-foreground/70">(Optional)</span>
           </Label>
           <Textarea
             id="mustHaveShots"
@@ -134,12 +140,13 @@ export function PrepTab({
             placeholder="e.g. Rolling shot on the canyon road, close-up of the wheels, group photo with the whole crew"
             rows={4}
             maxLength={2000}
+            className={MINIMAL_FIELD}
           />
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="moodBoardLinks" className="text-sm text-muted-foreground">
-            Mood board links
+            Mood board links <span className="text-muted-foreground/70">(Optional)</span>
           </Label>
           <Textarea
             id="moodBoardLinks"
@@ -148,6 +155,7 @@ export function PrepTab({
             placeholder="Paste Pinterest, Instagram or Google Drive links, one per line"
             rows={3}
             maxLength={2000}
+            className={MINIMAL_FIELD}
           />
         </div>
 

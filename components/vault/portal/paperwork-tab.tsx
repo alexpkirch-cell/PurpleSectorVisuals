@@ -12,9 +12,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DepositCheckout } from "@/components/vault/deposit-checkout"
-import { InvoiceSummary } from "@/components/vault/invoice-summary"
+import { PaperContract } from "@/components/vault/portal/paper-contract"
+import { PaperInvoice } from "@/components/vault/portal/paper-invoice"
 import { SignaturePad } from "@/components/vault/signature-pad"
-import { LIABILITY_RELEASE_TEXT, MINOR_ADDENDUM_TEXT } from "@/lib/contract-text"
 import type { InvoiceData } from "@/lib/vault-documents"
 
 interface PaperworkTabProps {
@@ -25,27 +25,6 @@ interface PaperworkTabProps {
   invoice: InvoiceData | null
   isComped: boolean
   onComplete: () => void
-}
-
-function ContractBody({ contractHtml, isMinor }: { contractHtml: string | null; isMinor: boolean }) {
-  if (contractHtml) {
-    return (
-      <div className="max-h-72 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed text-muted-foreground">
-        <div
-          className="[&_dd]:text-foreground [&_dl]:mb-4 [&_dl]:grid [&_dl]:gap-2 [&_dt]:text-xs [&_dt]:uppercase [&_h3]:mt-4 [&_h3]:font-medium [&_h3]:text-foreground [&_h4]:mt-4 [&_h4]:font-medium [&_h4]:text-foreground [&_p]:mt-2"
-          dangerouslySetInnerHTML={{ __html: contractHtml }}
-        />
-        {isMinor && <p className="mt-4 whitespace-pre-line">{MINOR_ADDENDUM_TEXT}</p>}
-      </div>
-    )
-  }
-
-  return (
-    <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-background p-4 text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
-      {LIABILITY_RELEASE_TEXT}
-      {isMinor && `\n\n${MINOR_ADDENDUM_TEXT}`}
-    </div>
-  )
 }
 
 export function PaperworkTab({
@@ -61,6 +40,7 @@ export function PaperworkTab({
   const [signed, setSigned] = useState(contractSigned)
   const [paid, setPaid] = useState(depositPaid || isComped)
   const [signature, setSignature] = useState("")
+  const [signedName, setSignedName] = useState<string | null>(null)
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [isMinor, setIsMinor] = useState(false)
   const [guardianName, setGuardianName] = useState("")
@@ -102,6 +82,7 @@ export function PaperworkTab({
     }
 
     setSigned(true)
+    setSignedName(signature.trim())
     // A $0 total has nothing to charge, so signing alone confirms the booking.
     if (isComped) {
       setPaid(true)
@@ -123,9 +104,9 @@ export function PaperworkTab({
   const fullyConfirmed = signed && paid
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       {fullyConfirmed && (
-        <div className="flex items-start gap-3 rounded-2xl border border-primary/40 bg-primary/10 p-5">
+        <div className="flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/10 p-5">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <div className="flex flex-col gap-1">
             <h2 className="font-heading text-base font-medium text-foreground">Your booking is confirmed</h2>
@@ -139,131 +120,123 @@ export function PaperworkTab({
         </div>
       )}
 
-      {invoice && (
-        <section aria-labelledby="invoice-heading" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
-          <h2 id="invoice-heading" className="font-heading text-base font-medium text-foreground">
-            Invoice
-          </h2>
-          <InvoiceSummary invoice={invoice} />
+      {invoice && <PaperInvoice vaultId={vaultId} invoice={invoice} depositPaid={paid && !isComped} />}
+
+      <PaperContract
+        vaultId={vaultId}
+        contractHtml={contractHtml}
+        isMinor={isMinor}
+        signed={signed}
+        signerName={signedName}
+      />
+
+      {!signed && (
+        <section aria-labelledby="sign-heading" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2 text-primary">
+            <FileSignature className="h-5 w-5" />
+            <h2 id="sign-heading" className="font-heading text-base font-medium text-foreground">
+              Sign this agreement
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5">
+            <Checkbox id="isMinor" checked={isMinor} onCheckedChange={(checked) => setIsMinor(checked === true)} />
+            <Label htmlFor="isMinor" className="cursor-pointer text-sm">
+              The subject of this session is under 18 years of age
+            </Label>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
+            <Checkbox
+              id="portfolioOptOut"
+              checked={portfolioOptOut}
+              onCheckedChange={(checked) => setPortfolioOptOut(checked === true)}
+              className="mt-0.5"
+            />
+            <Label htmlFor="portfolioOptOut" className="cursor-pointer text-sm leading-snug">
+              Opt out of portfolio &amp; marketing usage. Do not use my session images publicly.
+            </Label>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="signature" className="text-sm text-muted-foreground">
+              Type your full legal name to sign
+            </Label>
+            <Input
+              id="signature"
+              value={signature}
+              onChange={(e) => setSignature(e.target.value)}
+              placeholder="Jane Doe"
+              className="font-serif text-lg"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm text-muted-foreground">Draw your signature</Label>
+            <SignaturePad onChange={setSignatureImage} />
+          </div>
+
+          {isMinor && (
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+                Parent / Legal Guardian
+              </p>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianName" className="text-sm text-muted-foreground">
+                  Guardian full name
+                </Label>
+                <Input
+                  id="guardianName"
+                  value={guardianName}
+                  onChange={(e) => setGuardianName(e.target.value)}
+                  placeholder="Alex Doe"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianRelationship" className="text-sm text-muted-foreground">
+                  Relationship to minor
+                </Label>
+                <Input
+                  id="guardianRelationship"
+                  value={guardianRelationship}
+                  onChange={(e) => setGuardianRelationship(e.target.value)}
+                  placeholder="Parent"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="guardianSignature" className="text-sm text-muted-foreground">
+                  Type guardian&apos;s full legal name to countersign
+                </Label>
+                <Input
+                  id="guardianSignature"
+                  value={guardianSignature}
+                  onChange={(e) => setGuardianSignature(e.target.value)}
+                  placeholder="Alex Doe"
+                  className="font-serif text-lg"
+                />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          <Button onClick={handleSign} disabled={!canSign || signing} className="w-full">
+            {signing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : isComped ? (
+              "Sign & Confirm Booking"
+            ) : (
+              "Sign & Continue to Deposit"
+            )}
+          </Button>
         </section>
       )}
 
-      <section aria-labelledby="contract-heading" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
-        <div className="flex items-center gap-2 text-primary">
-          <FileSignature className="h-5 w-5" />
-          <h2 id="contract-heading" className="font-heading text-base font-medium text-foreground">
-            {signed ? "Signed Agreement" : "Session Agreement"}
-          </h2>
-        </div>
-
-        <ContractBody contractHtml={contractHtml} isMinor={isMinor} />
-
-        {signed ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 className="h-4 w-4 text-primary" />
-            You have signed this agreement.
-          </p>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5">
-              <Checkbox id="isMinor" checked={isMinor} onCheckedChange={(checked) => setIsMinor(checked === true)} />
-              <Label htmlFor="isMinor" className="cursor-pointer text-sm">
-                The subject of this session is under 18 years of age
-              </Label>
-            </div>
-
-            <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
-              <Checkbox
-                id="portfolioOptOut"
-                checked={portfolioOptOut}
-                onCheckedChange={(checked) => setPortfolioOptOut(checked === true)}
-                className="mt-0.5"
-              />
-              <Label htmlFor="portfolioOptOut" className="cursor-pointer text-sm leading-snug">
-                Opt out of portfolio &amp; marketing usage. Do not use my session images publicly.
-              </Label>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="signature" className="text-sm text-muted-foreground">
-                Type your full legal name to sign
-              </Label>
-              <Input
-                id="signature"
-                value={signature}
-                onChange={(e) => setSignature(e.target.value)}
-                placeholder="Jane Doe"
-                className="font-serif text-lg"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label className="text-sm text-muted-foreground">Draw your signature</Label>
-              <SignaturePad onChange={setSignatureImage} />
-            </div>
-
-            {isMinor && (
-              <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
-                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                  Parent / Legal Guardian
-                </p>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="guardianName" className="text-sm text-muted-foreground">
-                    Guardian full name
-                  </Label>
-                  <Input
-                    id="guardianName"
-                    value={guardianName}
-                    onChange={(e) => setGuardianName(e.target.value)}
-                    placeholder="Alex Doe"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="guardianRelationship" className="text-sm text-muted-foreground">
-                    Relationship to minor
-                  </Label>
-                  <Input
-                    id="guardianRelationship"
-                    value={guardianRelationship}
-                    onChange={(e) => setGuardianRelationship(e.target.value)}
-                    placeholder="Parent"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="guardianSignature" className="text-sm text-muted-foreground">
-                    Type guardian&apos;s full legal name to countersign
-                  </Label>
-                  <Input
-                    id="guardianSignature"
-                    value={guardianSignature}
-                    onChange={(e) => setGuardianSignature(e.target.value)}
-                    placeholder="Alex Doe"
-                    className="font-serif text-lg"
-                  />
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <Button onClick={handleSign} disabled={!canSign || signing} className="w-full">
-              {signing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isComped ? (
-                "Sign & Confirm Booking"
-              ) : (
-                "Sign & Continue to Deposit"
-              )}
-            </Button>
-          </>
-        )}
-      </section>
-
       {signed && !paid && (
-        <section aria-labelledby="deposit-heading" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+        <section aria-labelledby="deposit-heading" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-primary">
             <Wallet className="h-5 w-5" />
             <h2 id="deposit-heading" className="font-heading text-base font-medium text-foreground">

@@ -15,6 +15,10 @@ import type { InvoiceData } from "@/lib/vault-documents"
 
 const POLL_INTERVAL_MS = 8000
 
+// Flat underline tabs: muted when inactive, bright text with a purple underline when active, never a fill.
+const TAB_TRIGGER_CLASS =
+  "h-auto flex-1 flex-col gap-1 rounded-none px-2 pt-1 pb-3 text-muted-foreground hover:text-foreground data-active:text-foreground sm:flex-none sm:flex-row sm:gap-2 sm:px-1 after:bg-primary group-data-horizontal/tabs:after:bottom-[-1px] group-data-horizontal/tabs:after:h-0.5"
+
 interface VaultPortalProps {
   vaultId: string
   token: string
@@ -62,23 +66,27 @@ export function VaultPortal({
   const [tab, setTab] = useState<PortalTab>(delivered ? "delivery" : paperworkDone ? "tracker" : "paperwork")
 
   return (
-    <Tabs value={tab} onValueChange={(value) => setTab(value as PortalTab)} className="gap-6">
-      <TabsList className="grid h-auto w-full grid-cols-4">
-        <TabsTrigger value="paperwork" className="flex-col gap-1 py-2 sm:flex-row sm:gap-2">
+    <Tabs value={tab} onValueChange={(value) => setTab(value as PortalTab)} className="gap-8">
+      <TabsList
+        variant="line"
+        aria-label="Client vault sections"
+        className="h-auto w-full justify-start gap-0 rounded-none border-b border-border p-0 group-data-horizontal/tabs:h-auto sm:gap-4"
+      >
+        <TabsTrigger value="paperwork" className={TAB_TRIGGER_CLASS}>
           <FileText className="h-4 w-4" />
           <span className="text-xs sm:text-sm">Paperwork</span>
         </TabsTrigger>
-        <TabsTrigger value="prep" className="flex-col gap-1 py-2 sm:flex-row sm:gap-2">
+        <TabsTrigger value="prep" className={TAB_TRIGGER_CLASS}>
           <ClipboardList className="h-4 w-4" />
           <span className="text-xs sm:text-sm">
             Prep<span className="hidden sm:inline"> &amp; Planning</span>
           </span>
         </TabsTrigger>
-        <TabsTrigger value="tracker" className="flex-col gap-1 py-2 sm:flex-row sm:gap-2">
+        <TabsTrigger value="tracker" className={TAB_TRIGGER_CLASS}>
           <Route className="h-4 w-4" />
           <span className="text-xs sm:text-sm">Tracker</span>
         </TabsTrigger>
-        <TabsTrigger value="delivery" disabled={!delivered} className="flex-col gap-1 py-2 sm:flex-row sm:gap-2">
+        <TabsTrigger value="delivery" disabled={!delivered} className={TAB_TRIGGER_CLASS}>
           {delivered ? <PackageCheck className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
           <span className="text-xs sm:text-sm">
             <span className="hidden sm:inline">Final </span>Delivery

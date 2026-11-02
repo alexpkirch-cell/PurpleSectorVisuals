@@ -92,6 +92,9 @@ importers:
       stripe:
         specifier: ^22.6.2
         version: 22.6.2(@types/node@20.19.43)
+      suncalc:
+        specifier: ^2.1.1
+        version: 2.1.1
       swr:
         specifier: ^2.5.1
         version: 2.5.1(react@19.2.4)
@@ -3675,6 +3678,9 @@ packages:
         optional: true
       babel-plugin-macros:
         optional: true
+
+  suncalc@2.1.1:
+    resolution: {integrity: sha512-ufMOPzYRk5aomEs3g+qeJGdCPZWC3TL94E0HQagoSusFnNXCvfuewWBroY3lxRHqA7IA8UGvgg7dcrSSDJsuEg==}
 
   supercluster@8.0.1:
     resolution: {integrity: sha512-IiOea5kJ9iqzD2t7QJq/cREyLHTtSmUT6gQsweojg9WH2sYJqZK9SswTu6jrscO6D1G5v5vYZ9ru/eq85lXeZQ==}
@@ -7725,6 +7731,8 @@ snapshots:
       react: 19.2.4
     optionalDependencies:
       '@babel/core': 7.29.7
+
+  suncalc@2.1.1: {}
 
   supercluster@8.0.1:
     dependencies:
