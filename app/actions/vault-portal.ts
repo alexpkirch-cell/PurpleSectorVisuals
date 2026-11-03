@@ -22,6 +22,8 @@ export interface VaultProgress {
   photoCount: number
   contractSigned: boolean
   depositPaid: boolean
+  countersignature: string | null
+  countersignedAt: string | null
 }
 
 /** Live status for the portal tracker; polled so it follows the admin dragging the Kanban card. */
@@ -32,7 +34,7 @@ export async function getVaultProgress(vaultId: string): Promise<VaultProgress |
   try {
     const result = await pool.query(
       `SELECT COALESCE(s.status, CASE WHEN v.status = 'Active' THEN 'delivered_settled' END) AS shoot_status,
-              v.contract_signed, v.deposit_paid,
+              v.contract_signed, v.deposit_paid, v.countersignature, v.countersigned_at,
               (SELECT COUNT(*)::int FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) AS photo_count
          FROM vaults v
          LEFT JOIN shoots s ON s.id = v.shoot_id
@@ -47,6 +49,8 @@ export async function getVaultProgress(vaultId: string): Promise<VaultProgress |
       photoCount: Number(row.photo_count) || 0,
       contractSigned: Boolean(row.contract_signed),
       depositPaid: Boolean(row.deposit_paid),
+      countersignature: row.countersignature ?? null,
+      countersignedAt: row.countersigned_at ? new Date(row.countersigned_at).toISOString() : null,
     }
   } finally {
     await pool.end()

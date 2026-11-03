@@ -32,6 +32,8 @@ interface VaultPortalProps {
   mustHaveShots: string | null
   moodBoardLinks: string | null
   prepSubmitted: boolean
+  clientSignatureImage: string | null
+  clientSignedAt: string | null
   initialProgress: VaultProgress
 }
 
@@ -50,6 +52,8 @@ export function VaultPortal({
   mustHaveShots,
   moodBoardLinks,
   prepSubmitted,
+  clientSignatureImage,
+  clientSignedAt,
   initialProgress,
 }: VaultPortalProps) {
   // Polling keeps the tracker and the locked delivery tab in step with the admin's Kanban board.
@@ -103,6 +107,10 @@ export function VaultPortal({
           contractHtml={contractHtml}
           invoice={invoice}
           isComped={isComped}
+          clientSignatureImage={clientSignatureImage}
+          clientSignedAt={clientSignedAt}
+          countersignature={live.countersignature}
+          countersignedAt={live.countersignedAt}
           onComplete={() => setTab("prep")}
         />
       </TabsContent>

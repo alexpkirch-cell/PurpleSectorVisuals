@@ -24,6 +24,10 @@ interface PaperworkTabProps {
   contractHtml: string | null
   invoice: InvoiceData | null
   isComped: boolean
+  clientSignatureImage: string | null
+  clientSignedAt: string | null
+  countersignature: string | null
+  countersignedAt: string | null
   onComplete: () => void
 }
 
@@ -34,6 +38,10 @@ export function PaperworkTab({
   contractHtml,
   invoice,
   isComped,
+  clientSignatureImage,
+  clientSignedAt,
+  countersignature,
+  countersignedAt,
   onComplete,
 }: PaperworkTabProps) {
   const router = useRouter()
@@ -41,6 +49,7 @@ export function PaperworkTab({
   const [paid, setPaid] = useState(depositPaid || isComped)
   const [signature, setSignature] = useState("")
   const [signedName, setSignedName] = useState<string | null>(null)
+  const [signedAtNow, setSignedAtNow] = useState<string | null>(null)
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [isMinor, setIsMinor] = useState(false)
   const [guardianName, setGuardianName] = useState("")
@@ -83,6 +92,7 @@ export function PaperworkTab({
 
     setSigned(true)
     setSignedName(signature.trim())
+    setSignedAtNow(new Date().toISOString())
     // A $0 total has nothing to charge, so signing alone confirms the booking.
     if (isComped) {
       setPaid(true)
@@ -109,12 +119,16 @@ export function PaperworkTab({
         <div className="flex items-start gap-3 rounded-xl border border-primary/40 bg-primary/10 p-5">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
           <div className="flex flex-col gap-1">
-            <h2 className="font-heading text-base font-medium text-foreground">Your booking is confirmed</h2>
+            <h2 className="font-heading text-base font-medium text-foreground">
+              {countersignedAt ? "Your booking is confirmed" : "Signed. Awaiting countersignature"}
+            </h2>
             <p className="text-sm text-muted-foreground">
               {isComped
                 ? "Your agreement is signed and there is nothing to pay up front."
                 : "Your agreement is signed and your retainer has been received."}{" "}
-              Head to Prep &amp; Planning to get ready for the shoot.
+              {countersignedAt
+                ? "Head to Prep & Planning to get ready for the shoot."
+                : "Purple Sector Visuals will countersign shortly to finalize your booking. You can start on Prep & Planning in the meantime."}
             </p>
           </div>
         </div>
@@ -128,6 +142,10 @@ export function PaperworkTab({
         isMinor={isMinor}
         signed={signed}
         signerName={signedName}
+        signatureImage={clientSignatureImage ?? (signed ? signatureImage : null)}
+        signedAt={clientSignedAt ?? signedAtNow}
+        countersignature={countersignature}
+        countersignedAt={countersignedAt}
       />
 
       {!signed && (

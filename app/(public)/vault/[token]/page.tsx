@@ -109,11 +109,15 @@ export default async function VaultTokenPage({
           mustHaveShots={vault.mustHaveShots}
           moodBoardLinks={vault.moodBoardLinks}
           prepSubmitted={vault.prepSubmittedAt !== null}
+          clientSignatureImage={vault.clientSignatureImage}
+          clientSignedAt={vault.clientSignedAt}
           initialProgress={{
             shootStatus: vault.shootStatus,
             photoCount: vault.photoCount,
             contractSigned: vault.contractSigned,
             depositPaid: vault.depositPaid,
+            countersignature: vault.countersignature,
+            countersignedAt: vault.countersignedAt,
           }}
         />
       </VaultShell>

@@ -1,5 +1,6 @@
 "use server"
 
+import { headers } from "next/headers"
 import { Pool } from "pg"
 
 import { buildContractBody } from "@/lib/contract-text"
@@ -44,13 +45,22 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     }
   }
 
+  // ESIGN Act: the drawn signature is captured as a PNG data URL and stored with the record.
   const signatureImage = input.signatureImage ?? null
   if (
-    signatureImage &&
-    (!signatureImage.startsWith("data:image/png;base64,") || signatureImage.length > MAX_SIGNATURE_IMAGE_LENGTH)
+    !signatureImage ||
+    !signatureImage.startsWith("data:image/png;base64,") ||
+    signatureImage.length > MAX_SIGNATURE_IMAGE_LENGTH
   ) {
-    return { success: false, error: "That signature could not be read. Please clear it and sign again." }
+    return { success: false, error: "Please draw your signature in the box to continue." }
   }
+
+  const requestHeaders = await headers()
+  const signerIp =
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || null
+  const signerUserAgent = requestHeaders.get("user-agent")
+  // The server clock is the record of truth; a client-supplied time could be backdated.
+  const signedAt = new Date().toISOString()
 
   const pool = getPool()
   const client = await pool.connect()
@@ -58,15 +68,20 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     await client.query("BEGIN")
 
     const vault = await client.query(
-      `SELECT v.id, v.contract_html, COALESCE(s.is_comped, false) AS is_comped
+      `SELECT v.id, v.contract_html, v.contract_signed, COALESCE(s.is_comped, false) AS is_comped
        FROM vaults v
        LEFT JOIN shoots s ON s.id = v.shoot_id
-       WHERE v.id = $1`,
+       WHERE v.id = $1
+       FOR UPDATE OF v`,
       [vaultId]
     )
     if (vault.rowCount === 0) {
       await client.query("ROLLBACK")
       return { success: false, error: "Vault not found." }
+    }
+    if (vault.rows[0].contract_signed) {
+      await client.query("ROLLBACK")
+      return { success: false, error: "This agreement has already been signed." }
     }
 
     const isComped = Boolean(vault.rows[0].is_comped)
@@ -76,16 +91,18 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
       buildContractBody({ isMinor: input.isMinor, portfolioOptOut: input.portfolioOptOut })
 
     await client.query(
-      `INSERT INTO contracts (vault_id, contract_body, client_signature, signed_at)
-       VALUES ($1, $2, $3, now())`,
-      [vaultId, contractBody, signature]
+      `INSERT INTO contracts (vault_id, contract_body, client_signature, signed_at, signed_ip, signed_user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [vaultId, contractBody, signature, signedAt, signerIp, signerUserAgent]
     )
 
     await client.query(
       `UPDATE vaults SET
         contract_signed = true,
         client_signature = $9,
-        client_signed_at = now(),
+        client_signed_at = $11::timestamptz,
+        client_signed_ip = $12,
+        client_signed_user_agent = $13,
         requires_countersign = true,
         deposit_paid = CASE WHEN $10 THEN true ELSE deposit_paid END,
         is_minor = $2,
@@ -105,8 +122,11 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
         input.isMinor ? (input.guardianEmail?.trim() ?? null) : null,
         input.isMinor ? (input.guardianSignature?.trim() ?? null) : null,
         !input.portfolioOptOut,
-        signatureImage ?? signature,
+        signatureImage,
         isComped,
+        signedAt,
+        signerIp,
+        signerUserAgent,
       ]
     )
 

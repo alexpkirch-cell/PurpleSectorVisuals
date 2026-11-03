@@ -1,11 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { headers } from "next/headers"
 
 import { sql } from "@/lib/db"
 import { deleteGoogleCalendarEvent, syncShootToGoogleCalendar } from "@/lib/google-calendar"
 import { buildMapsUrl } from "@/lib/maps"
-import { finalizeBookedShoot } from "@/lib/shoot-booking"
+import { advanceShootForVault, finalizeBookedShoot } from "@/lib/shoot-booking"
 import { splitTotal } from "@/lib/payment-terms"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
 import { contractTotalOf, editorsOf, leadShooterName, shootersOf } from "@/lib/shoot-team"
@@ -85,6 +86,8 @@ export interface Shoot {
   vault_requires_countersign: boolean | null
   vault_client_signed_at: string | null
   vault_countersigned_at: string | null
+  vault_countersignature: string | null
+  vault_client_signed_ip: string | null
 }
 
 export interface ShootPhoto {
@@ -119,6 +122,12 @@ async function requireAdmin() {
 
   if (profile?.role !== "admin") {
     throw new Error("Not authorized")
+  }
+
+  const metadata = user.user_metadata as { full_name?: string; name?: string } | undefined
+  return {
+    email: user.email ?? null,
+    name: metadata?.full_name ?? metadata?.name ?? user.email ?? "Purple Sector Visuals",
   }
 }
 
@@ -265,7 +274,9 @@ export async function createManualBooking(input: {
       v.id AS vault_id,
       v.requires_countersign AS vault_requires_countersign,
       v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     WHERE s.id = ${inserted[0].id}
@@ -298,7 +309,9 @@ export async function listShoots(): Promise<Shoot[]> {
       v.id AS vault_id,
       v.requires_countersign AS vault_requires_countersign,
       v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     ORDER BY s.created_at DESC
@@ -307,23 +320,44 @@ export async function listShoots(): Promise<Shoot[]> {
   return rows
 }
 
+/**
+ * Applies the studio's digital countersignature to a client-signed agreement. This locks the
+ * contract permanently (a database trigger rejects later edits) and books the shoot, moving the
+ * card to Booked & Paid as long as the retainer is settled; a late payment books it instead.
+ */
 export async function countersignShoot(shootId: string): Promise<Shoot> {
-  await requireAdmin()
+  const admin = await requireAdmin()
+
+  const requestHeaders = await headers()
+  const adminIp =
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || null
+  const countersignedAt = new Date().toISOString()
 
   const { rows: updated } = await sql<{ id: string }>`
     UPDATE vaults SET
-      countersigned_at = now(),
+      countersignature = ${admin.name},
+      countersigned_by = ${admin.email},
+      countersigned_ip = ${adminIp},
+      countersigned_at = ${countersignedAt}::timestamptz,
       requires_countersign = false
     WHERE shoot_id = ${shootId}
       AND contract_signed = true
-      AND requires_countersign = true
+      AND countersigned_at IS NULL
     RETURNING id
   `
   if (updated.length === 0) {
-    throw new Error("Nothing to countersign: the client has not signed this agreement yet.")
+    throw new Error("Nothing to countersign: the client hasn't signed yet, or it was already countersigned.")
   }
 
+  try {
+    await advanceShootForVault(updated[0].id)
+  } catch (error) {
+    console.error("[v0] advanceShootForVault failed after countersign:", error)
+  }
+
+  revalidatePath("/admin")
   revalidatePath("/admin/operations")
+  revalidatePath("/admin/active-vaults")
 
   const { rows } = await sql<Shoot>`
     SELECT
@@ -347,7 +381,9 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
       v.id AS vault_id,
       v.requires_countersign AS vault_requires_countersign,
       v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     WHERE s.id = ${shootId}
@@ -502,9 +538,13 @@ export async function generateVaultAndAdvance(
     ? { deposit: 0, balance: 0 }
     : splitTotal(totalQuote)
 
-  const { rows: existingVaultRows } = await sql<{ id: string }>`
-    SELECT id FROM vaults WHERE shoot_id = ${id}
+  const { rows: existingVaultRows } = await sql<{ id: string; countersigned_at: string | null }>`
+    SELECT id, countersigned_at FROM vaults WHERE shoot_id = ${id}
   `
+
+  if (existingVaultRows[0]?.countersigned_at) {
+    throw new Error("This agreement is countersigned and locked, so its vault can't be regenerated.")
+  }
 
   if (existingVaultRows.length > 0) {
     await sql`
@@ -562,7 +602,9 @@ export async function generateVaultAndAdvance(
       v.id AS vault_id,
       v.requires_countersign AS vault_requires_countersign,
       v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     WHERE s.id = ${id}
@@ -742,7 +784,9 @@ export async function finalizeBooking(
       v.id AS vault_id,
       v.requires_countersign AS vault_requires_countersign,
       v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
     WHERE s.id = ${id}

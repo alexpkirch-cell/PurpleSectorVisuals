@@ -43,6 +43,10 @@ export type VaultRecord = {
   mustHaveShots: string | null
   moodBoardLinks: string | null
   prepSubmittedAt: string | null
+  clientSignatureImage: string | null
+  clientSignedAt: string | null
+  countersignature: string | null
+  countersignedAt: string | null
 }
 
 export async function activateVaultIfReady(vaultId: string) {
@@ -119,6 +123,7 @@ export async function lookupVaultByPin(
         COALESCE(s.status, CASE WHEN v.status = 'Active' THEN 'delivered_settled' END) AS shoot_status,
         s.location AS shoot_location,
         v.must_have_shots, v.mood_board_links, v.prep_submitted_at,
+        v.client_signature, v.client_signed_at, v.countersignature, v.countersigned_at,
         (SELECT COUNT(*)::int FROM gallery_photos gp2 WHERE gp2.gallery_id = v.gallery_id) AS photo_count,
         (SELECT MIN(gp.created_at) FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) as delivered_at
        FROM vaults v
@@ -177,6 +182,13 @@ export async function lookupVaultByPin(
         mustHaveShots: row.must_have_shots ?? null,
         moodBoardLinks: row.mood_board_links ?? null,
         prepSubmittedAt: row.prep_submitted_at ? new Date(row.prep_submitted_at).toISOString() : null,
+        clientSignatureImage:
+          typeof row.client_signature === "string" && row.client_signature.startsWith("data:image/png;base64,")
+            ? row.client_signature
+            : null,
+        clientSignedAt: row.client_signed_at ? new Date(row.client_signed_at).toISOString() : null,
+        countersignature: row.countersignature ?? null,
+        countersignedAt: row.countersigned_at ? new Date(row.countersigned_at).toISOString() : null,
       },
     }
   } finally {
