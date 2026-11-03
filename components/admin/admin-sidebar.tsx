@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   Briefcase,
   GalleryVerticalEnd,
-  Images,
   KeyRound,
   LayoutGrid,
   LogOut,
@@ -23,7 +22,6 @@ type NavLink = { href: string; label: string; icon: LucideIcon }
 
 const navLinks: NavLink[] = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
-  { href: "/admin/vaults", label: "Client Galleries", icon: Images },
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/site-editor", label: "Site Editor", icon: PanelsTopLeft },
   { href: "/admin/crew", label: "Crew & Roster", icon: UserRoundCheck },
