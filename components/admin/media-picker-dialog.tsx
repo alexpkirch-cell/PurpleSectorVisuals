@@ -69,7 +69,7 @@ export function MediaPickerDialog({ selectedUrl, onSelect, trigger }: MediaPicke
                         src={item.image_url}
                         alt={item.title || ""}
                         loading="lazy"
-                        className="size-full object-cover transition-transform group-hover:scale-105"
+                        className="size-full object-contain transition-transform group-hover:scale-105"
                       />
                       {selected ? (
                         <span className="absolute right-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">

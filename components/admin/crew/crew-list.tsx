@@ -42,7 +42,7 @@ export function CrewList({ initialMembers, archived = false }: { initialMembers:
           <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
             {member.profile_image_url ? (
               // eslint-disable-next-line @next/next/no-img-element -- admin preview of an uploaded public asset
-              <img src={member.profile_image_url} alt="" crossOrigin="anonymous" className="size-full object-cover" />
+              <img src={member.profile_image_url} alt="" crossOrigin="anonymous" className="size-full object-contain" />
             ) : (
               <User className="size-5" />
             )}

@@ -194,10 +194,10 @@ export function HighlightMediaUploader({
         {value.map((url, index) => (
           <li key={`${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted">
             {isVideoUrl(url) ? (
-              <video src={url} muted loop playsInline preload="metadata" className="size-full object-cover" aria-label={`Highlight video ${index + 1}`} />
+              <video src={url} muted loop playsInline preload="metadata" className="size-full object-contain" aria-label={`Highlight video ${index + 1}`} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={`Highlight ${index + 1}`} className="size-full object-cover" />
+              <img src={url} alt={`Highlight ${index + 1}`} className="size-full object-contain" />
             )}
             <button
               type="button"

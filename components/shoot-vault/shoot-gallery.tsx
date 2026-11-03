@@ -35,7 +35,7 @@ function PhotoSection({
               alt=""
               width={600}
               height={800}
-              className="h-auto w-full object-cover transition-opacity hover:opacity-90"
+              className="h-auto w-full object-contain transition-opacity hover:opacity-90"
               crossOrigin="anonymous"
             />
           </button>

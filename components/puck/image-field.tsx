@@ -78,7 +78,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       >
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={value} alt="" className="absolute inset-0 h-full w-full object-contain" />
         ) : (
           <button
             type="button"

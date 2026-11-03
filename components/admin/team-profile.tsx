@@ -125,7 +125,7 @@ function ProfileCard({
             alt={`Portrait of ${member.name}`}
             fill
             sizes="64px"
-            className="object-cover"
+            className="object-contain"
           />
           <button
             type="button"

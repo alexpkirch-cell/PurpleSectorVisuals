@@ -32,7 +32,7 @@ export function RosterGrid({ members }: { members: DirectoryMember[] }) {
                   fill
                   sizes="80px"
                   unoptimized
-                  className="object-cover object-top"
+                  className="object-contain"
                 />
               ) : (
                 <div className="flex size-full items-center justify-center text-muted-foreground">

@@ -47,6 +47,7 @@ import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
 import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
+import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
 import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
 import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
@@ -704,6 +705,8 @@ export function ShootDetailSheet({
                           <p className="text-xs text-muted-foreground">Client has not submitted prep notes yet.</p>
                         )}
                       </div>
+
+                      {shoot.vault_id && <VaultDeliveryUploader vaultId={shoot.vault_id} />}
                     </div>
                   ) : (
                     <>

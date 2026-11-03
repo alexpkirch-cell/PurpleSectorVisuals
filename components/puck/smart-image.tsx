@@ -4,7 +4,6 @@ import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox
 import { cn } from "@/lib/utils"
 
 export type ImageSizing = "auto" | "square" | "portrait" | "vertical" | "landscape" | "custom"
-export type ImageObjectFit = "cover" | "contain"
 
 export const DEFAULT_CUSTOM_HEIGHT = 480
 
@@ -43,7 +42,6 @@ type SmartImageProps = {
   src: string
   alt: string
   sizing: ImageSizing
-  objectFit?: ImageObjectFit
   customHeight?: number
   emptyLabel?: string
   className?: string
@@ -55,7 +53,6 @@ export function SmartImage({
   src,
   alt,
   sizing,
-  objectFit = "cover",
   customHeight = DEFAULT_CUSTOM_HEIGHT,
   emptyLabel,
   className,
@@ -101,7 +98,7 @@ export function SmartImage({
       <div className={outer}>
         <LightboxTrigger images={lightboxImages}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={src} alt={alt} className={cn("relative block h-auto w-full object-cover", frame, className)} />
+          <img src={src} alt={alt} className={cn("relative block h-auto w-full object-contain", frame, className)} />
         </LightboxTrigger>
       </div>
     )
@@ -114,7 +111,7 @@ export function SmartImage({
         className={cn(
           "relative",
           frame,
-          objectFit === "contain" && "bg-zinc-900",
+          "bg-zinc-900",
           sizing !== "custom" && ratioClass[sizing],
           className
         )}
@@ -126,7 +123,7 @@ export function SmartImage({
           fill
           sizes={isVertical ? "(max-width: 448px) 100vw, 448px" : "(max-width: 1152px) 100vw, 1152px"}
           unoptimized={needsUnoptimized(src)}
-          className={cn("h-full w-full", objectFit === "contain" ? "object-contain" : "object-cover")}
+          className="h-full w-full object-contain"
         />
       </div>
       </LightboxTrigger>

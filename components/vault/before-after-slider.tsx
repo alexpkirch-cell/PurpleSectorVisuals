@@ -54,7 +54,7 @@ export function BeforeAfterSlider({
       <img
         src={afterUrl}
         alt={`${fileName} — after`}
-        className="pointer-events-none size-full object-cover"
+        className="pointer-events-none size-full object-contain"
         crossOrigin="anonymous"
       />
       <div
@@ -65,7 +65,7 @@ export function BeforeAfterSlider({
         <img
           src={beforeUrl}
           alt={`${fileName} — before`}
-          className="size-full object-cover"
+          className="size-full object-contain"
           crossOrigin="anonymous"
         />
       </div>

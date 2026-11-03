@@ -293,7 +293,7 @@ function ImageBlock({
       >
         {row.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element -- admin preview of an uploaded public asset
-          <img src={row.image_url} alt={row.label} crossOrigin="anonymous" className="size-full object-cover" />
+          <img src={row.image_url} alt={row.label} crossOrigin="anonymous" className="size-full object-contain" />
         ) : (
           <span className="flex flex-col items-center gap-1 text-xs text-muted-foreground">
             <UploadCloud className="size-5" />

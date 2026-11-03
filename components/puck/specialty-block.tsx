@@ -40,9 +40,9 @@ export function SpecialtyBlock({ name, description, image, imageAlt }: Specialty
         }
       >
         {image ? (
-          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-3xl border border-zinc-800 shadow-2xl shadow-black/60">
+          <div className="w-full overflow-hidden rounded-3xl border border-zinc-800 shadow-2xl shadow-black/60">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image} alt={imageAlt} className="absolute inset-0 h-full w-full object-cover" />
+            <img src={image} alt={imageAlt} className="block h-auto w-full" />
           </div>
         ) : null}
         <div className="flex flex-col">

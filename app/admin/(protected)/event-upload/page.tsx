@@ -36,12 +36,12 @@ export default async function EventUploadPage() {
           No event photos have been processed yet.
         </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+        <ul className="columns-2 gap-3 md:columns-4 xl:columns-6">
           {rows.map((photo) => (
-            <li key={photo.id} className="flex flex-col gap-1.5">
-              <div className="relative aspect-[4/5] w-full overflow-hidden rounded-md border border-border bg-muted">
+            <li key={photo.id} className="mb-3 flex break-inside-avoid flex-col gap-1.5">
+              <div className="w-full overflow-hidden rounded-md border border-border bg-muted">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.image_url} alt="Event photo" className="absolute inset-0 size-full object-cover" />
+                <img src={photo.image_url} alt="Event photo" loading="lazy" className="block h-auto w-full" />
               </div>
               <span className="text-xs text-muted-foreground">
                 {photo.matched_face_ids?.length ?? 0} matched face

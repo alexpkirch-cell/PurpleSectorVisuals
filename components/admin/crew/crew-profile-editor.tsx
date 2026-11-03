@@ -108,7 +108,7 @@ export function CrewProfileEditor({ member, contractUrl }: { member: CrewMember;
         <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
           {profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- admin preview of an uploaded public asset
-            <img src={profileImageUrl} alt={member.name} crossOrigin="anonymous" className="size-full object-cover" />
+            <img src={profileImageUrl} alt={member.name} crossOrigin="anonymous" className="size-full object-contain" />
           ) : (
             <User className="size-7" />
           )}

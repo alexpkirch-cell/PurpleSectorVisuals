@@ -19,6 +19,8 @@ interface ImageSlotProps {
   /** Resolved image URL, if the caller has already looked it up. */
   imageUrl?: string | null
   imageAlt?: string
+  /** Size the slot to the photo's own proportions instead of filling a parent frame. */
+  natural?: boolean
 }
 
 export function ImageSlot({
@@ -32,9 +34,26 @@ export function ImageSlot({
   overrides,
   imageUrl,
   imageAlt,
+  natural = false,
 }: ImageSlotProps) {
   const resolvedUrl =
     imageUrl ?? (slotKey && overrides ? overrides[slotKey] : undefined)
+
+  if (resolvedUrl && natural) {
+    return (
+      <div className={cn("relative w-full overflow-hidden bg-[#121214]", className)}>
+        <Image
+          src={resolvedUrl}
+          alt={imageAlt ?? label ?? "Site asset"}
+          width={0}
+          height={0}
+          sizes="(max-width: 768px) 50vw, 33vw"
+          style={{ width: "100%", height: "auto" }}
+          className={cn("block", imageClassName)}
+        />
+      </div>
+    )
+  }
 
   if (resolvedUrl) {
     return (
@@ -44,7 +63,7 @@ export function ImageSlot({
           alt={imageAlt ?? label ?? "Site asset"}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
-          className={cn("h-full w-full object-cover", imageClassName)}
+          className={cn("h-full w-full object-contain", imageClassName)}
         />
       </div>
     )

@@ -136,7 +136,7 @@ function PreviewPane({
       <div className="relative flex flex-col gap-3 p-6">
         {image && (
           // eslint-disable-next-line @next/next/no-img-element -- preview mirrors uploaded site assets
-          <img src={image} alt="" className="mb-2 aspect-video w-full rounded-md object-cover" crossOrigin="anonymous" />
+          <img src={image} alt="" className="mb-2 aspect-video w-full rounded-md object-contain" crossOrigin="anonymous" />
         )}
         <p className="font-heading text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
           {eyebrow}
@@ -265,7 +265,7 @@ function SlotCard({
       >
         {currentUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- overridden assets are user uploads served from the public site-assets bucket
-          <img src={currentUrl} alt={label} className="size-full object-cover" crossOrigin="anonymous" />
+          <img src={currentUrl} alt={label} className="size-full object-contain" crossOrigin="anonymous" />
         ) : (
           <UploadCloud className="size-5 text-muted-foreground" />
         )}

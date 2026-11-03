@@ -151,21 +151,25 @@ export function DemoVaultBlock({
           <p className="max-w-xl text-sm text-zinc-400">{body}</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
           {photos.map((photo, index) => (
             <div
               key={index}
-              className="group relative aspect-[4/5] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900"
+              className="group relative mb-4 break-inside-avoid overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900"
             >
               {photo.src ? (
                 <Image
                   src={photo.src}
                   alt={`Sample delivered photo ${index + 1}`}
-                  fill
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  width={0}
+                  height={0}
+                  style={{ width: "100%", height: "auto" }}
+                  className="block transition-transform duration-300 group-hover:scale-105"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 />
-              ) : null}
+              ) : (
+                <div className="aspect-[4/5] w-full" />
+              )}
               <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
                 <Button size="icon" variant="secondary" aria-label={`Download photo ${index + 1}`}>
                   <Download />

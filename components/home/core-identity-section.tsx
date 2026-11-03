@@ -94,7 +94,7 @@ export function CoreIdentitySection({
                       <img
                         src={src}
                         alt={`Studio photo ${i + 1}`}
-                        className="size-full rounded-2xl border border-zinc-800 object-cover transition-transform duration-500 ease-out hover:scale-[1.03]"
+                        className="size-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
                       />
                     </LightboxTrigger>
                   ) : (

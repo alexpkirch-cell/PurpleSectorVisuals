@@ -73,7 +73,7 @@ export default async function CrewMemberPage({ params }: { params: Promise<{ id:
                   src={url}
                   alt={`${member.name} portfolio photo ${index + 1}`}
                   crossOrigin="anonymous"
-                  className="absolute inset-0 size-full object-cover"
+                  className="absolute inset-0 size-full object-contain"
                 />
               </li>
             ))}

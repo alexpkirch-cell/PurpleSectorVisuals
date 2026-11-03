@@ -25,7 +25,6 @@ import {
   DEFAULT_CUSTOM_HEIGHT,
   resolveImageSizing,
   SmartImage,
-  type ImageObjectFit,
   type ImageSizing,
 } from "@/components/puck/smart-image"
 import {
@@ -129,9 +128,8 @@ export type PuckComponents = {
     src: string
     alt: string
     caption: string
-    sizing: ImageSizing
-    objectFit: ImageObjectFit
-    customHeight: number
+  sizing: ImageSizing
+  customHeight: number
     /** Legacy field from before `sizing` existed; only read to keep old pages looking the same. */
     aspect?: "video" | "square" | "portrait"
   }
@@ -271,14 +269,6 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
             { label: "Custom Height", value: "custom" },
           ],
         },
-        objectFit: {
-          type: "select",
-          label: "Object fit",
-          options: [
-            { label: "Cover (fill and crop)", value: "cover" },
-            { label: "Contain (show whole image)", value: "contain" },
-          ],
-        },
         customHeight: { type: "number", label: "Custom height (px)", min: 120, max: 1600, step: 10 },
         ...photoInfoFields,
       },
@@ -286,21 +276,19 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         src: "",
         alt: "",
         caption: "",
-        sizing: "landscape",
-        objectFit: "cover",
+        sizing: "auto",
         customHeight: DEFAULT_CUSTOM_HEIGHT,
         ...emptyPhotoInfo(),
       },
       resolveFields: (data, { fields }) => {
-        const { objectFit, customHeight, ...base } = fields
+        const { customHeight, ...base } = fields
         const sizing = resolveImageSizing(data.props.sizing, data.props.aspect)
         return {
           ...base,
-          ...(sizing !== "auto" ? { objectFit } : {}),
           ...(sizing === "custom" ? { customHeight } : {}),
         } as typeof fields
       },
-      render: ({ src, alt, caption, sizing, objectFit, customHeight, aspect, puck, title, category, shooter, camera, lens, settings }) => (
+      render: ({ src, alt, caption, sizing, customHeight, aspect, puck, title, category, shooter, camera, lens, settings }) => (
         <section className="w-full bg-[#09090b]">
           <figure className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:px-10">
             <SmartImage
@@ -308,7 +296,6 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
               alt={alt}
               info={{ title, category, shooter, camera, lens, settings }}
               sizing={resolveImageSizing(sizing, aspect)}
-              objectFit={objectFit}
               customHeight={customHeight}
               emptyLabel={puck.isEditing ? "Select this block, then upload a picture in the right-hand panel." : undefined}
             />
