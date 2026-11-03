@@ -61,6 +61,7 @@ export function BatchUploader({
 
   const [files, setFiles] = useState<QueuedFile[]>([])
   const [photographer, setPhotographer] = useState(TEAM_OPTION)
+  const [editor, setEditor] = useState(TEAM_OPTION)
   const [title, setTitle] = useState("")
   const [categories, setCategories] = useState<string[]>([])
   const [progress, setProgress] = useState<Progress>({ phase: "idle", done: 0, total: 0 })
@@ -166,6 +167,7 @@ export function BatchUploader({
       const created = await createPortfolioBatch({
         imageUrls: uploaded.map((u) => u.url),
         photographer,
+        editedBy: editor,
         title,
         categories: selectedCategories,
       })
@@ -262,7 +264,7 @@ export function BatchUploader({
                 {files.map((queued) => (
                   <li key={queued.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/40">
                     {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview of a queued upload */}
-                    <img src={queued.previewUrl} alt="" className="size-10 shrink-0 rounded-md object-cover" />
+                    <img src={queued.previewUrl} alt="" className="size-10 shrink-0 rounded-md bg-muted object-contain" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{queued.file.name}</p>
                       <p className={cn("text-xs", queued.status === "failed" ? "text-destructive" : "text-muted-foreground")}>
@@ -297,6 +299,24 @@ export function BatchUploader({
             </Label>
             <Select value={photographer} onValueChange={(value) => value && setPhotographer(value)} disabled={uploading}>
               <SelectTrigger id="batch-photographer" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {photographerOptions.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="batch-editor" className="text-xs text-muted-foreground">
+              Editor
+            </Label>
+            <Select value={editor} onValueChange={(value) => value && setEditor(value)} disabled={uploading}>
+              <SelectTrigger id="batch-editor" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
