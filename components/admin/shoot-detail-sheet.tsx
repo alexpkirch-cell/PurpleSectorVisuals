@@ -11,9 +11,12 @@ import {
   KeyRound,
   Mail,
   MapPin,
+  Lock,
   MoreVertical,
+  PenLine,
   Phone,
   RotateCcw,
+  ShieldCheck,
   Trash2,
   Wallet,
   XCircle,
@@ -47,7 +50,7 @@ import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
 import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
-import { moveShootStage, updateShoot, updateShootTeam, type Shoot } from "@/app/actions/shoots"
+import { countersignShoot, moveShootStage, updateShoot, updateShootTeam, type Shoot } from "@/app/actions/shoots"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 
 function formatCurrency(value: number) {
@@ -121,6 +124,7 @@ export function ShootDetailSheet({
   const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
+  const [isCountersigning, setIsCountersigning] = useState(false)
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
 
   const calculatedTotal = useMemo(() => {
@@ -230,6 +234,24 @@ export function ShootDetailSheet({
       toast.error(error instanceof Error ? error.message : "Failed to confirm lead")
     } finally {
       setIsConfirmingLead(false)
+    }
+  }
+
+  async function handleCountersign() {
+    if (!shoot) return
+    setIsCountersigning(true)
+    try {
+      const updated = await countersignShoot(shoot.id)
+      onUpdated(updated)
+      toast.success(
+        updated.status === "booked_paid"
+          ? `Countersigned. ${shoot.client_name} is now Booked & Paid.`
+          : "Countersigned and locked. The card moves to Booked & Paid once the retainer is received."
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not countersign")
+    } finally {
+      setIsCountersigning(false)
     }
   }
 
@@ -583,15 +605,58 @@ export function ShootDetailSheet({
                       </div>
 
                       <div className="flex flex-col gap-1.5">
-                        <div
-                          className={
-                            "flex items-center gap-2 text-xs " +
-                            (shoot.vault_contract_signed ? "text-foreground" : "text-muted-foreground")
-                          }
-                        >
-                          <FileSignature className="size-3.5 shrink-0" />
-                          Service agreement {shoot.vault_contract_signed ? "signed" : "not yet signed"}
-                        </div>
+                        {shoot.vault_contract_signed ? (
+                          <div className="flex flex-col gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3">
+                            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                              <FileSignature className="size-3.5 shrink-0" />
+                              Client Signed
+                            </div>
+                            <p className="text-[0.65rem] text-muted-foreground">
+                              {shoot.vault_client_signed_at
+                                ? new Date(shoot.vault_client_signed_at).toLocaleString("en-US", {
+                                    dateStyle: "medium",
+                                    timeStyle: "short",
+                                  })
+                                : "Signed"}
+                              {shoot.vault_client_signed_ip ? ` \u00b7 IP ${shoot.vault_client_signed_ip}` : ""}
+                            </p>
+
+                            {shoot.vault_countersigned_at ? (
+                              <div className="flex items-start gap-2 rounded-md border border-border bg-background/60 p-2.5 text-xs">
+                                <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="flex items-center gap-1.5 font-medium text-foreground">
+                                    <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                                    Countersigned &amp; locked
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {shoot.vault_countersignature ? `${shoot.vault_countersignature} \u00b7 ` : ""}
+                                    {new Date(shoot.vault_countersigned_at).toLocaleString("en-US", {
+                                      dateStyle: "medium",
+                                      timeStyle: "short",
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={isCountersigning}
+                                onClick={handleCountersign}
+                                className="w-full"
+                              >
+                                <PenLine className="size-3.5" />
+                                {isCountersigning ? "Countersigning…" : "Countersign Agreement"}
+                              </Button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <FileSignature className="size-3.5 shrink-0" />
+                            Service agreement not yet signed
+                          </div>
+                        )}
                         <div
                           className={
                             "flex items-center gap-2 text-xs " +
@@ -616,6 +681,28 @@ export function ShootDetailSheet({
                           {" "}
                           {shoot.vault_balance_paid ? "paid" : "pending"}
                         </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Client prep notes</Label>
+                        {shoot.vault_prep_submitted_at ? (
+                          <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-xs">
+                            <div>
+                              <p className="font-medium text-foreground">Must-have shots</p>
+                              <p className="whitespace-pre-wrap text-muted-foreground">
+                                {shoot.vault_must_have_shots || "None provided"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">Mood board / inspiration</p>
+                              <p className="whitespace-pre-wrap break-words text-muted-foreground">
+                                {shoot.vault_mood_board_links || "None provided"}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">Client has not submitted prep notes yet.</p>
+                        )}
                       </div>
                     </div>
                   ) : (

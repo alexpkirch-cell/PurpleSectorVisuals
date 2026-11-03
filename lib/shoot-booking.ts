@@ -48,8 +48,9 @@ export async function advanceShootToBooked(shootId: string) {
 }
 
 /**
- * Books the shoot behind a vault once the client has signed and the retainer is settled
- * (paid, or nothing to pay because the shoot is comped or $0).
+ * Books the shoot behind a vault once the client has signed, the retainer is settled
+ * (paid, or nothing to pay because the shoot is comped or $0), and the studio has countersigned.
+ * Signing, paying and countersigning can happen in any order; whichever lands last books the shoot.
  */
 export async function advanceShootForVault(vaultId: string) {
   const { rows } = await sql<{ shoot_id: string | null; ready: boolean }>`
@@ -57,6 +58,7 @@ export async function advanceShootForVault(vaultId: string) {
       v.shoot_id,
       (
         v.contract_signed = true
+        AND v.countersigned_at IS NOT NULL
         AND (
           v.deposit_paid = true
           OR COALESCE(s.is_comped, false)

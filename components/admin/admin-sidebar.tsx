@@ -6,6 +6,7 @@ import {
   Briefcase,
   GalleryVerticalEnd,
   Images,
+  KeyRound,
   LayoutGrid,
   LogOut,
   Package,
@@ -22,12 +23,13 @@ type NavLink = { href: string; label: string; icon: LucideIcon }
 
 const navLinks: NavLink[] = [
   { href: "/admin", label: "Overview", icon: LayoutGrid },
-  { href: "/admin/vaults", label: "Vaults", icon: Images },
+  { href: "/admin/vaults", label: "Client Galleries", icon: Images },
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/site-editor", label: "Site Editor", icon: PanelsTopLeft },
   { href: "/admin/crew", label: "Crew & Roster", icon: UserRoundCheck },
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/operations", label: "Operations", icon: Briefcase },
+  { href: "/admin/active-vaults", label: "Active Vaults", icon: KeyRound },
 ]
 
 const eventLink: NavLink = { href: "/admin/event-upload", label: "Event Uploads", icon: ScanFace }

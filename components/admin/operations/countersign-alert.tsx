@@ -28,7 +28,11 @@ export function CountersignAlert({ shoots, onOpen, onCountersigned }: Countersig
     try {
       const updated = await countersignShoot(shoot.id)
       onCountersigned(updated)
-      toast.success(`Countersigned ${shoot.client_name}`)
+      toast.success(
+        updated.status === "booked_paid"
+          ? `Countersigned. ${shoot.client_name} is now Booked & Paid.`
+          : `Countersigned ${shoot.client_name}. Moves to Booked & Paid once the retainer is received.`
+      )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not countersign")
     } finally {

@@ -1,15 +1,17 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Clock, KeyRound } from "lucide-react"
+import { Clock } from "lucide-react"
 
 import { getVaultGallery } from "@/app/actions/vault"
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
 import { BlooperReel } from "@/components/vault/blooper-reel"
 import { LockedGallery } from "@/components/vault/locked-gallery"
-import { OnboardingWizard } from "@/components/vault/onboarding-wizard"
+import { VaultPortal } from "@/components/vault/portal/vault-portal"
 import { VaultGallery } from "@/components/vault/vault-gallery"
+import { formatShootDate } from "@/lib/operations"
 import { createAdminClient } from "@/lib/supabase/server"
+import { isDeliveredStatus } from "@/lib/vault-progress"
+import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 export const metadata: Metadata = {
   title: "Client Vault | Purple Sector Visuals",
@@ -37,8 +39,15 @@ function isPin(token: string) {
   return /^\d{4,6}$/.test(token)
 }
 
-export default async function VaultTokenPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function VaultTokenPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ view?: string }>
+}) {
   const { token } = await params
+  const { view } = await searchParams
 
   if (!isPin(token)) {
     return <LegacyGalleryView galleryId={token} />
@@ -46,20 +55,9 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
 
   const result = await lookupVaultByPin(token)
 
+  // Unknown PINs and unauthenticated visitors get the same redirect so PINs can't be probed via the URL.
   if (!result.found) {
-    return (
-      <VaultShell heading="Vault Not Found">
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card p-8 text-center">
-          <KeyRound className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            We couldn&apos;t find a vault with that PIN. Double-check the code your photographer sent you.
-          </p>
-          <Link href="/vault" className="text-sm font-medium text-primary underline-offset-4 hover:underline">
-            Back to Client Vault
-          </Link>
-        </div>
-      </VaultShell>
-    )
+    redirect("/vault")
   }
 
   if (result.secret) {
@@ -71,6 +69,12 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
   }
 
   const { vault } = result
+
+  // The PIN alone is never enough: the client must have signed in with their email + PIN.
+  const hasAccess = (await hasVaultSession(vault.id)) || (await isAdminViewer())
+  if (!hasAccess) {
+    redirect("/vault")
+  }
 
   if (vault.status === "Expired") {
     return (
@@ -86,23 +90,41 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
     )
   }
 
-  if (vault.status === "Onboarding") {
+  const delivered = isDeliveredStatus(vault.shootStatus)
+  const balanceDue = vault.balanceAmount && vault.balanceAmount > 0 && !vault.balancePaid ? vault.balanceAmount : null
+
+  if (!(view === "gallery" && delivered)) {
     return (
       <VaultShell heading={`Welcome, ${vault.clientName}`}>
-        <OnboardingWizard
+        <VaultPortal
           vaultId={vault.id}
+          token={token}
           category={vault.category}
-          contractSigned={vault.contractSigned}
-          depositPaid={vault.depositPaid}
+          location={vault.location}
+          shootDateLabel={formatShootDate(vault.shootDate, true)}
           contractHtml={vault.contractHtml}
           invoice={vault.invoiceData}
           isComped={vault.isComped}
+          balanceDue={balanceDue}
+          mustHaveShots={vault.mustHaveShots}
+          moodBoardLinks={vault.moodBoardLinks}
+          prepSubmitted={vault.prepSubmittedAt !== null}
+          clientSignatureImage={vault.clientSignatureImage}
+          clientSignedAt={vault.clientSignedAt}
+          initialProgress={{
+            shootStatus: vault.shootStatus,
+            photoCount: vault.photoCount,
+            contractSigned: vault.contractSigned,
+            depositPaid: vault.depositPaid,
+            countersignature: vault.countersignature,
+            countersignedAt: vault.countersignedAt,
+          }}
         />
       </VaultShell>
     )
   }
 
-  // Active vault — reuse the existing gallery viewer, keyed by gallery_id.
+  // Delivered: the final gallery viewer, keyed by gallery_id.
   let photos: { id: string; file_name: string; storage_path: string; url: string | null; isFavorited: boolean }[] = []
 
   if (vault.galleryId) {

@@ -24,7 +24,7 @@ export default async function VaultLandingPage() {
           </span>
           <h1 className="font-heading text-xl font-medium text-zinc-50">Client Vault</h1>
           <p className="text-sm text-zinc-400">
-            Enter your name and the access code from your booking confirmation to unlock your gallery.
+            Enter the email on your booking and the 6-digit PIN we sent you to unlock your vault.
           </p>
         </div>
         <VaultLoginForm />
