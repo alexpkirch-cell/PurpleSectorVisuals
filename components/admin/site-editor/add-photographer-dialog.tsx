@@ -5,6 +5,7 @@ import { Loader2, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { createPhotographer, type RosterContractor } from "@/app/actions/roster"
+import { ImageSourceButtons } from "@/components/admin/image-source-buttons"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -23,24 +24,33 @@ import { uploadPublicImage } from "@/lib/upload-public-image"
 export function AddPhotographerDialog({ onCreated }: { onCreated: (contractor: RosterContractor) => void }) {
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [profileFile, setProfileFile] = useState<File | null>(null)
+  const [profileUrl, setProfileUrl] = useState<string | null>(null)
+  const [portfolioFiles, setPortfolioFiles] = useState<File[]>([])
+  const [portfolioUrls, setPortfolioUrls] = useState<string[]>([])
+
+  function resetImages() {
+    setProfileFile(null)
+    setProfileUrl(null)
+    setPortfolioFiles([])
+    setPortfolioUrls([])
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
-    const profileFile = data.get("profile") as File | null
-    const portfolioFiles = (data.getAll("portfolio") as File[]).filter((f) => f.size > 0)
 
     setSubmitting(true)
     try {
       const folder = crypto.randomUUID()
-      const profileImageUrl =
-        profileFile && profileFile.size > 0
-          ? await uploadPublicImage(ROSTER_PORTFOLIOS_BUCKET, `${folder}/profile`, profileFile)
-          : null
-      const portfolioImageUrls = await Promise.all(
+      const profileImageUrl = profileFile
+        ? await uploadPublicImage(ROSTER_PORTFOLIOS_BUCKET, `${folder}/profile`, profileFile)
+        : profileUrl
+      const uploadedPortfolio = await Promise.all(
         portfolioFiles.map((file) => uploadPublicImage(ROSTER_PORTFOLIOS_BUCKET, `${folder}/portfolio`, file)),
       )
+      const portfolioImageUrls = [...portfolioUrls, ...uploadedPortfolio]
 
       const contractor = await createPhotographer({
         name: String(data.get("name") ?? ""),
@@ -52,6 +62,7 @@ export function AddPhotographerDialog({ onCreated }: { onCreated: (contractor: R
       onCreated({ ...contractor, portfolio_image_urls: contractor.portfolio_image_urls ?? [] })
       toast.success(`${contractor.name} added to the roster`)
       form.reset()
+      resetImages()
       setOpen(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not add photographer")
@@ -83,12 +94,36 @@ export function AddPhotographerDialog({ onCreated }: { onCreated: (contractor: R
             <Textarea id="photographer-bio" name="bio" rows={4} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="photographer-profile">Profile picture</Label>
-            <Input id="photographer-profile" name="profile" type="file" accept="image/*" />
+            <Label>Profile picture</Label>
+            <ImageSourceButtons
+              busy={submitting}
+              selectedUrl={profileUrl ?? undefined}
+              onFiles={(files) => {
+                setProfileFile(files[0] ?? null)
+                setProfileUrl(null)
+              }}
+              onSelect={(url) => {
+                setProfileUrl(url)
+                setProfileFile(null)
+              }}
+            />
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {profileFile ? profileFile.name : profileUrl ? "Using a photo from the gallery" : "No photo selected"}
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="photographer-portfolio">Portfolio images</Label>
-            <Input id="photographer-portfolio" name="portfolio" type="file" accept="image/*" multiple />
+            <Label>Portfolio images</Label>
+            <ImageSourceButtons
+              multiple
+              busy={submitting}
+              onFiles={(files) => setPortfolioFiles((current) => [...current, ...files])}
+              onSelectMany={(items) => setPortfolioUrls((current) => [...new Set([...current, ...items.map((i) => i.url)])])}
+            />
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {portfolioFiles.length + portfolioUrls.length === 0
+                ? "No portfolio images selected"
+                : `${portfolioFiles.length} to upload, ${portfolioUrls.length} from the gallery`}
+            </p>
           </div>
           <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="animate-spin" />}

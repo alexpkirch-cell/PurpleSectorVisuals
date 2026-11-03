@@ -116,6 +116,19 @@ export async function createPortfolioBatch(input: {
     RETURNING *
   `
 
+  // Every published photo also lives in the global media library; re-publishing an existing one only fills blanks.
+  await sql`
+    INSERT INTO media_library (bucket, storage_path, public_url, file_name, shooter, editor, categories, title)
+    SELECT ${PORTFOLIO_IMAGES_BUCKET}, substr(u.url, ${publicPrefix.length + 1}), u.url,
+           regexp_replace(substr(u.url, ${publicPrefix.length + 1}), '^.*/', ''),
+           ${photographer}::text, ${editor}::text, ${categories}::text[], ${title}::text
+    FROM unnest(${input.imageUrls}::text[]) AS u(url)
+    ON CONFLICT (bucket, storage_path) DO UPDATE SET
+      shooter = COALESCE(media_library.shooter, EXCLUDED.shooter),
+      editor = COALESCE(media_library.editor, EXCLUDED.editor),
+      categories = CASE WHEN cardinality(media_library.categories) = 0 THEN EXCLUDED.categories ELSE media_library.categories END
+  `
+
   revalidatePath("/admin/portfolio")
   revalidatePath("/work")
   revalidatePath("/")
@@ -164,6 +177,17 @@ export async function updatePortfolioItem(
     WHERE id = ${id}
   `
 
+  // Keep the library's filter metadata in step with edits made in the Portfolio CMS.
+  await sql`
+    UPDATE media_library
+    SET shooter = COALESCE(NULLIF(pi.shooter, ''), NULLIF(pi.shot_by, '')),
+        editor = NULLIF(pi.edited_by, ''),
+        categories = pi.categories,
+        title = COALESCE(pi.title, '')
+    FROM portfolio_items pi
+    WHERE pi.id = ${id} AND media_library.public_url = pi.image_url
+  `
+
   revalidatePath("/admin/portfolio")
   revalidatePath("/work")
   revalidatePath("/")
@@ -190,11 +214,23 @@ export async function reorderPortfolioItems(orderedIds: string[]): Promise<void>
 export async function deletePortfolioItem(id: string, storagePath: string | null): Promise<void> {
   await requireAdmin()
 
-  await sql`DELETE FROM portfolio_items WHERE id = ${id}`
+  const { rows: removed } = await sql<{ image_url: string }>`
+    DELETE FROM portfolio_items WHERE id = ${id} RETURNING image_url
+  `
 
-  if (storagePath) {
-    const supabase = await createClient()
-    await supabase.storage.from(PORTFOLIO_IMAGES_BUCKET).remove([storagePath])
+  // The same file can be shared by another portfolio entry or a client vault, so only delete it once nothing uses it.
+  if (storagePath && removed[0]) {
+    const { rows: usage } = await sql<{ uses: number }>`
+      SELECT (
+        (SELECT COUNT(*) FROM portfolio_items WHERE image_url = ${removed[0].image_url}) +
+        (SELECT COUNT(*) FROM vault_photos WHERE bucket = ${PORTFOLIO_IMAGES_BUCKET} AND storage_path = ${storagePath})
+      )::int AS uses
+    `
+    if ((usage[0]?.uses ?? 0) === 0) {
+      const supabase = await createClient()
+      await supabase.storage.from(PORTFOLIO_IMAGES_BUCKET).remove([storagePath])
+      await sql`DELETE FROM media_library WHERE bucket = ${PORTFOLIO_IMAGES_BUCKET} AND storage_path = ${storagePath}`
+    }
   }
 
   revalidatePath("/admin")

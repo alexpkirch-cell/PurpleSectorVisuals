@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   Baby,
   CalendarPlus,
@@ -98,10 +98,89 @@ function PaymentStatusPill({
   )
 }
 
+/** Turns pasted inspiration links into real links so the admin can open them. */
+function LinkifiedText({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </>
+  )
+}
+
+function PageTitle({ children }: { children: ReactNode }) {
+  return <h1 className="font-heading text-2xl font-medium text-foreground">{children}</h1>
+}
+
+function PageDescription({ children }: { children: ReactNode }) {
+  return <p className="mt-1 text-sm text-muted-foreground">{children}</p>
+}
+
+/** Tabs inside the slide-over sheet; side-by-side sections on the full-screen workspace page. */
+function PanelGroup({ isPage, children }: { isPage: boolean; children: ReactNode }) {
+  if (isPage) return <div className="grid items-start gap-6 xl:grid-cols-3">{children}</div>
+
+  return (
+    <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="finances">Finances</TabsTrigger>
+        <TabsTrigger value="vault">Vault</TabsTrigger>
+      </TabsList>
+      {children}
+    </Tabs>
+  )
+}
+
+function Panel({
+  isPage,
+  value,
+  title,
+  className,
+  children,
+}: {
+  isPage: boolean
+  value: string
+  title: string
+  className?: string
+  children: ReactNode
+}) {
+  if (!isPage) {
+    return (
+      <TabsContent value={value} className={className}>
+        {children}
+      </TabsContent>
+    )
+  }
+
+  return (
+    <section aria-labelledby={`workspace-${value}`} className={`${className ?? ""} rounded-xl border border-border bg-card p-5`}>
+      <h2 id={`workspace-${value}`} className="font-heading text-base font-medium text-foreground">
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
 export function ShootDetailSheet({
   shoot,
   bookingTiers,
   bookingAddons,
+  variant = "sheet",
   onOpenChange,
   onUpdated,
   onDeclined,
@@ -110,11 +189,18 @@ export function ShootDetailSheet({
   shoot: Shoot | null
   bookingTiers: BookingTier[]
   bookingAddons: BookingAddon[]
-  onOpenChange: (open: boolean) => void
+  /** "page" renders the same controls full width, without the slide-over sheet. */
+  variant?: "sheet" | "page"
+  onOpenChange?: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
   onDeclined?: (shoot: Shoot) => void
   onDeleteRequested?: (shoot: Shoot) => void
 }) {
+  const isPage = variant === "page"
+  const HeaderRoot = isPage ? "div" : SheetHeader
+  const Title = isPage ? PageTitle : SheetTitle
+  const Description = isPage ? PageDescription : SheetDescription
+
   const [totalPrice, setTotalPrice] = useState("0")
   const [priceTouched, setPriceTouched] = useState(false)
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
@@ -264,17 +350,14 @@ export function ShootDetailSheet({
 
   const isNewInquiry = shoot?.status === "new_inquiry"
 
-  return (
-    <Sheet open={!!shoot} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-6 overflow-y-auto sm:max-w-lg">
-        {shoot && (
+  const content = shoot && (
           <>
-            <SheetHeader className="flex-row items-start justify-between gap-2 pr-10">
+            <HeaderRoot className="flex flex-row items-start justify-between gap-2 pr-10">
               <div>
-                <SheetTitle>{shoot.client_name}</SheetTitle>
-                <SheetDescription>
+                <Title>{shoot.client_name}</Title>
+                <Description>
                   {shoot.shoot_type} &middot; {shoot.client_email}
-                </SheetDescription>
+                </Description>
               </div>
               {(onDeclined || onDeleteRequested) && shoot.status !== "declined" && (
                 <DropdownMenu>
@@ -305,7 +388,7 @@ export function ShootDetailSheet({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-            </SheetHeader>
+            </HeaderRoot>
 
             {isNewInquiry ? (
               <div className="flex flex-col gap-4 px-4">
@@ -367,14 +450,8 @@ export function ShootDetailSheet({
                 </Button>
               </div>
             ) : (
-              <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="finances">Finances</TabsTrigger>
-                  <TabsTrigger value="vault">Vault</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="flex flex-col gap-4">
+              <PanelGroup isPage={isPage}>
+                <Panel isPage={isPage} value="overview" title="Overview" className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <InfoRow label="Full name" value={shoot.client_name} />
                     <InfoRow label="Email" value={shoot.client_email} />
@@ -457,9 +534,9 @@ export function ShootDetailSheet({
                   <Button type="button" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? "Saving…" : "Save changes"}
                   </Button>
-                </TabsContent>
+                </Panel>
 
-                <TabsContent value="finances" className="flex flex-col gap-4">
+                <Panel isPage={isPage} value="finances" title="Finances and splits" className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="totalPrice">Total Contract Price</Label>
@@ -549,9 +626,9 @@ export function ShootDetailSheet({
                   <Button type="button" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? "Saving…" : "Save changes"}
                   </Button>
-                </TabsContent>
+                </Panel>
 
-                <TabsContent value="vault" className="flex flex-col gap-4">
+                <Panel isPage={isPage} value="vault" title="Vault, prep and delivery" className="flex flex-col gap-4">
                   {shoot.vault_pin ? (
                     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
                       <div className="flex items-center justify-between">
@@ -697,7 +774,11 @@ export function ShootDetailSheet({
                             <div>
                               <p className="font-medium text-foreground">Mood board / inspiration</p>
                               <p className="whitespace-pre-wrap break-words text-muted-foreground">
-                                {shoot.vault_mood_board_links || "None provided"}
+                                {shoot.vault_mood_board_links ? (
+                                  <LinkifiedText text={shoot.vault_mood_board_links} />
+                                ) : (
+                                  "None provided"
+                                )}
                               </p>
                             </div>
                           </div>
@@ -748,12 +829,17 @@ export function ShootDetailSheet({
                       </p>
                     </>
                   )}
-                </TabsContent>
-              </Tabs>
+                </Panel>
+              </PanelGroup>
             )}
           </>
-        )}
-      </SheetContent>
+  )
+
+  if (isPage) return <div className="flex flex-col gap-6">{content}</div>
+
+  return (
+    <Sheet open={!!shoot} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full flex-col gap-6 overflow-y-auto sm:max-w-lg">{content}</SheetContent>
     </Sheet>
   )
 }

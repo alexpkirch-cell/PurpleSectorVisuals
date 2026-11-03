@@ -7,9 +7,10 @@ import { requireAdmin } from "@/lib/require-admin"
 import { createAdminClient } from "@/lib/supabase/server"
 import { canViewDelivery } from "@/lib/vault-delivery"
 import { VAULT_PHOTOS_BUCKET } from "@/lib/vault-photo-storage"
+import { signStoragePaths } from "@/lib/vault-photo-signing"
 
-const SIGNED_URL_TTL_SECONDS = 60 * 60
 const MAX_FILE_NAME_LENGTH = 255
+const MAX_TITLE_LENGTH = 200
 
 export interface VaultPhotoView {
   id: string
@@ -25,6 +26,7 @@ export interface VaultPhotoView {
 
 interface VaultPhotoRow {
   id: string
+  bucket: string
   storage_path: string
   thumb_path: string | null
   file_name: string
@@ -36,13 +38,12 @@ interface VaultPhotoRow {
 async function toPhotoViews(rows: VaultPhotoRow[]): Promise<VaultPhotoView[]> {
   if (rows.length === 0) return []
 
-  const storage = createAdminClient().storage.from(VAULT_PHOTOS_BUCKET)
-  const displayPaths = rows.map((row) => row.thumb_path ?? row.storage_path)
-  const originalPaths = rows.map((row) => row.storage_path)
-
   const [display, originals] = await Promise.all([
-    storage.createSignedUrls(displayPaths, SIGNED_URL_TTL_SECONDS),
-    storage.createSignedUrls(originalPaths, SIGNED_URL_TTL_SECONDS, { download: true }),
+    signStoragePaths(rows.map((row) => ({ bucket: row.bucket, path: row.thumb_path ?? row.storage_path }))),
+    signStoragePaths(
+      rows.map((row) => ({ bucket: row.bucket, path: row.storage_path })),
+      { download: true }
+    ),
   ])
 
   return rows.map((row, index) => ({
@@ -51,14 +52,14 @@ async function toPhotoViews(rows: VaultPhotoRow[]): Promise<VaultPhotoView[]> {
     width: row.width,
     height: row.height,
     sizeBytes: row.size_bytes === null ? null : Number(row.size_bytes),
-    thumbUrl: display.data?.[index]?.signedUrl ?? null,
-    downloadUrl: originals.data?.[index]?.signedUrl ?? null,
+    thumbUrl: display[index],
+    downloadUrl: originals[index],
   }))
 }
 
 async function selectVaultPhotos(vaultId: string) {
   const { rows } = await sql<VaultPhotoRow>`
-    SELECT id, storage_path, thumb_path, file_name, width, height, size_bytes
+    SELECT id, bucket, storage_path, thumb_path, file_name, width, height, size_bytes
     FROM vault_photos
     WHERE vault_id = ${vaultId}
     ORDER BY created_at ASC, file_name ASC
@@ -72,7 +73,11 @@ export async function listVaultPhotosAdmin(vaultId: string): Promise<VaultPhotoV
   return toPhotoViews(await selectVaultPhotos(vaultId))
 }
 
-/** Records a photo that was already uploaded straight to storage by the admin's browser. */
+/**
+ * Records a photo that was already uploaded straight to the private bucket by the admin's browser,
+ * and files it in the global media library so it can be found later. Optional metadata (who shot and
+ * edited it, categories) feeds the library filters.
+ */
 export async function recordVaultPhoto(
   vaultId: string,
   input: {
@@ -83,6 +88,10 @@ export async function recordVaultPhoto(
     sizeBytes: number
     width: number | null
     height: number | null
+    shooter?: string | null
+    editor?: string | null
+    categories?: string[]
+    title?: string
   }
 ): Promise<void> {
   await requireAdmin()
@@ -93,29 +102,71 @@ export async function recordVaultPhoto(
   }
 
   const fileName = input.fileName.trim().slice(0, MAX_FILE_NAME_LENGTH) || "photo"
+  const shooter = input.shooter?.trim() || null
+  const editor = input.editor?.trim() || null
+  const categories = [...new Set(input.categories ?? [])]
+  const title = (input.title ?? "").trim().slice(0, MAX_TITLE_LENGTH)
 
   await sql`
-    INSERT INTO vault_photos (vault_id, storage_path, thumb_path, file_name, content_type, size_bytes, width, height)
+    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height)
     VALUES (
-      ${vaultId}, ${input.storagePath}, ${input.thumbPath}, ${fileName}, ${input.contentType},
+      ${vaultId}, ${VAULT_PHOTOS_BUCKET}, ${input.storagePath}, ${input.thumbPath}, ${fileName}, ${input.contentType},
       ${input.sizeBytes}, ${input.width}, ${input.height}
     )
+  `
+
+  // public_url stays null: the library lists only public files, so client photos never reach the public site.
+  await sql`
+    INSERT INTO media_library (
+      bucket, storage_path, public_url, file_name, content_type, size_bytes, width, height,
+      shooter, editor, categories, title, vault_id
+    )
+    VALUES (
+      ${VAULT_PHOTOS_BUCKET}, ${input.storagePath}, NULL, ${fileName}, ${input.contentType}, ${input.sizeBytes},
+      ${input.width}, ${input.height}, ${shooter}, ${editor}, ${categories}::text[], ${title}, ${vaultId}
+    )
+    ON CONFLICT (bucket, storage_path) DO NOTHING
   `
 
   revalidatePath("/admin/operations")
 }
 
+/** Attaches photos that already exist in the media library to a vault without copying the files. */
+export async function attachMediaToVault(vaultId: string, mediaIds: string[]): Promise<number> {
+  await requireAdmin()
+  if (mediaIds.length === 0) return 0
+
+  const { rowCount } = await sql`
+    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height)
+    SELECT ${vaultId}, m.bucket, m.storage_path, NULL, m.file_name, m.content_type, m.size_bytes, m.width, m.height
+    FROM media_library m
+    WHERE m.id = ANY(${mediaIds}::uuid[])
+      AND m.public_url IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM vault_photos p
+        WHERE p.vault_id = ${vaultId} AND p.bucket = m.bucket AND p.storage_path = m.storage_path
+      )
+  `
+
+  revalidatePath("/admin/operations")
+  return rowCount ?? 0
+}
+
 export async function deleteVaultPhoto(photoId: string): Promise<void> {
   await requireAdmin()
 
-  const { rows } = await sql<{ storage_path: string; thumb_path: string | null }>`
-    DELETE FROM vault_photos WHERE id = ${photoId} RETURNING storage_path, thumb_path
+  const { rows } = await sql<{ bucket: string; storage_path: string; thumb_path: string | null }>`
+    DELETE FROM vault_photos WHERE id = ${photoId} RETURNING bucket, storage_path, thumb_path
   `
   const removed = rows[0]
   if (!removed) return
 
-  const paths = [removed.storage_path, removed.thumb_path].filter((path): path is string => Boolean(path))
-  await createAdminClient().storage.from(VAULT_PHOTOS_BUCKET).remove(paths)
+  // Only files this vault owns are deleted. A shared library file just loses its link to the vault.
+  if (removed.bucket === VAULT_PHOTOS_BUCKET) {
+    const paths = [removed.storage_path, removed.thumb_path].filter((path): path is string => Boolean(path))
+    await createAdminClient().storage.from(VAULT_PHOTOS_BUCKET).remove(paths)
+    await sql`DELETE FROM media_library WHERE bucket = ${removed.bucket} AND storage_path = ${removed.storage_path}`
+  }
 
   revalidatePath("/admin/operations")
 }

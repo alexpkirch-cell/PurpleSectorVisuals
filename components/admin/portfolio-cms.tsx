@@ -4,6 +4,7 @@ import { useState } from "react"
 import { GripVertical, Pencil, Star, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import type { AssignableVault } from "@/app/actions/media-library"
 import { MultiSelect } from "@/components/admin/multi-select"
 import { BatchUploader } from "@/components/admin/portfolio/batch-uploader"
 import { PhotoEditDialog } from "@/components/admin/portfolio/photo-edit-dialog"
@@ -52,9 +53,11 @@ function CategoryEditor({ item, onCommit }: { item: PortfolioItem; onCommit: (se
 export function PortfolioCms({
   initialItems,
   photographers,
+  vaults,
 }: {
   initialItems: PortfolioItem[]
   photographers: string[]
+  vaults: AssignableVault[]
 }) {
   const [items, setItems] = useState(initialItems)
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -151,6 +154,7 @@ export function PortfolioCms({
     <div className="flex flex-col gap-6">
       <BatchUploader
         photographers={photographers}
+        vaults={vaults}
         onUploaded={(created) => setItems((prev) => [...prev, ...created])}
       />
 

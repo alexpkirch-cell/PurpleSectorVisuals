@@ -5,15 +5,12 @@ import { ZipArchive } from "archiver"
 import { NextResponse, type NextRequest } from "next/server"
 
 import { sql } from "@/lib/db"
-import { createAdminClient } from "@/lib/supabase/server"
 import { canViewDelivery } from "@/lib/vault-delivery"
-import { VAULT_PHOTOS_BUCKET } from "@/lib/vault-photo-storage"
+import { signStoragePaths } from "@/lib/vault-photo-signing"
 
 // A large delivery streams for a while; the archive is never held in memory.
 export const maxDuration = 300
 export const dynamic = "force-dynamic"
-
-const SIGNED_URL_TTL_SECONDS = 60 * 60
 
 function safeFileName(value: string) {
   return value.replace(/[^a-z0-9-_.]+/gi, "-").replace(/^-+|-+$/g, "") || "photos"
@@ -39,8 +36,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Not found" }, { status: 404 })
   }
 
-  const { rows: photos } = await sql<{ storage_path: string; file_name: string }>`
-    SELECT storage_path, file_name FROM vault_photos WHERE vault_id = ${vaultId} ORDER BY created_at ASC, file_name ASC
+  const { rows: photos } = await sql<{ bucket: string; storage_path: string; file_name: string }>`
+    SELECT bucket, storage_path, file_name FROM vault_photos WHERE vault_id = ${vaultId} ORDER BY created_at ASC, file_name ASC
   `
   if (photos.length === 0) {
     return NextResponse.json({ error: "No photos found" }, { status: 404 })
@@ -52,12 +49,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     WHERE v.id = ${vaultId}
   `
 
-  const signed = await createAdminClient()
-    .storage.from(VAULT_PHOTOS_BUCKET)
-    .createSignedUrls(
-      photos.map((photo) => photo.storage_path),
-      SIGNED_URL_TTL_SECONDS
-    )
+  const signedUrls = await signStoragePaths(photos.map((photo) => ({ bucket: photo.bucket, path: photo.storage_path })))
 
   // JPEG/PNG are already compressed, so storing them uncompressed keeps the stream fast.
   const archive = new ZipArchive({ store: true })
@@ -68,7 +60,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const usedNames = new Set<string>()
   photos.forEach((photo, index) => {
-    const url = signed.data?.[index]?.signedUrl
+    const url = signedUrls[index]
     if (!url) return
 
     let name = photo.file_name

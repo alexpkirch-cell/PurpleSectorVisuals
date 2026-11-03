@@ -1,73 +1,24 @@
 "use client"
 
 import { useId, useRef, useState, type DragEvent } from "react"
-import { ImagePlus, Loader2, Trash2 } from "lucide-react"
+import { ImagePlus, Images, Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
 
 import {
+  attachMediaToVault,
   deleteVaultPhoto,
   listVaultPhotosAdmin,
-  recordVaultPhoto,
   type VaultPhotoView,
 } from "@/app/actions/vault-photos"
+import type { MediaItem } from "@/app/actions/media-library"
+import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
-import { VAULT_PHOTOS_BUCKET, VAULT_THUMB_MAX_EDGE, vaultPhotoPath, vaultThumbPath } from "@/lib/vault-photo-storage"
+import { runPool, uploadVaultPhoto } from "@/lib/vault-photo-upload"
 import { cn } from "@/lib/utils"
 
 const UPLOAD_CONCURRENCY = 3
-const THUMB_QUALITY = 0.85
-
-interface Prepared {
-  width: number | null
-  height: number | null
-  thumb: Blob | null
-}
-
-function extensionFor(file: File) {
-  const fromName = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "")
-  if (fromName && fromName.length <= 5) return fromName
-  return file.type.split("/")[1]?.replace(/[^a-z0-9]/g, "") || "jpg"
-}
-
-/** Reads true (orientation-corrected) dimensions and builds a smaller preview; formats the browser can't decode upload as-is. */
-async function prepareImage(file: File): Promise<Prepared> {
-  try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
-    const { width, height } = bitmap
-    const longEdge = Math.max(width, height)
-
-    if (longEdge <= VAULT_THUMB_MAX_EDGE) {
-      bitmap.close()
-      return { width, height, thumb: null }
-    }
-
-    const scale = VAULT_THUMB_MAX_EDGE / longEdge
-    const canvas = document.createElement("canvas")
-    canvas.width = Math.round(width * scale)
-    canvas.height = Math.round(height * scale)
-    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-    bitmap.close()
-
-    const thumb = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", THUMB_QUALITY))
-    return { width, height, thumb }
-  } catch {
-    return { width: null, height: null, thumb: null }
-  }
-}
-
-async function runPool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
-  let cursor = 0
-  await Promise.all(
-    Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (cursor < items.length) {
-        const item = items[cursor++]
-        await worker(item)
-      }
-    })
-  )
-}
 
 export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
   const inputId = useId()
@@ -90,48 +41,13 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
     if (images.length === 0) return
 
     setProgress({ done: 0, total: images.length })
-    const supabase = createClient()
     let failed = 0
 
     await runPool(images, UPLOAD_CONCURRENCY, async (file) => {
-      const id = crypto.randomUUID()
-      const storagePath = vaultPhotoPath(vaultId, id, extensionFor(file))
-      const thumbPath = vaultThumbPath(vaultId, id)
-      const uploadedPaths: string[] = []
-
       try {
-        const prepared = await prepareImage(file)
-
-        const original = await supabase.storage
-          .from(VAULT_PHOTOS_BUCKET)
-          .upload(storagePath, file, { contentType: file.type, upsert: false })
-        if (original.error) throw new Error(original.error.message)
-        uploadedPaths.push(storagePath)
-
-        let savedThumbPath: string | null = null
-        if (prepared.thumb) {
-          const thumb = await supabase.storage
-            .from(VAULT_PHOTOS_BUCKET)
-            .upload(thumbPath, prepared.thumb, { contentType: "image/jpeg", upsert: false })
-          if (thumb.error) throw new Error(thumb.error.message)
-          uploadedPaths.push(thumbPath)
-          savedThumbPath = thumbPath
-        }
-
-        await recordVaultPhoto(vaultId, {
-          storagePath,
-          thumbPath: savedThumbPath,
-          fileName: file.name,
-          contentType: file.type,
-          sizeBytes: file.size,
-          width: prepared.width,
-          height: prepared.height,
-        })
+        await uploadVaultPhoto(vaultId, file)
       } catch (error) {
         failed += 1
-        if (uploadedPaths.length > 0) {
-          await supabase.storage.from(VAULT_PHOTOS_BUCKET).remove(uploadedPaths)
-        }
         console.error("[v0] vault photo upload failed:", file.name, error)
       } finally {
         setProgress((current) => (current ? { ...current, done: current.done + 1 } : current))
@@ -144,6 +60,20 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
     const succeeded = images.length - failed
     if (succeeded > 0) toast.success(`${succeeded} ${succeeded === 1 ? "photo" : "photos"} attached to this vault`)
     if (failed > 0) toast.error(`${failed} ${failed === 1 ? "photo" : "photos"} failed to upload`)
+  }
+
+  async function attachFromGallery(items: MediaItem[]) {
+    try {
+      const attached = await attachMediaToVault(
+        vaultId,
+        items.map((item) => item.id)
+      )
+      await mutate()
+      if (attached === 0) toast.info("Those photos are already attached to this vault")
+      else toast.success(`${attached} ${attached === 1 ? "photo" : "photos"} attached from the gallery`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not attach photos")
+    }
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
@@ -208,6 +138,18 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
           }}
         />
       </label>
+
+      <MediaPickerDialog
+        multiple
+        title="Attach from Gallery"
+        onSelectMany={(items) => void attachFromGallery(items)}
+        trigger={
+          <Button type="button" variant="outline" size="sm" disabled={uploading}>
+            <Images className="size-4" aria-hidden="true" />
+            Choose from Gallery
+          </Button>
+        }
+      />
 
       {progress ? (
         <div className="flex flex-col gap-1.5" aria-live="polite">

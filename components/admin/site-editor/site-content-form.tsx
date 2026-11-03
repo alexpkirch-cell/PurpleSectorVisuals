@@ -315,21 +315,22 @@ function ImageBlock({
           onChange={(e) => handleUpload(e.target.files?.[0] ?? null)}
         />
       </label>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={busy} onClick={() => inputRef.current?.click()}>
+          <UploadCloud className="size-4" />
+          Upload from Computer
+        </Button>
         <MediaPickerDialog
           selectedUrl={row.image_url ?? undefined}
-          onSelect={handlePick}
+          onSelect={(url) => void handlePick(url)}
           trigger={
-            <Button type="button" variant="outline" size="sm" className="flex-1" disabled={busy}>
+            <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={busy}>
               <Images className="size-4" />
-              Portfolio
+              Choose from Gallery
             </Button>
           }
         />
-        <Button type="button" variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => inputRef.current?.click()}>
-          <UploadCloud className="size-4" />
-          Upload new
-        </Button>
+
         {row.image_url && (
           <Button type="button" variant="ghost" size="sm" onClick={handleClear} disabled={busy}>
             Remove

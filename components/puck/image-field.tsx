@@ -112,21 +112,28 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
         aria-label="Upload image file"
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 basis-36"
+          disabled={uploading}
+          onClick={openPicker}
+        >
+          <Upload className="size-4" />
+          Upload from Computer
+        </Button>
         <MediaPickerDialog
           selectedUrl={value}
-          onSelect={onChange}
+          onSelect={(url) => onChange(url)}
           trigger={
-            <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading}>
+            <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={uploading}>
               <Images className="size-4" />
-              Portfolio
+              Choose from Gallery
             </Button>
           }
         />
-        <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading} onClick={openPicker}>
-          <Upload className="size-4" />
-          Upload new
-        </Button>
         <Button
           type="button"
           variant="ghost"

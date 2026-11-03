@@ -320,6 +320,42 @@ export async function listShoots(): Promise<Shoot[]> {
   return rows
 }
 
+/** One shoot with its vault fields, for the full-screen admin workspace. */
+export async function getShootAdmin(shootId: string): Promise<Shoot | null> {
+  await requireAdmin()
+
+  const { rows } = await sql<Shoot>`
+    SELECT
+      s.*,
+      v.pin_code AS vault_pin,
+      v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed,
+      v.deposit_paid AS vault_deposit_paid,
+      v.must_have_shots AS vault_must_have_shots,
+      v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at,
+      v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid,
+      v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at,
+      v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name,
+      v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone,
+      v.guardian_email AS vault_guardian_email,
+      v.id AS vault_id,
+      v.requires_countersign AS vault_requires_countersign,
+      v.client_signed_at AS vault_client_signed_at,
+      v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature,
+      v.client_signed_ip AS vault_client_signed_ip
+    FROM shoots s
+    LEFT JOIN vaults v ON v.shoot_id = s.id
+    WHERE s.id = ${shootId}
+  `
+  return rows[0] ?? null
+}
+
 /**
  * Applies the studio's digital countersignature to a client-signed agreement. This locks the
  * contract permanently (a database trigger rejects later edits) and books the shoot, moving the

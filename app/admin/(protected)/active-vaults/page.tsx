@@ -1,8 +1,11 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 
 import { CopyVaultLink } from "@/components/admin/active-vaults/copy-vault-link"
+import { CountersignRowButton } from "@/components/admin/active-vaults/countersign-row-button"
 import { Badge } from "@/components/ui/badge"
 import { sql } from "@/lib/db"
+import { STATUS_LABELS } from "@/lib/operations"
 
 export const metadata: Metadata = {
   title: "Active Vaults | Purple Sector Visuals Admin",
@@ -13,6 +16,8 @@ export const dynamic = "force-dynamic"
 
 interface ActiveVaultRow {
   id: string
+  shoot_id: string | null
+  shoot_status: keyof typeof STATUS_LABELS | null
   client_name: string | null
   shoot_date: string | Date | null
   pin_code: string
@@ -36,6 +41,8 @@ export default async function ActiveVaultsPage() {
   const { rows } = await sql<ActiveVaultRow>`
     SELECT
       v.id,
+      s.id AS shoot_id,
+      s.status AS shoot_status,
       COALESCE(s.client_name, v.client_name) AS client_name,
       COALESCE(v.shoot_date, s.shoot_date) AS shoot_date,
       v.pin_code,
@@ -53,8 +60,7 @@ export default async function ActiveVaultsPage() {
       <div>
         <h1 className="font-heading text-2xl font-medium text-foreground">Active Vaults</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every client vault currently open. Clients sign in at the vault link with their booking email and the PIN
-          below.
+          Every client vault currently open. Open a client to manage their whole shoot in one place.
         </p>
       </div>
 
@@ -64,12 +70,15 @@ export default async function ActiveVaultsPage() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[40rem] border-collapse text-sm">
+          <table className="w-full min-w-[56rem] border-collapse text-sm">
             <caption className="sr-only">Active client vaults</caption>
             <thead>
               <tr className="border-b border-border text-left text-xs tracking-wider text-muted-foreground uppercase">
                 <th scope="col" className="px-4 py-3 font-medium">
                   Client Name
+                </th>
+                <th scope="col" className="px-4 py-3 font-medium">
+                  Pipeline Stage
                 </th>
                 <th scope="col" className="px-4 py-3 font-medium">
                   Shoot Date
@@ -86,37 +95,63 @@ export default async function ActiveVaultsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((vault) => (
-                <tr key={vault.id} className="border-b border-border last:border-b-0">
-                  <th scope="row" className="px-4 py-3 text-left font-medium text-foreground">
-                    {vault.client_name ?? "Unnamed client"}
-                  </th>
-                  <td className="px-4 py-3 text-muted-foreground">{formatDate(vault.shoot_date)}</td>
-                  <td className="px-4 py-3 font-mono tracking-widest text-foreground">{vault.pin_code}</td>
-                  <td className="px-4 py-3">
-                    <CopyVaultLink />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col items-start gap-1">
-                      <Badge
-                        variant="outline"
-                        className={
-                          vault.contract_signed
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                            : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                        }
-                      >
-                        {vault.contract_signed ? "Signed" : "Pending"}
-                      </Badge>
-                      {vault.contract_signed && (
-                        <span className="text-xs text-muted-foreground">
-                          {vault.countersigned_at ? "Countersigned" : "Awaiting countersignature"}
-                        </span>
+              {rows.map((vault) => {
+                const name = vault.client_name ?? "Unnamed client"
+                const awaitingCountersign = vault.contract_signed && !vault.countersigned_at && vault.shoot_id
+
+                return (
+                  <tr key={vault.id} className="border-b border-border last:border-b-0">
+                    <th scope="row" className="px-4 py-3 text-left font-medium text-foreground">
+                      {vault.shoot_id ? (
+                        <Link
+                          href={`/admin/shoots/${vault.shoot_id}`}
+                          className="underline-offset-4 transition-colors hover:text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        >
+                          {name}
+                        </Link>
+                      ) : (
+                        name
                       )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </th>
+                    <td className="px-4 py-3">
+                      {vault.shoot_status ? (
+                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                          {STATUS_LABELS[vault.shoot_status] ?? vault.shoot_status}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">No linked shoot</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDate(vault.shoot_date)}</td>
+                    <td className="px-4 py-3 font-mono tracking-widest text-foreground">{vault.pin_code}</td>
+                    <td className="px-4 py-3">
+                      <CopyVaultLink />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1.5">
+                        <Badge
+                          variant="outline"
+                          className={
+                            vault.contract_signed
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                          }
+                        >
+                          {vault.contract_signed ? "Signed" : "Pending"}
+                        </Badge>
+                        {vault.contract_signed && (
+                          <span className="text-xs text-muted-foreground">
+                            {vault.countersigned_at ? "Countersigned" : "Awaiting countersignature"}
+                          </span>
+                        )}
+                        {awaitingCountersign && vault.shoot_id ? (
+                          <CountersignRowButton shootId={vault.shoot_id} clientName={name} />
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
