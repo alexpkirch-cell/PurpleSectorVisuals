@@ -8,7 +8,15 @@ import { toast } from "sonner"
 import { countersignShoot } from "@/app/actions/shoots"
 import { Button } from "@/components/ui/button"
 
-export function CountersignRowButton({ shootId, clientName }: { shootId: string; clientName: string }) {
+export function CountersignRowButton({
+  shootId,
+  clientName,
+  onDone,
+}: {
+  shootId: string
+  clientName: string
+  onDone?: () => void
+}) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
 
@@ -22,6 +30,7 @@ export function CountersignRowButton({ shootId, clientName }: { shootId: string;
           : `Countersigned ${clientName}. The card moves to Booked & Paid once the retainer is received.`
       )
       router.refresh()
+      onDone?.()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not countersign")
       setPending(false)

@@ -24,12 +24,17 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/admin/galleries/:path*",
-        destination: "/admin/active-vaults",
+        destination: "/admin/reports",
         permanent: true,
       },
       {
         source: "/admin/vaults/:path*",
-        destination: "/admin/active-vaults",
+        destination: "/admin/reports",
+        permanent: true,
+      },
+      {
+        source: "/admin/active-vaults",
+        destination: "/admin/reports",
         permanent: true,
       },
     ]

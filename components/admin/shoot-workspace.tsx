@@ -35,11 +35,11 @@ export function ShootWorkspace({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/admin/active-vaults"
+          href="/admin/reports"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Active Vaults
+          Reports &amp; Search
         </Link>
 
         <div className="flex flex-wrap items-center gap-2">

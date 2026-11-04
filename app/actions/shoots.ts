@@ -393,7 +393,7 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
 
   revalidatePath("/admin")
   revalidatePath("/admin/operations")
-  revalidatePath("/admin/active-vaults")
+  revalidatePath("/admin/reports")
 
   const { rows } = await sql<Shoot>`
     SELECT

@@ -7,7 +7,6 @@ import {
   BookUser,
   FileBarChart,
   GalleryVerticalEnd,
-  KeyRound,
   LayoutGrid,
   LogOut,
   Package,
@@ -29,7 +28,6 @@ const navLinks: NavLink[] = [
   { href: "/admin/crew", label: "Crew & Roster", icon: UserRoundCheck },
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/operations", label: "Operations", icon: Briefcase },
-  { href: "/admin/active-vaults", label: "Active Vaults", icon: KeyRound },
   { href: "/admin/clients", label: "Client Directory", icon: BookUser },
   { href: "/admin/reports", label: "Reports & Search", icon: FileBarChart },
 ]

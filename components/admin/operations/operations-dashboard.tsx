@@ -142,9 +142,9 @@ export function OperationsDashboard({
             <Plus className="size-4" />
             Manual Booking
           </Button>
-          <Button variant="outline" render={<Link href="/admin/active-vaults" />} nativeButton={false}>
+          <Button variant="outline" render={<Link href="/admin/reports" />} nativeButton={false}>
             <Images className="size-4" />
-            Active Vaults
+            Reports &amp; Search
           </Button>
         </div>
       </header>
