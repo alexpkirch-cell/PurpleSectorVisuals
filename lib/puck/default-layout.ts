@@ -1,7 +1,5 @@
 import type { Data } from "@measured/puck"
 
-import { HOW_WE_WORK_DEFAULTS } from "@/components/home/how-we-work-section"
-
 const HOME_LAYOUT = {
   root: {
     props: {
@@ -11,10 +9,22 @@ const HOME_LAYOUT = {
   },
   content: [
     { type: "Hero", props: { id: "home-hero" } },
-    { type: "Text", props: { id: "home-how-we-work", ...HOW_WE_WORK_DEFAULTS } },
-    { type: "Studio", props: { id: "home-studio", images: Array.from({ length: 6 }, () => ({ src: "" })) } },
-    { type: "DualSplit", props: { id: "home-dual-split" } },
+    { type: "Studio", props: { id: "home-studio" } },
     { type: "Disciplines", props: { id: "home-disciplines" } },
+    { type: "DualSplit", props: { id: "home-dual-split" } },
+    {
+      type: "PageHeader",
+      props: {
+        id: "home-book-header",
+        eyebrow: "PURPLE SECTOR VISUALS",
+        heading: "Book a shoot",
+        body: "Tell us about your shoot and we'll follow up to confirm the details.",
+        align: "center",
+        width: "narrow",
+        style: "compact",
+      },
+    },
+    { type: "BookingForm", props: { id: "home-book-form", width: "narrow" } },
     { type: "JoinRoster", props: { id: "home-join-roster" } },
   ],
 } as Data

@@ -1,6 +1,6 @@
 import type { ComponentConfig, Config, CustomField, Fields, TextField } from "@measured/puck"
 
-import { STUDIO_GRID_MAX, STUDIO_GRID_MIN, STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
+import { STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
 import { DISCIPLINES_TEXT_DEFAULTS } from "@/components/home/disciplines-section"
 import { DUAL_SPLIT_TEXT_DEFAULTS } from "@/components/home/dual-split-section"
 import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
@@ -137,10 +137,6 @@ function gridBlock(
   }
 }
 
-type StudioPhoto = { src: string }
-const STUDIO_DEFAULT_SLOTS = 6
-const emptyStudioPhotos = (): StudioPhoto[] => Array.from({ length: STUDIO_DEFAULT_SLOTS }, () => ({ src: "" }))
-
 const PHOTO_INFO_KEYS = ["title", "category", "shooter", "camera", "lens", "settings"] as const
 type PhotoInfo = Record<(typeof PHOTO_INFO_KEYS)[number], string>
 
@@ -181,6 +177,8 @@ type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> &
 type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
 type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
   Partial<Record<DisciplineHrefKey, string>> &
+  Partial<Record<`${(typeof DISCIPLINE_FIELD_KEYS)[number]}Focal`, string>> &
+  Partial<Record<`${(typeof DISCIPLINE_FIELD_KEYS)[number]}Zoom`, number>> &
   Partial<Record<(typeof DISCIPLINE_TEXT_KEYS)[number], string>>
 
 const emptyProps = <K extends string>(keys: readonly K[]) =>
@@ -242,12 +240,6 @@ export type PuckComponents = {
     eyebrow?: string
     heading?: string
     body?: string
-    images?: { src: string; focal?: string; zoom?: number }[]
-    /** Legacy fixed slots from before `images` existed; only read when `images` was never saved. */
-    reel?: string
-    sports?: string
-    portrait?: string
-    bts?: { src: string }[]
   }
   DualSplit: DualSplitProps
   Disciplines: DisciplinesProps
@@ -492,46 +484,12 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       label: "The Studio",
       fields: {
         ...(inlineTextFields(STUDIO_TEXT_KEYS, ["body"]) as Record<(typeof STUDIO_TEXT_KEYS)[number], TextField>),
-        images: {
-          type: "array",
-          label: "Studio photos (click a photo on the page to change it)",
-          min: STUDIO_GRID_MIN,
-          max: STUDIO_GRID_MAX,
-          arrayFields: { src: imageField("Photo") },
-          defaultItemProps: { src: "" },
-          getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
-        },
       },
-      defaultProps: {
-        ...pickText(STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS),
-        images: emptyStudioPhotos(),
-      },
-      // Layouts saved before these fields existed have no `images` or copy; fill them in (carrying over any legacy photos)
-      // so the page and the editor always agree on which slots and text exist.
-      resolveData: ({ props }) => {
-        const legacy = [props.reel, props.sports, props.portrait, ...(props.bts ?? []).map((item) => item?.src)]
-        const current = Array.isArray(props.images) ? props.images : []
-        const length = Math.max(STUDIO_DEFAULT_SLOTS, current.length, legacy.length)
-        const images = Array.from({ length }, (_, i) => ({
-          // Spread first so the saved framing (focal, zoom) survives this rebuild.
-          ...current[i],
-          src: current[i]?.src ?? (current.length ? "" : legacy[i]) ?? "",
-        }))
-        return { props: { ...props, ...fillText(props, STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS), images } }
-      },
-      render: ({ images, reel, sports, portrait, bts, ...rest }) => (
-        <StudioBlock
-          text={pickText(rest, STUDIO_TEXT_KEYS)}
-          images={{
-            gallery: images?.map((item) => item.src),
-            frames: images?.map((item) => ({ focal: item.focal, zoom: item.zoom })),
-            reel,
-            sports,
-            portrait,
-            bts: bts?.map((item) => item.src),
-          }}
-        />
-      ),
+      defaultProps: pickText(STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS),
+      // Layouts saved before a text field existed have no value for it; fill it in so the page and the editor agree.
+      // Photos saved by the old photo grid stay in the saved data untouched; they are simply no longer shown.
+      resolveData: ({ props }) => ({ props: { ...props, ...fillText(props, STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS) } }),
+      render: (props) => <StudioBlock text={pickText(props, STUDIO_TEXT_KEYS)} />,
     },
     DualSplit: {
       label: "Founders Split (Alex & Gabe)",
@@ -591,6 +549,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         <DisciplinesBlock
           text={pickText(props, DISCIPLINE_TEXT_KEYS)}
           images={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[key]]))}
+          frames={Object.fromEntries(
+            DISCIPLINE_FIELD_KEYS.map((key) => [key, { focal: props[`${key}Focal`], zoom: props[`${key}Zoom`] }])
+          )}
           hrefs={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[`${key}Href`]]))}
         />
       ),

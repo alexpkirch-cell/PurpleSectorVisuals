@@ -3,9 +3,10 @@
 import { createContext, useContext, type ComponentProps, type ReactNode } from "react"
 
 import { CreatorPage } from "@/components/creator-page"
-import { CoreIdentitySection, type CoreIdentityImages, type StudioText } from "@/components/home/core-identity-section"
+import { CoreIdentitySection, type StudioText } from "@/components/home/core-identity-section"
 import {
   DisciplinesSection,
+  type DisciplineFrames,
   type DisciplineHrefs,
   type DisciplineImages,
   type DisciplinesText,
@@ -30,8 +31,8 @@ export function HeroBlock({ photos }: { photos: HeroPhoto[] }) {
   return <HeroCarousel3D photos={photos} />
 }
 
-export function StudioBlock({ images, text }: { images: CoreIdentityImages; text?: StudioText }) {
-  return <CoreIdentitySection overrides={useContext(SiteSlotsContext)} images={images} text={text} />
+export function StudioBlock({ text }: { text?: StudioText }) {
+  return <CoreIdentitySection text={text} />
 }
 
 export function DualSplitBlock({
@@ -52,10 +53,12 @@ export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "ov
 
 export function DisciplinesBlock({
   images,
+  frames,
   hrefs,
   text,
 }: {
   images: DisciplineImages
+  frames?: DisciplineFrames
   hrefs?: DisciplineHrefs
   text?: DisciplinesText
 }) {
@@ -67,6 +70,7 @@ export function DisciplinesBlock({
     <DisciplinesSection
       overrides={useContext(SiteSlotsContext)}
       images={images}
+      frames={frames}
       hrefs={hrefs}
       text={{ ...text, heading: hasHeading ? heading : undefined }}
     />

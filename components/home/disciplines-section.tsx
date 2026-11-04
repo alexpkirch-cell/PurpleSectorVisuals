@@ -4,32 +4,27 @@ import Link from "@/components/puck/edit-mode"
 
 import { ImageSlot } from "@/components/image-slot"
 import { EditableImage } from "@/components/puck/inline-edit"
+import type { PhotoFrame } from "@/lib/focal-point"
 import { disciplines } from "@/lib/site-data"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { withTextDefaults } from "@/lib/text-defaults"
 
-const CARD_SPANS = [
-  "lg:col-span-2",
-  "lg:col-span-2",
-  "lg:col-span-2",
-  "lg:col-span-3",
-  "sm:col-span-2 lg:col-span-3",
-]
-
 /** Keyed by lower-cased discipline name: sports, automotive, portraits, events, commercial. */
 export type DisciplineImages = Record<string, string | undefined>
 
-/** "View Gallery" destinations keyed by lower-cased discipline name; blank falls back to the filtered /work page. */
+/** Saved framing (focal point and zoom) per photo, keyed like `DisciplineImages`. */
+export type DisciplineFrames = Record<string, PhotoFrame | undefined>
+
+/** Card destinations keyed by lower-cased discipline name; blank falls back to the gallery filtered to that discipline. */
 export type DisciplineHrefs = Record<string, string | undefined>
 
 export const DISCIPLINES_TEXT_DEFAULTS = {
   eyebrow: "Disciplines",
   heading: "Built for five disciplines.",
   seeAllLabel: "See all work",
-  viewGalleryLabel: "View Gallery",
   portraitsTitle: "Portraits",
   portraitsDescription: "Character studies with cinematic depth.",
-  sportsTitle: "Sports",
+  sportsTitle: "Athletics",
   sportsDescription: "Peak action, frozen at the decisive moment.",
   automotiveTitle: "Automotive",
   automotiveDescription: "Steel, light, and motion rendered with intent.",
@@ -45,11 +40,13 @@ export type DisciplinesText = { [K in keyof typeof DISCIPLINES_TEXT_DEFAULTS]?: 
 export function DisciplinesSection({
   overrides,
   images,
+  frames,
   hrefs,
   text,
 }: {
   overrides?: SiteSlotOverrides
   images?: DisciplineImages
+  frames?: DisciplineFrames
   hrefs?: DisciplineHrefs
   text?: DisciplinesText
 }) {
@@ -75,41 +72,43 @@ export function DisciplinesSection({
           </Link>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          {disciplines.map((discipline, index) => (
-            <div
-              key={discipline.name}
-              className={`group relative flex h-96 flex-col justify-end overflow-hidden rounded-3xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)] ${CARD_SPANS[index] ?? ""}`}
-            >
-              <div className="absolute inset-0">
-                <EditableImage path={discipline.name.toLowerCase()}>
-                  <ImageSlot
-                    aspect={discipline.aspect}
-                    label=""
-                    className="border-none"
-                    slotKey={`home.discipline.${discipline.name.toLowerCase()}`}
-                    overrides={overrides}
-                    imageUrl={images?.[discipline.name.toLowerCase()] || undefined}
-                  />
-                </EditableImage>
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/40 to-transparent" />
-              <div className="relative z-10 p-6">
-                <h3 className="font-heading text-2xl font-bold tracking-tight text-foreground">
-                  {copy[`${discipline.name.toLowerCase()}Title` as keyof typeof copy]}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
-                  {copy[`${discipline.name.toLowerCase()}Description` as keyof typeof copy]}
-                </p>
-                <Link
-                  href={hrefs?.[discipline.name.toLowerCase()]?.trim() || discipline.galleryHref || `/work?category=${discipline.name}`}
-                  className="mt-4 inline-flex items-center rounded-full border border-zinc-700 bg-zinc-950/70 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:text-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
-                >
-                  {copy.viewGalleryLabel}
-                </Link>
-              </div>
-            </div>
-          ))}
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+          {disciplines.map((discipline) => {
+            const key = discipline.name.toLowerCase()
+            const href = hrefs?.[key]?.trim() || discipline.galleryHref || `/work?category=${discipline.name}`
+
+            return (
+              <Link
+                key={discipline.name}
+                href={href}
+                className="group relative block aspect-[3/4] overflow-hidden rounded-2xl border border-zinc-800 bg-[#0c0c0f] transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)] focus-visible:border-[#e829f1] focus-visible:outline-none"
+              >
+                <div className="absolute inset-0">
+                  <EditableImage path={key} fit="cover">
+                    <ImageSlot
+                      aspect="3:4 Slot"
+                      label={`${discipline.name} photo`}
+                      className="border-none"
+                      fit="cover"
+                      frame={frames?.[key]}
+                      slotKey={`home.discipline.${key}`}
+                      overrides={overrides}
+                      imageUrl={images?.[key] || undefined}
+                    />
+                  </EditableImage>
+                </div>
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/50 via-35% to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 p-4">
+                  <h3 className="font-heading text-xl font-bold tracking-tight text-foreground">
+                    {copy[`${key}Title` as keyof typeof copy]}
+                  </h3>
+                  <p className="mt-1 text-sm leading-snug text-zinc-300">
+                    {copy[`${key}Description` as keyof typeof copy]}
+                  </p>
+                </div>
+              </Link>
+            )
+          })}
         </div>
 
         <Link

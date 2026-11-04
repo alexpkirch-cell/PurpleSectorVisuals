@@ -62,8 +62,6 @@ const CANVAS_IMAGE_STYLES = `
   [data-psv-image]:hover > * { outline: 2px solid #e829f1; outline-offset: -2px; }
 `
 
-const STUDIO_MIN_SLOTS = 3
-
 function readPath(source: unknown, path: string): unknown {
   return path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], source)
 }
@@ -134,8 +132,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
       const slot = path.match(/^(.+)\.(\d+)\.src$/)
       const list = slot ? (readPath(item.props, slot[1]) as unknown[] | undefined) : undefined
       const slotIndex = slot ? Number(slot[2]) : -1
-      const minSlots = slot?.[1] === "images" ? STUDIO_MIN_SLOTS : 1
-      const canDeleteSlot = Boolean(list && list.length > minSlots)
+      const canDeleteSlot = Boolean(list && list.length > 1)
 
       open({
         label: slot ? `Photo ${slotIndex + 1}` : "Photo",
