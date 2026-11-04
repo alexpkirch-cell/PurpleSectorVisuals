@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Puck, setDeep, usePuck, type Data, type Overrides } from "@measured/puck"
+import { Puck, setDeep, useGetPuck, type Data, type Overrides } from "@measured/puck"
 import { ArrowLeft, ExternalLink, Plus } from "lucide-react"
 
 import { savePageLayout } from "@/app/actions/page-layouts"
@@ -40,7 +40,19 @@ const RESIZE_OBSERVER_MESSAGES = [
 function ignoreResizeObserverError(event: ErrorEvent) {
   if (RESIZE_OBSERVER_MESSAGES.includes(event.message)) {
     event.stopImmediatePropagation()
+    event.preventDefault()
   }
+}
+
+const guardedWindows = new WeakSet<Window>()
+
+// The canvas iframe is its own window, so the root layout's guard never sees its errors. Register during render (once per
+// window) rather than in an effect: effects run after the canvas children mount, and an observer that loops while they
+// mount would report before the listener exists.
+function guardResizeObserverErrors(target: Window | null | undefined) {
+  if (!target || guardedWindows.has(target)) return
+  guardedWindows.add(target)
+  target.addEventListener("error", ignoreResizeObserverError, true)
 }
 
 // Puck makes everything inside a block inert (`[data-puck-component] * { pointer-events: none }`) so clicks select the block.
@@ -60,12 +72,14 @@ function readPath(source: unknown, path: string): unknown {
 function PreviewFrame({ children, document: frameDocument }: { children: ReactNode; document?: Document }) {
   // Child effects run before this component's effects, so patch during render to cover observers they create.
   deferResizeObserver(frameDocument?.defaultView)
+  guardResizeObserverErrors(frameDocument?.defaultView)
 
-  const puck = usePuck()
+  // `useGetPuck` reads the editor state on demand; `usePuck` would re-render the canvas wrapper on every state change.
+  const getPuck = useGetPuck()
   const openImageEditor = useInlineImageEditor()
-  const latest = useRef({ puck, openImageEditor })
+  const latest = useRef({ getPuck, openImageEditor })
   useEffect(() => {
-    latest.current = { puck, openImageEditor }
+    latest.current = { getPuck, openImageEditor }
   })
 
   useEffect(() => {
@@ -78,14 +92,14 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
       const componentId = photo?.closest("[data-puck-component]")?.getAttribute("data-puck-component")
       if (!path || !componentId) return
 
-      const { puck: api, openImageEditor: open } = latest.current
-      const item = api.getItemById(componentId)
+      const { getPuck: readPuck, openImageEditor: open } = latest.current
+      const item = readPuck().getItemById(componentId)
       if (!item) return
       event.preventDefault()
       event.stopPropagation()
 
       const write = (props: typeof item.props) => {
-        const current = latest.current.puck
+        const current = latest.current.getPuck()
         const selector = current.getSelectorForId(componentId)
         const currentItem = current.getItemById(componentId)
         if (!selector || !currentItem) return
@@ -104,7 +118,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
       const aspect = isFramed && slotShape?.offsetWidth && slotShape.offsetHeight ? slotShape.offsetWidth / slotShape.offsetHeight : undefined
 
       const setPhoto = (url: string, focal?: string) => {
-        const currentItem = latest.current.puck.getItemById(componentId)
+        const currentItem = latest.current.getPuck().getItemById(componentId)
         if (!currentItem) return
         const withPhoto = setDeep(currentItem.props, path, url)
         write(isFramed ? setDeep(withPhoto, focalPath, url ? (focal ?? "50% 50%") : "") : withPhoto)
@@ -126,7 +140,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
         deleteSlot:
           canDeleteSlot && slot
             ? () => {
-                const currentItem = latest.current.puck.getItemById(componentId)
+                const currentItem = latest.current.getPuck().getItemById(componentId)
                 const currentList = currentItem ? (readPath(currentItem.props, slot[1]) as unknown[]) : []
                 if (currentItem) write(setDeep(currentItem.props, slot[1], currentList.filter((_, i) => i !== slotIndex)))
               }
@@ -145,9 +159,6 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     frameDocument.documentElement.className = `${window.document.documentElement.className} dark`
     frameDocument.body.className = "min-h-svh bg-background text-foreground"
 
-    const frameWindow = frameDocument.defaultView
-    frameWindow?.addEventListener("error", ignoreResizeObserverError, true)
-
     // Real links and buttons from the live site must not navigate away while editing; selection still works.
     const blockNavigation = (event: MouseEvent) => {
       if ((event.target as Element | null)?.closest("a[href]")) event.preventDefault()
@@ -155,7 +166,6 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
     frameDocument.addEventListener("click", blockNavigation, true)
 
     return () => {
-      frameWindow?.removeEventListener("error", ignoreResizeObserverError, true)
       frameDocument.removeEventListener("click", blockNavigation, true)
     }
   }, [frameDocument])
@@ -172,10 +182,11 @@ const CLICK_MOVE_TOLERANCE = 5
 
 /** Components stay draggable, and a plain click now also appends them to the page and brings the new block into view. */
 function ComponentListItem({ name, children }: { name: string; children: ReactNode }) {
-  const { appState, dispatch } = usePuck()
+  const getPuck = useGetPuck()
   const pointerStart = useRef<{ x: number; y: number } | null>(null)
 
   function insertAtEnd() {
+    const { appState, dispatch } = getPuck()
     const id = `${name}-${crypto.randomUUID()}`
     const index = appState.data.content.length
     const zone = "root:default-zone"
@@ -214,7 +225,7 @@ function ComponentListItem({ name, children }: { name: string; children: ReactNo
 // themselves, see `imageField`). Text fields that are not editable inline (alt text, links, SEO) stay visible.
 const overrides: Partial<Overrides> = {
   iframe: PreviewFrame,
-  componentItem: ComponentListItem,
+  drawerItem: ComponentListItem,
   fieldTypes: {
     text: ({ field, children }) => ((field as { contentEditable?: boolean }).contentEditable ? null : <>{children}</>),
     textarea: ({ field, children }) => ((field as { contentEditable?: boolean }).contentEditable ? null : <>{children}</>),
