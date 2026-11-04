@@ -86,9 +86,10 @@ export function DisciplinesSection({
                 <div className="absolute inset-0">
                   <EditableImage path={key} fit="cover">
                     <ImageSlot
-                      aspect="3:4 Slot"
-                      label={`${discipline.name} photo`}
-                      className="border-none"
+                      aspect=""
+                      label=""
+                      imageAlt={`${discipline.name} photography`}
+                      className="border-none pb-24"
                       fit="cover"
                       frame={frames?.[key]}
                       slotKey={`home.discipline.${key}`}
