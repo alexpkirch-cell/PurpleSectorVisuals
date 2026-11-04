@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useState, type ReactElement } from "react"
 import { Check, Loader2 } from "lucide-react"
 import useSWR from "swr"
 
@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { cn } from "@/lib/utils"
 
 type MediaPickerBase = {
-  trigger: ReactNode
+  /** A single button element; it becomes the dialog's trigger itself, so there is no wrapper to tab through. */
+  trigger: ReactElement
   title?: string
 }
 
@@ -105,7 +106,7 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<span className="contents" />}>{trigger}</DialogTrigger>
+      <DialogTrigger render={trigger} />
       <DialogContent className="flex max-h-[88vh] flex-col gap-4 sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

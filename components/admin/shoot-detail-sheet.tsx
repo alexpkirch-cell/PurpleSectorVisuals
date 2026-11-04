@@ -165,6 +165,7 @@ export function ShootDetailSheet({
   bookingAddons,
   variant = "sheet",
   pageExtras,
+  hideClientContact = false,
   onOpenChange,
   onUpdated,
   onDeclined,
@@ -177,6 +178,8 @@ export function ShootDetailSheet({
   variant?: "sheet" | "page"
   /** Page variant only: more cards that join the same two-column grid after the overview and finances cards. */
   pageExtras?: ReactNode
+  /** Omit the editable contact fields when another card (the Client Card) owns them. */
+  hideClientContact?: boolean
   onOpenChange?: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
   onDeclined?: (shoot: Shoot) => void
@@ -265,9 +268,10 @@ export function ShootDetailSheet({
       const trimmedClientPhone = clientPhone.trim()
       const locationChanged = trimmedLocation !== (shoot.location ?? "")
       await updateShoot(shoot.id, {
-        clientName: trimmedClientName,
-        clientEmail: trimmedClientEmail,
-        clientPhone: trimmedClientPhone || null,
+        // Only send contact fields that actually changed, so a stale copy never overwrites newer details.
+        ...(trimmedClientName && trimmedClientName !== shoot.client_name ? { clientName: trimmedClientName } : {}),
+        ...(trimmedClientEmail && trimmedClientEmail !== shoot.client_email ? { clientEmail: trimmedClientEmail } : {}),
+        ...(trimmedClientPhone !== (shoot.client_phone ?? "") ? { clientPhone: trimmedClientPhone || null } : {}),
         basePrice: price,
         travelFee: 0,
         notes: notes || null,
@@ -453,6 +457,7 @@ export function ShootDetailSheet({
             ) : (
               <PanelGroup isPage={isPage}>
                 <Panel isPage={isPage} value="overview" title="Overview" className="flex flex-col gap-4">
+                  {!hideClientContact && (
                   <div className="flex flex-col gap-3 rounded-md border border-border p-3">
                     <span className="text-xs font-medium text-foreground">Client contact</span>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -500,6 +505,7 @@ export function ShootDetailSheet({
                       </div>
                     </div>
                   </div>
+                  )}
 
                   <div className="flex flex-col gap-3 rounded-md border border-border p-3">
                     <span className="text-xs font-medium text-foreground">Shoot logistics</span>

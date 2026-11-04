@@ -49,7 +49,7 @@ function AccordionContent({
   className,
   children,
   ...props
-}: AccordionPrimitive.Panel.Props) {
+}: Omit<AccordionPrimitive.Panel.Props, "className"> & { className?: string }) {
   return (
     <AccordionPrimitive.Panel
       data-slot="accordion-content"

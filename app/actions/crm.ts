@@ -1,5 +1,8 @@
 "use server"
 
+import { revalidatePath } from "next/cache"
+
+import { getShootAdmin, type Shoot } from "@/app/actions/shoots"
 import { sql } from "@/lib/db"
 import { requireAdmin } from "@/lib/require-admin"
 import { computeSettlement, type AssignedShooter } from "@/lib/settlement"
@@ -11,17 +14,6 @@ export interface ClientSummary {
   phone: string | null
   lifetimeSpend: number
   shootCount: number
-}
-
-export interface ClientShootHistory {
-  id: string
-  clientName: string
-  shootType: string
-  shootDate: string | null
-  status: string
-  totalPrice: number
-  vaultPin: string | null
-  contractSigned: boolean
 }
 
 export async function listClientDirectory(): Promise<ClientSummary[]> {
@@ -42,34 +34,102 @@ export async function listClientDirectory(): Promise<ClientSummary[]> {
   return rows.map((row) => ({ key: row.key, name: row.name, email: row.email, phone: row.phone, lifetimeSpend: Number(row.lifetime_spend), shootCount: row.shoot_count }))
 }
 
-export async function getClientProfile(key: string) {
+export interface ClientDashboardData {
+  client: { name: string; email: string; phone: string | null }
+  relationshipNotes: string
+  /** Every shoot for this client, newest first, with the vault fields the workspace needs. */
+  shoots: Shoot[]
+}
+
+/** Everything the unified Client Profile needs, with each shoot loaded as a full workspace record. */
+export async function getClientDashboard(key: string): Promise<ClientDashboardData | null> {
   await requireAdmin()
-  const { rows: clientRows } = await sql<{ name: string; email: string; phone: string | null }>`
-    SELECT MAX(client_name) AS name, MAX(client_email) AS email, MAX(client_phone) AS phone
-    FROM shoots
+
+  const { rows: ids } = await sql<{ id: string }>`
+    SELECT id FROM shoots
     WHERE COALESCE(NULLIF(lower(trim(client_email)), ''), lower(trim(client_name))) = ${key}
+    ORDER BY shoot_date DESC NULLS LAST, created_at DESC
   `
-  const { rows: shoots } = await sql<{ id: string; client_name: string; shoot_type: string; shoot_date: string | null; status: string; total_price: string; vault_pin: string | null; contract_signed: boolean }>`
-    SELECT s.id, s.client_name, s.shoot_type, s.shoot_date, s.status,
-      COALESCE(s.total_price, s.final_amount, s.base_price, 0) AS total_price,
-      v.pin_code AS vault_pin, COALESCE(v.contract_signed, false) AS contract_signed
-    FROM shoots s LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE COALESCE(NULLIF(lower(trim(s.client_email)), ''), lower(trim(s.client_name))) = ${key}
-    ORDER BY s.shoot_date DESC NULLS LAST, s.created_at DESC
+  if (ids.length === 0) return null
+
+  const loaded = await Promise.all(ids.map((row) => getShootAdmin(row.id)))
+  const shoots = loaded.filter((shoot): shoot is Shoot => shoot !== null)
+  if (shoots.length === 0) return null
+
+  const { rows: notes } = await sql<{ relationship_notes: string }>`
+    SELECT relationship_notes FROM client_profile_notes WHERE client_key = ${key}
   `
+
+  const latest = shoots[0]
   return {
-    client: clientRows[0] ?? null,
-    shoots: shoots.map((shoot) => ({
-      id: shoot.id,
-      clientName: shoot.client_name,
-      shootType: shoot.shoot_type,
-      shootDate: shoot.shoot_date,
-      status: shoot.status,
-      totalPrice: Number(shoot.total_price),
-      vaultPin: shoot.vault_pin,
-      contractSigned: shoot.contract_signed,
-    })),
+    client: { name: latest.client_name, email: latest.client_email, phone: latest.client_phone },
+    relationshipNotes: notes[0]?.relationship_notes ?? "",
+    shoots,
   }
+}
+
+export interface ClientCardInput {
+  name: string
+  email: string
+  phone: string
+  relationshipNotes: string
+}
+
+/**
+ * Saves the Client Card. Name, email and phone are applied to every shoot (and vault) that belongs to
+ * the client so their whole history stays consistent. Because the directory key is derived from the
+ * email, changing it returns the new key and carries the relationship notes over to it.
+ */
+export async function updateClientCard(
+  key: string,
+  input: ClientCardInput
+): Promise<{ key: string; name: string; email: string; phone: string | null }> {
+  await requireAdmin()
+
+  const name = input.name.trim()
+  const email = input.email.trim()
+  const phone = input.phone.trim() || null
+  const relationshipNotes = input.relationshipNotes.trim()
+
+  if (!name) throw new Error("A client name is required")
+  if (!/^\S+@\S+$/.test(email)) throw new Error("Enter a valid email address")
+
+  const newKey = email.toLowerCase()
+
+  if (newKey !== key) {
+    const { rows: clash } = await sql<{ id: string }>`
+      SELECT id FROM shoots
+      WHERE COALESCE(NULLIF(lower(trim(client_email)), ''), lower(trim(client_name))) = ${newKey}
+      LIMIT 1
+    `
+    if (clash.length > 0) throw new Error("Another client already uses that email address")
+  }
+
+  const { rows: updated } = await sql<{ id: string }>`
+    UPDATE shoots
+    SET client_name = ${name}, client_email = ${email}, client_phone = ${phone}
+    WHERE COALESCE(NULLIF(lower(trim(client_email)), ''), lower(trim(client_name))) = ${key}
+    RETURNING id
+  `
+  if (updated.length === 0) throw new Error("Client not found")
+
+  const shootIds = updated.map((row) => row.id)
+  await sql`UPDATE vaults SET client_name = ${name} WHERE shoot_id = ANY(${shootIds}::uuid[])`
+
+  await sql`
+    INSERT INTO client_profile_notes (client_key, relationship_notes, updated_at)
+    VALUES (${newKey}, ${relationshipNotes}, now())
+    ON CONFLICT (client_key) DO UPDATE SET relationship_notes = EXCLUDED.relationship_notes, updated_at = now()
+  `
+  if (newKey !== key) {
+    await sql`DELETE FROM client_profile_notes WHERE client_key = ${key}`
+  }
+
+  revalidatePath("/admin/clients")
+  revalidatePath("/admin/reports")
+  revalidatePath("/admin/operations")
+
+  return { key: newKey, name, email, phone }
 }
 
 export interface DraftVault {

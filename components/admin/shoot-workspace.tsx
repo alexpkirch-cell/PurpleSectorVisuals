@@ -24,24 +24,37 @@ export function ShootWorkspace({
   initialShoot,
   bookingTiers,
   bookingAddons,
+  embedded = false,
+  onChange,
 }: {
   initialShoot: Shoot
   bookingTiers: BookingTier[]
   bookingAddons: BookingAddon[]
+  /** Inline inside the Client Profile: no back link, and the Client Card owns the contact fields. */
+  embedded?: boolean
+  /** Called with the latest shoot whenever something in the workspace changes it. */
+  onChange?: (shoot: Shoot) => void
 }) {
   const [shoot, setShoot] = useState(initialShoot)
   const [uploadOpen, setUploadOpen] = useState(false)
 
+  function handleUpdated(next: Shoot) {
+    setShoot(next)
+    onChange?.(next)
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link
-          href="/admin/reports"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Reports &amp; Search
-        </Link>
+      <div className={`flex flex-wrap items-center gap-3 ${embedded ? "justify-end" : "justify-between"}`}>
+        {embedded ? null : (
+          <Link
+            href="/admin/reports"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            Reports &amp; Search
+          </Link>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {shoot.vault_id ? (
@@ -50,9 +63,11 @@ export function ShootWorkspace({
               Upload Client Photos
             </Button>
           ) : null}
-          <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-            {STATUS_LABELS[shoot.status] ?? shoot.status}
-          </Badge>
+          {embedded ? null : (
+            <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+              {STATUS_LABELS[shoot.status] ?? shoot.status}
+            </Badge>
+          )}
           {shoot.vault_pin ? (
             <Link
               href={`/vault/${shoot.vault_pin}`}
@@ -77,11 +92,12 @@ export function ShootWorkspace({
         shoot={shoot}
         bookingTiers={bookingTiers}
         bookingAddons={bookingAddons}
-        onUpdated={setShoot}
+        onUpdated={handleUpdated}
+        hideClientContact={embedded}
         pageExtras={
           <>
             <WorkspacePrepCard shoot={shoot} />
-            <WorkspaceAgreementCard shoot={shoot} onUpdated={setShoot} />
+            <WorkspaceAgreementCard shoot={shoot} onUpdated={handleUpdated} />
 
             <section
               aria-labelledby="workspace-delivery"
