@@ -1,6 +1,5 @@
 import { HeroSection } from "@/components/home/hero-section"
 import { CoreIdentitySection } from "@/components/home/core-identity-section"
-import { HowWeWorkSection } from "@/components/home/how-we-work-section"
 import { DualSplitSection } from "@/components/home/dual-split-section"
 import { DisciplinesSection } from "@/components/home/disciplines-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
@@ -12,10 +11,9 @@ export async function HomePage() {
   return (
     <>
       <HeroSection text={text} />
-      <HowWeWorkSection />
-      <CoreIdentitySection overrides={overrides} />
-      <DualSplitSection overrides={overrides} />
+      <CoreIdentitySection />
       <DisciplinesSection overrides={overrides} />
+      <DualSplitSection overrides={overrides} />
       <JoinTheRosterSection />
     </>
   )

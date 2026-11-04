@@ -3,9 +3,20 @@
 import { createContext, useContext, type ComponentProps, type ReactNode } from "react"
 
 import { CreatorPage } from "@/components/creator-page"
-import { CoreIdentitySection, type CoreIdentityImages } from "@/components/home/core-identity-section"
-import { DisciplinesSection, type DisciplineHrefs, type DisciplineImages } from "@/components/home/disciplines-section"
-import { DualSplitSection, type DualSplitImages } from "@/components/home/dual-split-section"
+import { CoreIdentitySection, type StudioText } from "@/components/home/core-identity-section"
+import {
+  DisciplinesSection,
+  type DisciplineFrames,
+  type DisciplineHrefs,
+  type DisciplineImages,
+  type DisciplinesText,
+} from "@/components/home/disciplines-section"
+import {
+  DualSplitSection,
+  type DualSplitFrames,
+  type DualSplitImages,
+  type DualSplitText,
+} from "@/components/home/dual-split-section"
 import { HeroCarousel3D, type HeroPhoto } from "@/components/home/hero-carousel-3d"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
@@ -20,12 +31,20 @@ export function HeroBlock({ photos }: { photos: HeroPhoto[] }) {
   return <HeroCarousel3D photos={photos} />
 }
 
-export function StudioBlock({ images }: { images: CoreIdentityImages }) {
-  return <CoreIdentitySection overrides={useContext(SiteSlotsContext)} images={images} />
+export function StudioBlock({ text }: { text?: StudioText }) {
+  return <CoreIdentitySection text={text} />
 }
 
-export function DualSplitBlock({ images }: { images: DualSplitImages }) {
-  return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} />
+export function DualSplitBlock({
+  images,
+  frames,
+  text,
+}: {
+  images: DualSplitImages
+  frames?: DualSplitFrames
+  text?: DualSplitText
+}) {
+  return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} frames={frames} text={text} />
 }
 
 export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "overrides">) {
@@ -34,22 +53,26 @@ export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "ov
 
 export function DisciplinesBlock({
   images,
+  frames,
   hrefs,
-  heading,
+  text,
 }: {
   images: DisciplineImages
+  frames?: DisciplineFrames
   hrefs?: DisciplineHrefs
-  heading?: ReactNode
+  text?: DisciplinesText
 }) {
   // Puck passes contentEditable text fields as React elements inside the editor, so only strings can be trimmed.
+  const heading = text?.heading
   const hasHeading = typeof heading === "string" ? heading.trim() !== "" : Boolean(heading)
 
   return (
     <DisciplinesSection
       overrides={useContext(SiteSlotsContext)}
       images={images}
+      frames={frames}
       hrefs={hrefs}
-      text={hasHeading ? { heading } : undefined}
+      text={{ ...text, heading: hasHeading ? heading : undefined }}
     />
   )
 }

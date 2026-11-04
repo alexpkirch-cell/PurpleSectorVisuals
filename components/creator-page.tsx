@@ -115,19 +115,17 @@ export function CreatorPage({
           </Link>
         </div>
 
-        <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {shots.map((shot, i) => (
+        <div className="mt-10 columns-2 gap-3 sm:columns-3">
+          {shots.map((shot) => (
             <div
               key={shot.id}
-              className={cn(
-                "group relative overflow-hidden rounded-2xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
-                i % 3 === 0 ? "col-span-2 aspect-[16/10] sm:col-span-1 sm:aspect-[3/4]" : "aspect-[3/4]"
-              )}
+              className="group relative mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
             >
               <ImageSlot
+                natural
                 aspect={shot.aspect}
                 label=""
-                className="border-none"
+                className={cn("border-none", !shot.src && !(shot.slotKey && overrides?.[shot.slotKey]) && "aspect-[3/4]")}
                 slotKey={shot.slotKey}
                 overrides={overrides}
                 imageUrl={shot.src || undefined}

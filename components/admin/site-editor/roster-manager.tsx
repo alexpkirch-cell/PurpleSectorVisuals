@@ -64,7 +64,7 @@ export function RosterManager({ initialRoster }: { initialRoster: RosterContract
                     src={contractor.profile_image_url}
                     alt={contractor.name}
                     crossOrigin="anonymous"
-                    className="size-full object-cover"
+                    className="size-full object-contain"
                   />
                 ) : (
                   <User className="size-5" />

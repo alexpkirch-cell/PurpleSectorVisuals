@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
 import {
   Baby,
   CalendarPlus,
@@ -18,6 +18,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Trash2,
+  UserRound,
   Wallet,
   XCircle,
 } from "lucide-react"
@@ -42,11 +43,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LinkifiedText } from "@/components/admin/linkified-text"
 import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
 import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
+import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
 import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-terms"
 import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
@@ -97,10 +100,72 @@ function PaymentStatusPill({
   )
 }
 
+function PageTitle({ children }: { children: ReactNode }) {
+  return <h1 className="font-heading text-2xl font-medium text-foreground">{children}</h1>
+}
+
+function PageDescription({ children }: { children: ReactNode }) {
+  return <p className="mt-1 text-sm text-muted-foreground">{children}</p>
+}
+
+/** Tabs inside the slide-over sheet; side-by-side sections on the full-screen workspace page. */
+function PanelGroup({ isPage, children }: { isPage: boolean; children: ReactNode }) {
+  // The workspace page owns the grid, so panels become direct grid items there.
+  if (isPage) return <>{children}</>
+
+  return (
+    <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="finances">Finances</TabsTrigger>
+        <TabsTrigger value="vault">Vault</TabsTrigger>
+      </TabsList>
+      {children}
+    </Tabs>
+  )
+}
+
+function Panel({
+  isPage,
+  value,
+  title,
+  className,
+  children,
+}: {
+  isPage: boolean
+  value: string
+  title: string
+  className?: string
+  children: ReactNode
+}) {
+  if (!isPage) {
+    return (
+      <TabsContent value={value} className={className}>
+        {children}
+      </TabsContent>
+    )
+  }
+
+  return (
+    <section
+      aria-labelledby={`workspace-${value}`}
+      className={`${className ?? ""} min-w-0 rounded-xl border border-border bg-card p-5`}
+    >
+      <h2 id={`workspace-${value}`} className="font-heading text-base font-medium text-foreground">
+        {title}
+      </h2>
+      {children}
+    </section>
+  )
+}
+
 export function ShootDetailSheet({
   shoot,
   bookingTiers,
   bookingAddons,
+  variant = "sheet",
+  pageExtras,
+  hideClientContact = false,
   onOpenChange,
   onUpdated,
   onDeclined,
@@ -109,17 +174,31 @@ export function ShootDetailSheet({
   shoot: Shoot | null
   bookingTiers: BookingTier[]
   bookingAddons: BookingAddon[]
-  onOpenChange: (open: boolean) => void
+  /** "page" renders the same controls full width, without the slide-over sheet. */
+  variant?: "sheet" | "page"
+  /** Page variant only: more cards that join the same two-column grid after the overview and finances cards. */
+  pageExtras?: ReactNode
+  /** Omit the editable contact fields when another card (the Client Card) owns them. */
+  hideClientContact?: boolean
+  onOpenChange?: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
   onDeclined?: (shoot: Shoot) => void
   onDeleteRequested?: (shoot: Shoot) => void
 }) {
+  const isPage = variant === "page"
+  const HeaderRoot = isPage ? "div" : SheetHeader
+  const Title = isPage ? PageTitle : SheetTitle
+  const Description = isPage ? PageDescription : SheetDescription
+
   const [totalPrice, setTotalPrice] = useState("0")
   const [priceTouched, setPriceTouched] = useState(false)
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("0")
   const [notes, setNotes] = useState("")
+  const [clientName, setClientName] = useState("")
+  const [clientEmail, setClientEmail] = useState("")
+  const [clientPhone, setClientPhone] = useState("")
   const [location, setLocation] = useState("")
   const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -145,6 +224,9 @@ export function ShootDetailSheet({
       setEditors(editorsOf(shoot))
       setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
       setNotes(shoot.notes ?? "")
+      setClientName(shoot.client_name)
+      setClientEmail(shoot.client_email)
+      setClientPhone(shoot.client_phone ?? "")
       setLocation(shoot.location ?? "")
       setLocationMapsUrl(shoot.location_maps_url)
     }
@@ -181,8 +263,15 @@ export function ShootDetailSheet({
       const price = Math.max(0, Number(totalPrice) || 0)
 
       const trimmedLocation = location.trim()
+      const trimmedClientName = clientName.trim()
+      const trimmedClientEmail = clientEmail.trim()
+      const trimmedClientPhone = clientPhone.trim()
       const locationChanged = trimmedLocation !== (shoot.location ?? "")
       await updateShoot(shoot.id, {
+        // Only send contact fields that actually changed, so a stale copy never overwrites newer details.
+        ...(trimmedClientName && trimmedClientName !== shoot.client_name ? { clientName: trimmedClientName } : {}),
+        ...(trimmedClientEmail && trimmedClientEmail !== shoot.client_email ? { clientEmail: trimmedClientEmail } : {}),
+        ...(trimmedClientPhone !== (shoot.client_phone ?? "") ? { clientPhone: trimmedClientPhone || null } : {}),
         basePrice: price,
         travelFee: 0,
         notes: notes || null,
@@ -197,6 +286,9 @@ export function ShootDetailSheet({
       })
       onUpdated({
         ...shoot,
+        client_name: trimmedClientName || shoot.client_name,
+        client_email: trimmedClientEmail || shoot.client_email,
+        client_phone: trimmedClientPhone || null,
         base_price: String(price),
         travel_fee: "0",
         total_price: String(price),
@@ -214,7 +306,7 @@ export function ShootDetailSheet({
             }
           : {}),
       })
-      toast.success("Shoot updated")
+      toast.success("Client details updated")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save shoot")
     } finally {
@@ -263,17 +355,14 @@ export function ShootDetailSheet({
 
   const isNewInquiry = shoot?.status === "new_inquiry"
 
-  return (
-    <Sheet open={!!shoot} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-6 overflow-y-auto sm:max-w-lg">
-        {shoot && (
+  const content = shoot && (
           <>
-            <SheetHeader className="flex-row items-start justify-between gap-2 pr-10">
+            <HeaderRoot className="flex flex-row items-start justify-between gap-2 pr-10 lg:col-span-2">
               <div>
-                <SheetTitle>{shoot.client_name}</SheetTitle>
-                <SheetDescription>
+                <Title>{shoot.client_name}</Title>
+                <Description>
                   {shoot.shoot_type} &middot; {shoot.client_email}
-                </SheetDescription>
+                </Description>
               </div>
               {(onDeclined || onDeleteRequested) && shoot.status !== "declined" && (
                 <DropdownMenu>
@@ -304,10 +393,10 @@ export function ShootDetailSheet({
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
-            </SheetHeader>
+            </HeaderRoot>
 
             {isNewInquiry ? (
-              <div className="flex flex-col gap-4 px-4">
+              <div className="flex flex-col gap-4 px-4 lg:col-span-2">
                 <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border bg-accent/20 p-3">
                   <span className="text-xs font-medium text-foreground">New inquiry</span>
                   <p className="text-xs text-muted-foreground">
@@ -366,65 +455,127 @@ export function ShootDetailSheet({
                 </Button>
               </div>
             ) : (
-              <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="finances">Finances</TabsTrigger>
-                  <TabsTrigger value="vault">Vault</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <InfoRow label="Full name" value={shoot.client_name} />
-                    <InfoRow label="Email" value={shoot.client_email} />
-                    <InfoRow label="Phone" value={shoot.client_phone ?? "Not provided"} />
-                    <InfoRow label="Package selected" value={shoot.shoot_type} />
-                    <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="shoot-location">Location</Label>
-                      {mapsUrlFor(shoot) && (
-                        <a
-                          href={mapsUrlFor(shoot) ?? undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <MapPin className="size-3" aria-hidden="true" />
-                          Open in Maps
-                          <ExternalLink className="size-3" aria-hidden="true" />
-                        </a>
-                      )}
+              <PanelGroup isPage={isPage}>
+                <Panel isPage={isPage} value="overview" title="Overview" className="flex flex-col gap-4">
+                  {!hideClientContact && (
+                  <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+                    <span className="text-xs font-medium text-foreground">Client contact</span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <Label htmlFor="client-name">Full name</Label>
+                        <div className="relative">
+                          <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-name"
+                            className="h-9 pl-9"
+                            value={clientName}
+                            onChange={(event) => setClientName(event.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="client-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-email"
+                            type="email"
+                            className="h-9 pl-9"
+                            value={clientEmail}
+                            onChange={(event) => setClientEmail(event.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="client-phone">Phone</Label>
+                        <div className="relative">
+                          <Phone className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-phone"
+                            type="tel"
+                            className="h-9 pl-9"
+                            value={clientPhone}
+                            onChange={(event) => setClientPhone(event.target.value)}
+                            placeholder="Not provided"
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <LocationAutocomplete
-                      id="shoot-location"
-                      value={location}
-                      onChange={(selection) => {
-                        setLocation(selection.location)
-                        setLocationMapsUrl(selection.mapsUrl)
-                      }}
-                      placeholder="Search a venue or address"
-                    />
                   </div>
-
-                  {shoot.shoot_date && (
-                    <a
-                      href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
-                    >
-                      <CalendarPlus className="size-3.5" />
-                      Add to Google Calendar
-                    </a>
                   )}
 
+                  <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+                    <span className="text-xs font-medium text-foreground">Shoot logistics</span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <InfoRow label="Package selected" value={shoot.shoot_type} />
+                      <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="shoot-location">Location</Label>
+                        {mapsUrlFor(shoot) && (
+                          <a
+                            href={mapsUrlFor(shoot) ?? undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <MapPin className="size-3" aria-hidden="true" />
+                            Open in Maps
+                            <ExternalLink className="size-3" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
+                      <LocationAutocomplete
+                        id="shoot-location"
+                        value={location}
+                        onChange={(selection) => {
+                          setLocation(selection.location)
+                          setLocationMapsUrl(selection.mapsUrl)
+                        }}
+                        placeholder="Search a venue or address"
+                      />
+                    </div>
+
+                    {shoot.shoot_date && (
+                      <a
+                        href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
+                      >
+                        <CalendarPlus className="size-3.5" />
+                        Add to Google Calendar
+                      </a>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                      <Baby className="size-3.5" />
-                      Minor status
+                    <span className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Baby className="size-3.5" />
+                        Minor status
+                      </span>
+                      {shoot.vault_pin ? (
+                        <Badge
+                          variant="outline"
+                          className={
+                            shoot.vault_is_minor
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          }
+                        >
+                          {shoot.vault_is_minor ? "Minor: guardian signed" : "Adult confirmed"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Not collected yet
+                        </Badge>
+                      )}
                     </span>
                     {shoot.vault_is_minor ? (
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -456,9 +607,9 @@ export function ShootDetailSheet({
                   <Button type="button" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? "Saving…" : "Save changes"}
                   </Button>
-                </TabsContent>
+                </Panel>
 
-                <TabsContent value="finances" className="flex flex-col gap-4">
+                <Panel isPage={isPage} value="finances" title="Finances &amp; Splits" className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="totalPrice">Total Contract Price</Label>
@@ -548,9 +699,10 @@ export function ShootDetailSheet({
                   <Button type="button" onClick={handleSave} disabled={isSaving}>
                     {isSaving ? "Saving…" : "Save changes"}
                   </Button>
-                </TabsContent>
+                </Panel>
 
-                <TabsContent value="vault" className="flex flex-col gap-4">
+                {!isPage && (
+                <Panel isPage={isPage} value="vault" title="Vault, prep and delivery" className="flex flex-col gap-4">
                   {shoot.vault_pin ? (
                     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
                       <div className="flex items-center justify-between">
@@ -696,7 +848,11 @@ export function ShootDetailSheet({
                             <div>
                               <p className="font-medium text-foreground">Mood board / inspiration</p>
                               <p className="whitespace-pre-wrap break-words text-muted-foreground">
-                                {shoot.vault_mood_board_links || "None provided"}
+                                {shoot.vault_mood_board_links ? (
+                                  <LinkifiedText text={shoot.vault_mood_board_links} />
+                                ) : (
+                                  "None provided"
+                                )}
                               </p>
                             </div>
                           </div>
@@ -704,6 +860,8 @@ export function ShootDetailSheet({
                           <p className="text-xs text-muted-foreground">Client has not submitted prep notes yet.</p>
                         )}
                       </div>
+
+                      {shoot.vault_id && <VaultDeliveryUploader vaultId={shoot.vault_id} />}
                     </div>
                   ) : (
                     <>
@@ -745,12 +903,25 @@ export function ShootDetailSheet({
                       </p>
                     </>
                   )}
-                </TabsContent>
-              </Tabs>
+                </Panel>
+                )}
+              </PanelGroup>
             )}
           </>
-        )}
-      </SheetContent>
+  )
+
+  if (isPage) {
+    return (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {content}
+        {pageExtras}
+      </div>
+    )
+  }
+
+  return (
+    <Sheet open={!!shoot} onOpenChange={onOpenChange}>
+      <SheetContent className="flex w-full flex-col gap-6 overflow-y-auto sm:max-w-lg">{content}</SheetContent>
     </Sheet>
   )
 }

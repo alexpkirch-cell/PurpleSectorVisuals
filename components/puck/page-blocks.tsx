@@ -8,6 +8,7 @@ import type { PortfolioItem } from "@/app/actions/portfolio"
 import { UnifiedBookingForm } from "@/components/booking/unified-booking-form"
 import { GalleryGrid } from "@/components/gallery-grid"
 import { StudioConfigurator } from "@/components/packages/studio-configurator"
+import { EditableImage, EditOnly } from "@/components/puck/inline-edit"
 import { Button } from "@/components/ui/button"
 import { VaultLoginForm } from "@/components/vault/vault-login-form"
 import type { ServicePackage } from "@/lib/packages"
@@ -151,27 +152,32 @@ export function DemoVaultBlock({
           <p className="max-w-xl text-sm text-zinc-400">{body}</p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
           {photos.map((photo, index) => (
-            <div
-              key={index}
-              className="group relative aspect-[4/5] overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900"
-            >
-              {photo.src ? (
-                <Image
-                  src={photo.src}
-                  alt={`Sample delivered photo ${index + 1}`}
-                  fill
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                />
-              ) : null}
-              <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
-                <Button size="icon" variant="secondary" aria-label={`Download photo ${index + 1}`}>
-                  <Download />
-                </Button>
+            <EditableImage key={index} path={`photos.${index}.src`}>
+              <div className="group relative mb-4 break-inside-avoid overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
+                {photo.src ? (
+                  <Image
+                    src={photo.src}
+                    alt={`Sample delivered photo ${index + 1}`}
+                    width={0}
+                    height={0}
+                    style={{ width: "100%", height: "auto" }}
+                    className="block object-contain transition-transform duration-300 group-hover:scale-105"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                ) : (
+                  <div className="flex aspect-[4/5] w-full items-center justify-center text-xs text-zinc-500">
+                    <EditOnly>Click to add a photo</EditOnly>
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-end justify-end bg-gradient-to-t from-black/60 via-transparent to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
+                  <Button size="icon" variant="secondary" aria-label={`Download photo ${index + 1}`}>
+                    <Download />
+                  </Button>
+                </div>
               </div>
-            </div>
+            </EditableImage>
           ))}
         </div>
       </div>

@@ -1,74 +1,50 @@
+import type { ReactNode } from "react"
 import { Camera } from "lucide-react"
+
 import Link from "@/components/puck/edit-mode"
-
-import { ImageSlot } from "@/components/image-slot"
-import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
-import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
-
-export const STUDIO_GRID_MIN = 3
-export const STUDIO_GRID_MAX = 12
-
-export type CoreIdentityImages = {
-  /** Current shape: any number of photos (3 to 12) that auto-flow into the grid. */
-  gallery?: (string | undefined)[]
-  /** Legacy fixed slots, only read when `gallery` has never been saved. */
-  reel?: string
-  sports?: string
-  portrait?: string
-  bts?: (string | undefined)[]
-}
+import { withTextDefaults } from "@/lib/text-defaults"
 
 export const STUDIO_TEXT_DEFAULTS = {
-  eyebrow: "The Studio",
-  heading: "Two Shooters. One Standard.",
-  body: "Purple Sector Visuals is built on a two-person team. One of us specializes in fast-paced action and event coverage, while the other focuses on lighting, portraits, and atmosphere.\n\nNo matter who is behind the camera or what package you book, the result is exactly the same: premium quality, fast delivery, and zero hassle.",
+  eyebrow: "PURPLE SECTOR VISUALS",
+  heading: "Independent Production. Zero Friction.",
+  body: "Purple Sector Visuals is an independent media production company based in Grand Junction. We keep the process simple: clear contracts, transparent pricing, and fast turnaround through secure digital delivery. Submit your project requirements, and we match the shoot to the right creator on our roster—or browse our portfolios to request a specific specialist. From single-session bookings to full commercial campaigns, we take care of the entire production so you don't have to manage the details.",
   buttonLabel: "View Our Work",
 }
 
-export type StudioText = Partial<typeof STUDIO_TEXT_DEFAULTS>
+/** Strings on the live site; React nodes inside the editor, where each one is an inline text editor. */
+export type StudioText = { [K in keyof typeof STUDIO_TEXT_DEFAULTS]?: ReactNode }
 
-function resolveGallery(images?: CoreIdentityImages) {
-  const source = images?.gallery ?? (images ? [images.reel, images.sports, images.portrait, ...(images.bts ?? [])] : [])
-  const slots = source.slice(0, STUDIO_GRID_MAX)
-  while (slots.length < (images ? Math.max(STUDIO_GRID_MIN, slots.length) : 6)) slots.push(undefined)
-  return slots
-}
-
-export function CoreIdentitySection({
-  overrides,
-  images,
-  text,
-}: {
-  overrides?: SiteSlotOverrides
-  images?: CoreIdentityImages
-  text?: StudioText
-}) {
-  const copy = { ...STUDIO_TEXT_DEFAULTS, ...text }
-  const paragraphs = copy.body.split(/\n{2,}/).filter(Boolean)
-  const slots = resolveGallery(images)
-  const lightboxImages: LightboxImage[] = slots.flatMap((src, i) =>
-    src ? [{ src, title: `Studio photo ${i + 1}`, category: "The Studio" }] : [],
-  )
+/** The studio statement that opens the page below the hero: who we are and how a project moves from request to delivery. */
+export function CoreIdentitySection({ text }: { text?: StudioText }) {
+  const copy = withTextDefaults(STUDIO_TEXT_DEFAULTS, text)
+  const paragraphs = typeof copy.body === "string" ? copy.body.split(/\n{2,}/).filter(Boolean) : null
 
   return (
     <section className="w-full bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 py-24 sm:px-10">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-start">
-          <div className="lg:sticky lg:top-28">
-            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">
-              {copy.eyebrow}
-            </p>
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-16">
+          <div className="lg:col-span-5">
+            <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">{copy.eyebrow}</p>
             <h2 className="mt-4 text-balance font-heading text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
               {copy.heading}
             </h2>
-            {paragraphs.map((paragraph, index) => (
-              <p
-                key={index}
-                className={`${index === 0 ? "mt-6" : "mt-4"} text-pretty text-base leading-relaxed text-zinc-400`}
-              >
-                {paragraph}
-              </p>
-            ))}
+          </div>
+
+          <div className="lg:col-span-7 lg:pt-9">
+            {paragraphs ? (
+              paragraphs.map((paragraph, index) => (
+                <p
+                  key={index}
+                  className={`${index === 0 ? "" : "mt-4"} text-pretty text-base leading-relaxed text-zinc-400 sm:text-lg sm:leading-relaxed`}
+                >
+                  {paragraph}
+                </p>
+              ))
+            ) : (
+              <div className="whitespace-pre-line text-pretty text-base leading-relaxed text-zinc-400 sm:text-lg sm:leading-relaxed">
+                {copy.body}
+              </div>
+            )}
 
             <Link
               href="/work"
@@ -77,38 +53,6 @@ export function CoreIdentitySection({
               <Camera className="size-3.5" />
               {copy.buttonLabel}
             </Link>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {slots.map((src, i) => {
-              const lightboxIndex = src ? lightboxImages.findIndex((item) => item.src === src) : -1
-              return (
-                <div key={i} className="relative aspect-square w-full overflow-hidden rounded-2xl">
-                  {src ? (
-                    <LightboxTrigger
-                      images={lightboxImages}
-                      startIndex={Math.max(lightboxIndex, 0)}
-                      className="absolute inset-0"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
-                      <img
-                        src={src}
-                        alt={`Studio photo ${i + 1}`}
-                        className="size-full rounded-2xl border border-zinc-800 object-cover transition-transform duration-500 ease-out hover:scale-[1.03]"
-                      />
-                    </LightboxTrigger>
-                  ) : (
-                    <ImageSlot
-                      aspect="1:1 Slot"
-                      label={`Studio ${i + 1}`}
-                      compact
-                      slotKey={i === 0 ? "home.core-identity" : undefined}
-                      overrides={i === 0 ? overrides : undefined}
-                    />
-                  )}
-                </div>
-              )
-            })}
           </div>
         </div>
       </div>

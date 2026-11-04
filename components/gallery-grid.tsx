@@ -80,7 +80,7 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
         ))}
       </div>
 
-      <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <div className="mt-8 columns-2 gap-3 sm:columns-3 lg:columns-4">
         {filtered.map((item, i) => (
           <div
             key={item.id}
@@ -94,19 +94,15 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
                 setOpenIndex(i)
               }
             }}
-            className={cn(
-              "group relative cursor-zoom-in overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]",
-              i % 5 === 0
-                ? "col-span-2 aspect-[16/10] sm:aspect-[4/3]"
-                : "aspect-[3/4]"
-            )}
+            className="group relative mb-3 block cursor-zoom-in break-inside-avoid overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are served from the public portfolio-images bucket */}
             <img
               src={item.image_url || "/placeholder.svg"}
               alt={item.title}
               crossOrigin="anonymous"
-              className="size-full object-cover transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
+              loading="lazy"
+              className="block h-auto w-full transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
               <div className="px-4 text-center">

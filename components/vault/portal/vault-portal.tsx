@@ -21,14 +21,12 @@ const TAB_TRIGGER_CLASS =
 
 interface VaultPortalProps {
   vaultId: string
-  token: string
   category: string | null
   location: string | null
   shootDateLabel: string | null
   contractHtml: string | null
   invoice: InvoiceData | null
   isComped: boolean
-  balanceDue: number | null
   mustHaveShots: string | null
   moodBoardLinks: string | null
   prepSubmitted: boolean
@@ -41,14 +39,12 @@ type PortalTab = "paperwork" | "prep" | "tracker" | "delivery"
 
 export function VaultPortal({
   vaultId,
-  token,
   category,
   location,
   shootDateLabel,
   contractHtml,
   invoice,
   isComped,
-  balanceDue,
   mustHaveShots,
   moodBoardLinks,
   prepSubmitted,
@@ -133,7 +129,7 @@ export function VaultPortal({
 
       {delivered && (
         <TabsContent value="delivery">
-          <DeliveryTab galleryHref={`/vault/${token}?view=gallery`} photoCount={live.photoCount} balanceDue={balanceDue} />
+          <DeliveryTab vaultId={vaultId} />
         </TabsContent>
       )}
     </Tabs>

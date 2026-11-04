@@ -1,11 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { GripVertical, Star, Trash2 } from "lucide-react"
+import { GripVertical, Pencil, Star, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import type { AssignableVault } from "@/app/actions/media-library"
 import { MultiSelect } from "@/components/admin/multi-select"
 import { BatchUploader } from "@/components/admin/portfolio/batch-uploader"
+import { PhotoEditDialog } from "@/components/admin/portfolio/photo-edit-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -51,15 +53,20 @@ function CategoryEditor({ item, onCommit }: { item: PortfolioItem; onCommit: (se
 export function PortfolioCms({
   initialItems,
   photographers,
+  vaults,
 }: {
   initialItems: PortfolioItem[]
   photographers: string[]
+  vaults: AssignableVault[]
 }) {
   const [items, setItems] = useState(initialItems)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null)
+
+  const editingPhoto = items.find((item) => item.id === editingPhotoId) ?? null
 
   async function handleToggleFeatured(item: PortfolioItem) {
     setPendingId(item.id)
@@ -147,6 +154,7 @@ export function PortfolioCms({
     <div className="flex flex-col gap-6">
       <BatchUploader
         photographers={photographers}
+        vaults={vaults}
         onUploaded={(created) => setItems((prev) => [...prev, ...created])}
       />
 
@@ -157,15 +165,17 @@ export function PortfolioCms({
       ) : (
         <div>
           <p className="mb-3 text-xs text-muted-foreground">
-            Drag any tile to reorder — this is the exact layout clients see on the public Portfolio page.
+            Click any photo to edit its shooter, editor, title and category. Drag a tile to reorder; this is the exact
+            layout clients see on the public Portfolio page.
           </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {items.map((item, i) => {
+          <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">
+            {items.map((item) => {
               const isDragOver = dragOverId === item.id && draggingId !== item.id
               return (
                 <div
                   key={item.id}
                   draggable
+                  onClick={() => setEditingPhotoId(item.id)}
                   onDragStart={() => setDraggingId(item.id)}
                   onDragEnd={() => {
                     setDraggingId(null)
@@ -181,10 +191,9 @@ export function PortfolioCms({
                     handleDrop(item.id)
                   }}
                   className={cn(
-                    "group relative cursor-grab overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200 ease-out active:cursor-grabbing",
-                    i % 5 === 0 ? "col-span-2 aspect-[16/10] sm:aspect-[4/3]" : "aspect-[3/4]",
+                    "group relative mb-3 block cursor-pointer break-inside-avoid overflow-hidden rounded-2xl border border-border bg-card transition-all duration-200 ease-out",
                     draggingId === item.id && "opacity-40",
-                    isDragOver && "border-primary ring-2 ring-primary/40",
+                    isDragOver && "border-primary ring-2 ring-primary/40"
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are uploaded to the public portfolio-images bucket */}
@@ -192,16 +201,18 @@ export function PortfolioCms({
                     src={item.image_url || "/placeholder.svg"}
                     alt={item.title || "Portfolio photo"}
                     crossOrigin="anonymous"
-                    className="size-full object-cover"
+                    loading="lazy"
+                    draggable={false}
+                    className="block h-auto w-full"
                   />
 
-                  <div className="pointer-events-none absolute left-2 top-2 flex size-7 items-center justify-center rounded-md bg-black/50 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
+                  <div className="pointer-events-none absolute left-2 top-2 flex size-7 items-center justify-center rounded-md bg-black/50 text-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100">
                     <GripVertical className="size-3.5" />
                   </div>
 
                   <div
                     className={cn(
-                      "absolute inset-0 flex flex-col justify-between bg-black/0 p-3 opacity-0 transition-opacity group-hover:bg-black/65 group-hover:opacity-100",
+                      "absolute inset-0 flex flex-col justify-between bg-black/0 p-3 opacity-0 transition-opacity focus-within:bg-black/65 focus-within:opacity-100 group-hover:bg-black/65 group-hover:opacity-100",
                       editingCategoryId === item.id && "bg-black/65 opacity-100"
                     )}
                   >
@@ -209,9 +220,25 @@ export function PortfolioCms({
                       <Button
                         type="button"
                         size="icon"
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setEditingPhotoId(item.id)
+                        }}
+                        aria-label={`Edit ${item.title || "photo"}`}
+                        className="size-7"
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
                         variant={item.featured ? "default" : "secondary"}
                         disabled={pendingId === item.id}
-                        onClick={() => handleToggleFeatured(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleToggleFeatured(item)
+                        }}
                         aria-label={item.featured ? "Unfeature" : "Feature"}
                         className="size-7"
                       >
@@ -222,7 +249,10 @@ export function PortfolioCms({
                         size="icon"
                         variant="destructive"
                         disabled={pendingId === item.id}
-                        onClick={() => handleDelete(item)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(item)
+                        }}
                         aria-label="Delete"
                         className="size-7"
                       >
@@ -230,7 +260,11 @@ export function PortfolioCms({
                       </Button>
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <p className="text-sm font-medium text-white">{item.title || "Untitled"}</p>
+                      <p className="text-sm font-medium text-foreground">{item.title || "Untitled"}</p>
+                      <p className="text-[0.65rem] text-muted-foreground">
+                        Shot by {item.shot_by ?? item.shooter ?? "Unassigned"} &middot; Edited by{" "}
+                        {item.edited_by ?? "Unassigned"}
+                      </p>
                       {editingCategoryId === item.id ? (
                         <CategoryEditor item={item} onCommit={(selected) => handleCategoriesChange(item, selected)} />
                       ) : (
@@ -258,6 +292,18 @@ export function PortfolioCms({
           </div>
         </div>
       )}
+
+      {editingPhoto ? (
+        <PhotoEditDialog
+          key={editingPhoto.id}
+          item={editingPhoto}
+          people={photographers}
+          onOpenChange={(open) => {
+            if (!open) setEditingPhotoId(null)
+          }}
+          onSaved={(updated) => setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)))}
+        />
+      ) : null}
     </div>
   )
 }

@@ -18,11 +18,10 @@ type ImageFieldInputProps = {
   onChange: (value: string) => void
 }
 
-export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) {
+/** Browser-direct upload to the public site-assets bucket, shared by every image control in the site editor. */
+export function useImageUpload(onChange: (value: string) => void) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const [showUrl, setShowUrl] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleFile(file: File | undefined) {
@@ -50,11 +49,19 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
     }
   }
 
-  function openPicker(event: { preventDefault: () => void; stopPropagation: () => void }) {
-    event.preventDefault()
-    event.stopPropagation()
+  function openPicker(event?: { preventDefault: () => void; stopPropagation: () => void }) {
+    event?.preventDefault()
+    event?.stopPropagation()
     if (!uploading) inputRef.current?.click()
   }
+
+  return { inputRef, uploading, error, handleFile, openPicker }
+}
+
+export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) {
+  const { inputRef, uploading, error, handleFile, openPicker } = useImageUpload(onChange)
+  const [dragging, setDragging] = useState(false)
+  const [showUrl, setShowUrl] = useState(false)
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()
@@ -78,7 +85,7 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
       >
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img src={value} alt="" className="absolute inset-0 h-full w-full object-contain" />
         ) : (
           <button
             type="button"
@@ -112,21 +119,28 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
         aria-label="Upload image file"
       />
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 basis-36"
+          disabled={uploading}
+          onClick={openPicker}
+        >
+          <Upload className="size-4" />
+          Upload from Computer
+        </Button>
         <MediaPickerDialog
           selectedUrl={value}
-          onSelect={onChange}
+          onSelect={(url) => onChange(url)}
           trigger={
-            <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading}>
+            <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={uploading}>
               <Images className="size-4" />
-              Portfolio
+              Choose from Gallery
             </Button>
           }
         />
-        <Button type="button" variant="outline" size="sm" className="flex-1" disabled={uploading} onClick={openPicker}>
-          <Upload className="size-4" />
-          Upload new
-        </Button>
         <Button
           type="button"
           variant="ghost"

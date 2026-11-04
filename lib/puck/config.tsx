@@ -1,10 +1,21 @@
-import type { Config, CustomField, Fields } from "@measured/puck"
+import type { ComponentConfig, Config, CustomField, Fields, TextField } from "@measured/puck"
 
+import { STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
+import { DISCIPLINES_TEXT_DEFAULTS } from "@/components/home/disciplines-section"
+import { DUAL_SPLIT_TEXT_DEFAULTS } from "@/components/home/dual-split-section"
 import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
 import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
 import { ImageFieldInput } from "@/components/puck/image-field"
+import { EditableImage } from "@/components/puck/inline-edit"
+import {
+  GRID_TEXT_DEFAULTS,
+  MasonryGallerySection,
+  ScatteredCollageSection,
+  StandardGridSection,
+  type GridPhoto,
+} from "@/components/puck/smart-grids"
 import {
   BookingFormBlock,
   DemoVaultBlock,
@@ -25,7 +36,6 @@ import {
   DEFAULT_CUSTOM_HEIGHT,
   resolveImageSizing,
   SmartImage,
-  type ImageObjectFit,
   type ImageSizing,
 } from "@/components/puck/smart-image"
 import {
@@ -51,12 +61,81 @@ const widthField = {
   ],
 } as const
 
-/** Every photo slot in the editor uses this: file picker -> Supabase `public_site_assets` -> public URL. */
-const imageField = (label: string): CustomField<string> => ({
-  type: "custom",
-  label,
-  render: ({ value, onChange }) => <ImageFieldInput value={value ?? ""} onChange={onChange} />,
-})
+/**
+ * A photo slot: file picker -> Supabase `public_site_assets` -> public URL. Blocks that mark their photos with `EditableImage`
+ * are edited by clicking the photo on the canvas, so the sidebar renders nothing for them; pass `inline: false` for photos the
+ * canvas cannot click yet so their sidebar input stays.
+ */
+const imageField = (label: string, { inline = true }: { inline?: boolean } = {}): CustomField<string> =>
+  ({
+    type: "custom",
+    label,
+    render: ({ value, onChange }: { value?: string; onChange: (value: string) => void }) =>
+      inline ? <></> : <ImageFieldInput value={value ?? ""} onChange={onChange} />,
+  }) as CustomField<string>
+
+const humanize = (key: string) => key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase())
+
+/** Text fields that are edited by typing on the canvas; the sidebar hides them (see the editor's `fieldTypes` override). */
+const inlineTextFields = (keys: readonly string[], multiline: readonly string[] = []) =>
+  Object.fromEntries(
+    keys.map((key) => [
+      key,
+      { type: multiline.includes(key) ? "textarea" : "text", label: humanize(key), contentEditable: true },
+    ])
+  )
+
+const pickText = <K extends string>(source: Record<string, unknown>, keys: readonly K[]) =>
+  Object.fromEntries(keys.map((key) => [key, source[key]])) as Record<K, string>
+
+/** Copy for text fields a layout saved before the field existed does not have yet. */
+const fillText = <K extends string>(props: Record<string, unknown>, defaults: Record<string, string>, keys: readonly K[]) =>
+  Object.fromEntries(keys.map((key) => [key, typeof props[key] === "string" ? props[key] : defaults[key]])) as Record<K, string>
+
+const STUDIO_TEXT_KEYS = ["eyebrow", "heading", "body"] as const
+const DUAL_SPLIT_TEXT_KEYS = ["eyebrow", "heading", "alexName", "alexSubtitle", "gabeName", "gabeSubtitle"] as const
+const DISCIPLINE_TEXT_KEYS = [
+  "eyebrow",
+  "heading",
+  ...(["sports", "automotive", "portraits", "events", "commercial"] as const).flatMap(
+    (name) => [`${name}Title`, `${name}Description`] as const
+  ),
+] as const
+
+const GRID_TEXT_KEYS = ["eyebrow", "heading"] as const
+const emptyGridPhoto = (): GridPhoto => ({ src: "", alt: "", focal: "" })
+
+/** A layout module from the "Add Section" group: it starts with empty, clickable photo slots that the admin fills in on the canvas. */
+function gridBlock(
+  label: string,
+  Section: (props: { photos: GridPhoto[]; text: { eyebrow?: string; heading?: string } }) => React.ReactNode,
+  { slots, max }: { slots: number; max: number }
+): ComponentConfig<GridProps> {
+  return {
+    label,
+    fields: {
+      ...(inlineTextFields(GRID_TEXT_KEYS) as Record<(typeof GRID_TEXT_KEYS)[number], TextField>),
+      items: {
+        type: "array",
+        label: "Photos (click a photo on the page to change it)",
+        min: 1,
+        max,
+        arrayFields: {
+          src: imageField("Photo"),
+          alt: { type: "text", label: "Alt text (describe the photo)" },
+        },
+        defaultItemProps: emptyGridPhoto(),
+        getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
+      },
+    },
+    defaultProps: {
+      ...pickText(GRID_TEXT_DEFAULTS, GRID_TEXT_KEYS),
+      items: Array.from({ length: slots }, emptyGridPhoto),
+    },
+    resolveData: ({ props }) => ({ props: { ...props, ...fillText(props, GRID_TEXT_DEFAULTS, GRID_TEXT_KEYS) } }),
+    render: (props) => <Section photos={props.items ?? []} text={pickText(props, GRID_TEXT_KEYS)} />,
+  }
+}
 
 const PHOTO_INFO_KEYS = ["title", "category", "shooter", "camera", "lens", "settings"] as const
 type PhotoInfo = Record<(typeof PHOTO_INFO_KEYS)[number], string>
@@ -91,10 +170,16 @@ const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events", "c
 
 type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string> &
   Partial<Record<`${(typeof HERO_FIELD_KEYS)[number]}Info`, PhotoInfo>>
-type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string>
+type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> &
+  Partial<Record<`${(typeof DUAL_SPLIT_FIELD_KEYS)[number]}Focal`, string>> &
+  Partial<Record<`${(typeof DUAL_SPLIT_FIELD_KEYS)[number]}Zoom`, number>> &
+  Partial<Record<(typeof DUAL_SPLIT_TEXT_KEYS)[number], string>>
 type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
 type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
-  Partial<Record<DisciplineHrefKey, string>> & { heading?: string }
+  Partial<Record<DisciplineHrefKey, string>> &
+  Partial<Record<`${(typeof DISCIPLINE_FIELD_KEYS)[number]}Focal`, string>> &
+  Partial<Record<`${(typeof DISCIPLINE_FIELD_KEYS)[number]}Zoom`, number>> &
+  Partial<Record<(typeof DISCIPLINE_TEXT_KEYS)[number], string>>
 
 const emptyProps = <K extends string>(keys: readonly K[]) =>
   Object.fromEntries(keys.map((key) => [key, ""])) as Record<K, string>
@@ -118,7 +203,12 @@ const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> 
   commercial: "Commercial",
 }
 
+export type GridProps = { eyebrow?: string; heading?: string; items: GridPhoto[] }
+
 export type PuckComponents = {
+  StandardGrid: GridProps
+  MasonryGallery: GridProps
+  ScatteredCollage: GridProps
   Hero: HeroProps
   Text: {
     eyebrow: string
@@ -129,9 +219,8 @@ export type PuckComponents = {
     src: string
     alt: string
     caption: string
-    sizing: ImageSizing
-    objectFit: ImageObjectFit
-    customHeight: number
+  sizing: ImageSizing
+  customHeight: number
     /** Legacy field from before `sizing` existed; only read to keep old pages looking the same. */
     aspect?: "video" | "square" | "portrait"
   }
@@ -148,12 +237,9 @@ export type PuckComponents = {
     align: Align
   }
   Studio: {
-    images?: { src: string }[]
-    /** Legacy fixed slots from before `images` existed; only read when `images` was never saved. */
-    reel?: string
-    sports?: string
-    portrait?: string
-    bts?: { src: string }[]
+    eyebrow?: string
+    heading?: string
+    body?: string
   }
   DualSplit: DualSplitProps
   Disciplines: DisciplinesProps
@@ -200,6 +286,11 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     render: ({ children }) => <div className="min-h-screen w-full bg-[#09090b] text-foreground">{children}</div>,
   },
   categories: {
+    grids: {
+      title: "Add Section",
+      defaultExpanded: true,
+      components: ["StandardGrid", "MasonryGallery", "ScatteredCollage"],
+    },
     sections: {
       title: "Homepage sections",
       components: ["Hero", "Text", "Studio", "DualSplit", "Disciplines", "JoinRoster"],
@@ -211,6 +302,10 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     },
   },
   components: {
+    StandardGrid: gridBlock("Standard Grid (2x3)", StandardGridSection, { slots: 6, max: 12 }),
+    MasonryGallery: gridBlock("Masonry Gallery", MasonryGallerySection, { slots: 8, max: 16 }),
+    ScatteredCollage: gridBlock("Scattered Collage", ScatteredCollageSection, { slots: 5, max: 8 }),
+
     Hero: {
       label: "Hero Section",
       fields: Object.fromEntries(
@@ -271,14 +366,6 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
             { label: "Custom Height", value: "custom" },
           ],
         },
-        objectFit: {
-          type: "select",
-          label: "Object fit",
-          options: [
-            { label: "Cover (fill and crop)", value: "cover" },
-            { label: "Contain (show whole image)", value: "contain" },
-          ],
-        },
         customHeight: { type: "number", label: "Custom height (px)", min: 120, max: 1600, step: 10 },
         ...photoInfoFields,
       },
@@ -286,32 +373,31 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         src: "",
         alt: "",
         caption: "",
-        sizing: "landscape",
-        objectFit: "cover",
+        sizing: "auto",
         customHeight: DEFAULT_CUSTOM_HEIGHT,
         ...emptyPhotoInfo(),
       },
       resolveFields: (data, { fields }) => {
-        const { objectFit, customHeight, ...base } = fields
+        const { customHeight, ...base } = fields
         const sizing = resolveImageSizing(data.props.sizing, data.props.aspect)
         return {
           ...base,
-          ...(sizing !== "auto" ? { objectFit } : {}),
           ...(sizing === "custom" ? { customHeight } : {}),
         } as typeof fields
       },
-      render: ({ src, alt, caption, sizing, objectFit, customHeight, aspect, puck, title, category, shooter, camera, lens, settings }) => (
+      render: ({ src, alt, caption, sizing, customHeight, aspect, puck, title, category, shooter, camera, lens, settings }) => (
         <section className="w-full bg-[#09090b]">
           <figure className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:px-10">
-            <SmartImage
-              src={src}
-              alt={alt}
-              info={{ title, category, shooter, camera, lens, settings }}
-              sizing={resolveImageSizing(sizing, aspect)}
-              objectFit={objectFit}
-              customHeight={customHeight}
-              emptyLabel={puck.isEditing ? "Select this block, then upload a picture in the right-hand panel." : undefined}
-            />
+            <EditableImage path="src">
+              <SmartImage
+                src={src}
+                alt={alt}
+                info={{ title, category, shooter, camera, lens, settings }}
+                sizing={resolveImageSizing(sizing, aspect)}
+                customHeight={customHeight}
+                emptyLabel={puck.isEditing ? "Click to add a photo" : undefined}
+              />
+            </EditableImage>
             {caption ? (
               <figcaption className="font-heading text-xs font-semibold uppercase tracking-[0.25em] text-zinc-400">
                 {caption}
@@ -397,41 +483,46 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     Studio: {
       label: "The Studio",
       fields: {
-        images: {
-          type: "array",
-          label: "Studio photos (add as many as you like)",
-          arrayFields: { src: imageField("Photo") },
-          defaultItemProps: { src: "" },
-          getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
-        },
+        ...(inlineTextFields(STUDIO_TEXT_KEYS, ["body"]) as Record<(typeof STUDIO_TEXT_KEYS)[number], TextField>),
       },
-      defaultProps: {
-        images: Array.from({ length: 6 }, () => ({ src: "" })),
-      },
-      render: ({ images, reel, sports, portrait, bts }) => (
-        <StudioBlock
-          images={{
-            gallery: images?.map((item) => item.src),
-            reel,
-            sports,
-            portrait,
-            bts: bts?.map((item) => item.src),
-          }}
-        />
-      ),
+      defaultProps: pickText(STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS),
+      // Layouts saved before a text field existed have no value for it; fill it in so the page and the editor agree.
+      // Photos saved by the old photo grid stay in the saved data untouched; they are simply no longer shown.
+      resolveData: ({ props }) => ({ props: { ...props, ...fillText(props, STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS) } }),
+      render: (props) => <StudioBlock text={pickText(props, STUDIO_TEXT_KEYS)} />,
     },
     DualSplit: {
       label: "Founders Split (Alex & Gabe)",
-      fields: Object.fromEntries(
-        DUAL_SPLIT_FIELD_KEYS.map((key) => [key, imageField(DUAL_SPLIT_LABELS[key])])
-      ) as Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], CustomField<string>>,
-      defaultProps: emptyProps(DUAL_SPLIT_FIELD_KEYS),
-      render: ({ id: _id, puck: _puck, editMode: _editMode, ...images }) => <DualSplitBlock images={images} />,
+      fields: {
+        ...(inlineTextFields(DUAL_SPLIT_TEXT_KEYS) as Record<(typeof DUAL_SPLIT_TEXT_KEYS)[number], TextField>),
+        ...(Object.fromEntries(
+          DUAL_SPLIT_FIELD_KEYS.map((key) => [key, imageField(DUAL_SPLIT_LABELS[key])])
+        ) as Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], CustomField<string>>),
+      },
+      defaultProps: {
+        ...emptyProps(DUAL_SPLIT_FIELD_KEYS),
+        ...pickText(DUAL_SPLIT_TEXT_DEFAULTS, DUAL_SPLIT_TEXT_KEYS),
+      },
+      resolveData: ({ props }) => ({
+        props: { ...props, ...fillText(props, DUAL_SPLIT_TEXT_DEFAULTS, DUAL_SPLIT_TEXT_KEYS) },
+      }),
+      render: (props) => (
+        <DualSplitBlock
+          text={pickText(props, DUAL_SPLIT_TEXT_KEYS)}
+          images={Object.fromEntries(DUAL_SPLIT_FIELD_KEYS.map((key) => [key, props[key]]))}
+          frames={Object.fromEntries(
+            DUAL_SPLIT_FIELD_KEYS.map((key) => [key, { focal: props[`${key}Focal`], zoom: props[`${key}Zoom`] }])
+          )}
+        />
+      ),
     },
     Disciplines: {
       label: "Disciplines",
       fields: {
-        heading: { type: "text", label: "Section heading", contentEditable: true },
+        ...(inlineTextFields(DISCIPLINE_TEXT_KEYS, DISCIPLINE_TEXT_KEYS.filter((key) => key.endsWith("Description"))) as Record<
+          (typeof DISCIPLINE_TEXT_KEYS)[number],
+          TextField
+        >),
         ...(Object.fromEntries(
           DISCIPLINE_FIELD_KEYS.map((key) => [key, imageField(DISCIPLINE_LABELS[key])])
         ) as Record<(typeof DISCIPLINE_FIELD_KEYS)[number], CustomField<string>>),
@@ -444,17 +535,23 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       },
       defaultProps: {
         ...emptyProps(DISCIPLINE_FIELD_KEYS),
-        heading: "Built for five disciplines.",
+        ...pickText(DISCIPLINES_TEXT_DEFAULTS, DISCIPLINE_TEXT_KEYS),
         sportsHref: "/work?category=Sports",
         automotiveHref: "/work?category=Automotive",
         portraitsHref: "/work?category=Portraits",
         eventsHref: "/work?category=Events",
         commercialHref: "/work",
       },
+      resolveData: ({ props }) => ({
+        props: { ...props, ...fillText(props, DISCIPLINES_TEXT_DEFAULTS, DISCIPLINE_TEXT_KEYS) },
+      }),
       render: (props) => (
         <DisciplinesBlock
-          heading={props.heading}
+          text={pickText(props, DISCIPLINE_TEXT_KEYS)}
           images={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[key]]))}
+          frames={Object.fromEntries(
+            DISCIPLINE_FIELD_KEYS.map((key) => [key, { focal: props[`${key}Focal`], zoom: props[`${key}Zoom`] }])
+          )}
           hrefs={Object.fromEntries(DISCIPLINE_FIELD_KEYS.map((key) => [key, props[`${key}Href`]]))}
         />
       ),
@@ -577,14 +674,14 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
           defaultItemProps: { tag: "New specialty" },
           getItemSummary: (item) => item.tag || "Tag",
         },
-        heroImage: imageField("Hero portrait"),
+        heroImage: imageField("Hero portrait", { inline: false }),
         shotsHeading: { type: "text", label: "Gallery heading" },
         galleryLabel: { type: "text", label: "Full gallery link label" },
         shots: {
           type: "array",
           label: "Selected work",
           arrayFields: {
-            src: imageField("Photo"),
+            src: imageField("Photo", { inline: false }),
             title: { type: "text", label: "Title" },
             category: { type: "text", label: "Category" },
           },

@@ -24,7 +24,7 @@ export function BlooperReel() {
         {BLOOPERS.map((b) => (
           <figure key={b.src} className="flex flex-col gap-2 overflow-hidden rounded-xl border border-border">
             <div className="relative aspect-[4/5] w-full bg-muted">
-              <Image src={b.src} alt="" fill sizes="200px" className="object-cover grayscale" crossOrigin="anonymous" />
+              <Image src={b.src} alt="" fill sizes="200px" className="object-contain grayscale" crossOrigin="anonymous" />
             </div>
             <figcaption className="px-2 pb-2 text-left text-xs text-muted-foreground">{b.caption}</figcaption>
           </figure>

@@ -1,8 +1,9 @@
 "use client"
 
 import { useRef, useState, type DragEvent } from "react"
-import { ArrowLeft, ArrowRight, ImagePlus, Loader2, Plus, Trash2, Upload, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, ImagePlus, Images, Loader2, Plus, Trash2, Upload, X } from "lucide-react"
 
+import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { Button } from "@/components/ui/button"
 import { PUBLIC_SITE_ASSETS_BUCKET } from "@/lib/storage-buckets"
 import { isVideoUrl } from "@/lib/team-directory"
@@ -107,18 +108,28 @@ export function CutoutUploader({ value, onChange }: { value: string; onChange: (
         aria-label="Upload cutout image"
         onChange={(event) => void handleFile(event.target.files?.[0])}
       />
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="flex-1"
+          className="flex-1 basis-36"
           disabled={uploading}
           onClick={() => inputRef.current?.click()}
         >
           <Upload className="size-4" />
-          {value ? "Replace cutout" : "Upload cutout"}
+          Upload from Computer
         </Button>
+        <MediaPickerDialog
+          selectedUrl={value}
+          onSelect={(url) => onChange(url)}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={uploading}>
+              <Images className="size-4" />
+              Choose from Gallery
+            </Button>
+          }
+        />
         {value ? (
           <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => onChange("")} aria-label="Remove cutout">
             <Trash2 className="size-4" />
@@ -194,10 +205,10 @@ export function HighlightMediaUploader({
         {value.map((url, index) => (
           <li key={`${url}-${index}`} className="group relative aspect-square overflow-hidden rounded-md border border-border bg-muted">
             {isVideoUrl(url) ? (
-              <video src={url} muted loop playsInline preload="metadata" className="size-full object-cover" aria-label={`Highlight video ${index + 1}`} />
+              <video src={url} muted loop playsInline preload="metadata" className="size-full object-contain" aria-label={`Highlight video ${index + 1}`} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt={`Highlight ${index + 1}`} className="size-full object-cover" />
+              <img src={url} alt={`Highlight ${index + 1}`} className="size-full object-contain" />
             )}
             <button
               type="button"
@@ -262,6 +273,35 @@ export function HighlightMediaUploader({
         aria-label="Upload highlight images or videos"
         onChange={(event) => void handleFiles(event.target.files)}
       />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 basis-40"
+          disabled={busy || value.length >= MAX_HIGHLIGHTS}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="size-4" />
+          Upload from Computer
+        </Button>
+        <MediaPickerDialog
+          multiple
+          onSelectMany={(items) => onChange([...value, ...items.map((item) => item.url)].slice(0, MAX_HIGHLIGHTS))}
+          trigger={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 basis-40"
+              disabled={busy || value.length >= MAX_HIGHLIGHTS}
+            >
+              <Images className="size-4" />
+              Choose from Gallery
+            </Button>
+          }
+        />
+      </div>
       <p className="text-xs text-muted-foreground">
         Images (JPG, PNG, WebP) and videos (MP4, WebM), up to 50 MB each. Use the arrows to set the carousel order.
       </p>

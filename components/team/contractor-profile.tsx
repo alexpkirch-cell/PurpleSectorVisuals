@@ -19,7 +19,7 @@ export function ContractorProfile({ contractor }: { contractor: Contractor }) {
               alt={contractor.name}
               fill
               sizes="160px"
-              className="object-cover"
+              className="object-contain"
               priority
             />
           ) : (
@@ -53,7 +53,7 @@ export function ContractorProfile({ contractor }: { contractor: Contractor }) {
                   width={1200}
                   height={1500}
                   sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                  className="h-auto w-full object-cover"
+                  className="h-auto w-full object-contain"
                 />
               </li>
             ))}

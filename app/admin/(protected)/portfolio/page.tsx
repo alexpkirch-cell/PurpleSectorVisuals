@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 
+import { listAssignableVaults } from "@/app/actions/media-library"
 import { listPortfolioItemsAdmin } from "@/app/actions/portfolio"
 import { PortfolioCms } from "@/components/admin/portfolio-cms"
 import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
@@ -10,7 +11,11 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminPortfolioPage() {
-  const [items, crew] = await Promise.all([listPortfolioItemsAdmin(), getActiveDirectoryMembers()])
+  const [items, crew, vaults] = await Promise.all([
+    listPortfolioItemsAdmin(),
+    getActiveDirectoryMembers(),
+    listAssignableVaults(),
+  ])
   const photographers = crew.map((member) => member.name)
 
   return (
@@ -22,7 +27,7 @@ export default async function AdminPortfolioPage() {
         </p>
       </div>
 
-      <PortfolioCms initialItems={items} photographers={photographers} />
+      <PortfolioCms initialItems={items} photographers={photographers} vaults={vaults} />
     </div>
   )
 }

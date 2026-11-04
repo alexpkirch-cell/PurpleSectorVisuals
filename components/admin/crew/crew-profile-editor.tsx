@@ -12,6 +12,7 @@ import {
   type CrewMember,
   type SplitTier,
 } from "@/app/actions/crew"
+import { ImageSourceButtons } from "@/components/admin/image-source-buttons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -108,7 +109,7 @@ export function CrewProfileEditor({ member, contractUrl }: { member: CrewMember;
         <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-muted-foreground">
           {profileImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- admin preview of an uploaded public asset
-            <img src={profileImageUrl} alt={member.name} crossOrigin="anonymous" className="size-full object-cover" />
+            <img src={profileImageUrl} alt={member.name} crossOrigin="anonymous" className="size-full object-contain" />
           ) : (
             <User className="size-7" />
           )}
@@ -137,13 +138,13 @@ export function CrewProfileEditor({ member, contractUrl }: { member: CrewMember;
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="crew-photo">Profile photo</Label>
-              <Input
-                id="crew-photo"
-                type="file"
+              <Label>Profile photo</Label>
+              <ImageSourceButtons
+                busy={uploadingPhoto}
                 accept="image/jpeg, image/png, image/webp, image/heic, .heic"
-                disabled={uploadingPhoto}
-                onChange={(event) => handlePhoto(event.target.files?.[0])}
+                onFiles={(files) => void handlePhoto(files[0])}
+                selectedUrl={profileImageUrl ?? undefined}
+                onSelect={(url) => setProfileImageUrl(url)}
               />
             </div>
             <div className="flex gap-2">

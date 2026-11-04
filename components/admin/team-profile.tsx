@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react"
 import Image from "next/image"
 import { Camera, Clock3, DollarSign, ImageUp, Plus, Trash2, TrendingUp } from "lucide-react"
 
+import { ImageSourceButtons } from "@/components/admin/image-source-buttons"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -77,8 +78,7 @@ function ProfileCard({
     fileInputRef.current?.click()
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
+  function uploadPhotoFile(file: File | undefined) {
     if (!file) return
 
     const previewUrl = URL.createObjectURL(file)
@@ -91,7 +91,10 @@ function ProfileCard({
       const publicUrl = await uploadTeamPhoto(member.id, formData)
       setPhotoUrl(publicUrl)
     })
+  }
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    uploadPhotoFile(e.target.files?.[0])
     e.target.value = ""
   }
 
@@ -125,7 +128,7 @@ function ProfileCard({
             alt={`Portrait of ${member.name}`}
             fill
             sizes="64px"
-            className="object-cover"
+            className="object-contain"
           />
           <button
             type="button"
@@ -149,6 +152,16 @@ function ProfileCard({
             className="h-7 border-white/10 bg-black/40 text-xs text-primary"
           />
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="text-xs text-zinc-300">Profile photo</span>
+        <ImageSourceButtons
+          busy={isPending}
+          onFiles={(files) => uploadPhotoFile(files[0])}
+          selectedUrl={photoUrl ?? undefined}
+          onSelect={(url) => setPhotoUrl(url)}
+        />
       </div>
 
       <div className="flex flex-col gap-1.5">

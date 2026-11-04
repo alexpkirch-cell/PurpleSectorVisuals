@@ -1,6 +1,7 @@
 import Image from "next/image"
 import { Camera } from "lucide-react"
 
+import { frameStyle, type PhotoFrame } from "@/lib/focal-point"
 import { cn } from "@/lib/utils"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
@@ -19,6 +20,12 @@ interface ImageSlotProps {
   /** Resolved image URL, if the caller has already looked it up. */
   imageUrl?: string | null
   imageAlt?: string
+  /** Size the slot to the photo's own proportions instead of filling a parent frame. */
+  natural?: boolean
+  /** `cover` fills the whole frame, cropping the photo. Defaults to `contain`, which never crops. */
+  fit?: "contain" | "cover"
+  /** Saved framing for a `cover` slot: which part of the photo stays visible, and how far it is zoomed. */
+  frame?: PhotoFrame
 }
 
 export function ImageSlot({
@@ -32,9 +39,28 @@ export function ImageSlot({
   overrides,
   imageUrl,
   imageAlt,
+  natural = false,
+  fit = "contain",
+  frame,
 }: ImageSlotProps) {
   const resolvedUrl =
     imageUrl ?? (slotKey && overrides ? overrides[slotKey] : undefined)
+
+  if (resolvedUrl && natural) {
+    return (
+      <div className={cn("relative w-full overflow-hidden bg-[#121214]", className)}>
+        <Image
+          src={resolvedUrl}
+          alt={imageAlt ?? label ?? "Site asset"}
+          width={0}
+          height={0}
+          sizes="(max-width: 768px) 50vw, 33vw"
+          style={{ width: "100%", height: "auto" }}
+          className={cn("block", imageClassName)}
+        />
+      </div>
+    )
+  }
 
   if (resolvedUrl) {
     return (
@@ -44,7 +70,8 @@ export function ImageSlot({
           alt={imageAlt ?? label ?? "Site asset"}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
-          className={cn("h-full w-full object-cover", imageClassName)}
+          style={fit === "cover" ? frameStyle(frame) : undefined}
+          className={cn("h-full w-full", fit === "cover" ? "object-cover" : "object-contain", imageClassName)}
         />
       </div>
     )
