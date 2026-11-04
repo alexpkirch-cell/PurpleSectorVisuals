@@ -175,6 +175,8 @@ const DISCIPLINE_FIELD_KEYS = ["sports", "automotive", "portraits", "events", "c
 type HeroProps = Record<(typeof HERO_FIELD_KEYS)[number], string> &
   Partial<Record<`${(typeof HERO_FIELD_KEYS)[number]}Info`, PhotoInfo>>
 type DualSplitProps = Record<(typeof DUAL_SPLIT_FIELD_KEYS)[number], string> &
+  Partial<Record<`${(typeof DUAL_SPLIT_FIELD_KEYS)[number]}Focal`, string>> &
+  Partial<Record<`${(typeof DUAL_SPLIT_FIELD_KEYS)[number]}Zoom`, number>> &
   Partial<Record<(typeof DUAL_SPLIT_TEXT_KEYS)[number], string>>
 type DisciplineHrefKey = `${(typeof DISCIPLINE_FIELD_KEYS)[number]}Href`
 type DisciplinesProps = Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> &
@@ -240,7 +242,7 @@ export type PuckComponents = {
     eyebrow?: string
     heading?: string
     body?: string
-    images?: { src: string }[]
+    images?: { src: string; focal?: string; zoom?: number }[]
     /** Legacy fixed slots from before `images` existed; only read when `images` was never saved. */
     reel?: string
     sports?: string
@@ -510,7 +512,11 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         const legacy = [props.reel, props.sports, props.portrait, ...(props.bts ?? []).map((item) => item?.src)]
         const current = Array.isArray(props.images) ? props.images : []
         const length = Math.max(STUDIO_DEFAULT_SLOTS, current.length, legacy.length)
-        const images = Array.from({ length }, (_, i) => ({ src: current[i]?.src ?? (current.length ? "" : legacy[i]) ?? "" }))
+        const images = Array.from({ length }, (_, i) => ({
+          // Spread first so the saved framing (focal, zoom) survives this rebuild.
+          ...current[i],
+          src: current[i]?.src ?? (current.length ? "" : legacy[i]) ?? "",
+        }))
         return { props: { ...props, ...fillText(props, STUDIO_TEXT_DEFAULTS, STUDIO_TEXT_KEYS), images } }
       },
       render: ({ images, reel, sports, portrait, bts, ...rest }) => (
@@ -518,6 +524,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
           text={pickText(rest, STUDIO_TEXT_KEYS)}
           images={{
             gallery: images?.map((item) => item.src),
+            frames: images?.map((item) => ({ focal: item.focal, zoom: item.zoom })),
             reel,
             sports,
             portrait,
@@ -545,6 +552,9 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
         <DualSplitBlock
           text={pickText(props, DUAL_SPLIT_TEXT_KEYS)}
           images={Object.fromEntries(DUAL_SPLIT_FIELD_KEYS.map((key) => [key, props[key]]))}
+          frames={Object.fromEntries(
+            DUAL_SPLIT_FIELD_KEYS.map((key) => [key, { focal: props[`${key}Focal`], zoom: props[`${key}Zoom`] }])
+          )}
         />
       ),
     },

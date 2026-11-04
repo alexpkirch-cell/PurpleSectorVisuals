@@ -5,6 +5,7 @@ import Link from "@/components/puck/edit-mode"
 import { ImageSlot } from "@/components/image-slot"
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { EditableImage } from "@/components/puck/inline-edit"
+import { frameStyle, type PhotoFrame } from "@/lib/focal-point"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 import { withTextDefaults } from "@/lib/text-defaults"
 
@@ -14,6 +15,8 @@ export const STUDIO_GRID_MAX = 12
 export type CoreIdentityImages = {
   /** Current shape: any number of photos (3 to 12) that auto-flow into the grid. */
   gallery?: (string | undefined)[]
+  /** Saved framing for each `gallery` photo, same order. */
+  frames?: (PhotoFrame | undefined)[]
   /** Legacy fixed slots, only read when `gallery` has never been saved. */
   reel?: string
   sports?: string
@@ -87,12 +90,12 @@ export function CoreIdentitySection({
             </Link>
           </div>
 
-          {/* Photos keep the proportions they were shot in; only empty placeholders are square. */}
+          {/* Every slot is a square frame; photos fill it completely and the saved framing decides which part shows. */}
           <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3">
             {slots.map((src, i) => {
               if (!src) {
                 return (
-                  <EditableImage key={i} path={`images.${i}.src`}>
+                  <EditableImage key={i} path={`images.${i}.src`} fit="cover">
                     <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
                       <ImageSlot
                         aspect="1:1 Slot"
@@ -108,17 +111,19 @@ export function CoreIdentitySection({
 
               const lightboxIndex = lightboxImages.findIndex((item) => item.src === src)
               return (
-                <EditableImage key={i} path={`images.${i}.src`}>
+                <EditableImage key={i} path={`images.${i}.src`} fit="cover">
                   <LightboxTrigger
                     images={lightboxImages}
                     startIndex={Math.max(lightboxIndex, 0)}
-                    className="block w-full overflow-hidden rounded-2xl"
+                    className="block aspect-square w-full overflow-hidden rounded-2xl border border-zinc-800 transition-transform duration-500 ease-out hover:scale-[1.03]"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
                     <img
                       src={src}
                       alt={`Studio photo ${i + 1}`}
-                      className="block h-auto w-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
+                      loading="lazy"
+                      style={frameStyle(images?.frames?.[i])}
+                      className="block size-full object-cover"
                     />
                   </LightboxTrigger>
                 </EditableImage>

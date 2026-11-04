@@ -38,7 +38,8 @@ export type ImageEditTarget = {
   /** Set for fixed-shape slots: width / height of the real container, which the framing step locks to. */
   aspect?: number
   currentFocal?: string
-  apply: (url: string, focal?: string) => void
+  currentZoom?: number
+  apply: (url: string, frame?: { focal: string; zoom: number }) => void
   clear: () => void
   /** Present when the photo sits in a list the editor may shorten (Studio slots). */
   deleteSlot?: () => void
@@ -60,7 +61,7 @@ type Step = "choose" | "gallery" | "frame"
 export function InlineImageEditor({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<ImageEditTarget | null>(null)
   const [step, setStep] = useState<Step>("choose")
-  const [pending, setPending] = useState<{ url: string; focal: string } | null>(null)
+  const [pending, setPending] = useState<{ url: string; focal: string; zoom: number } | null>(null)
 
   const open = useCallback((next: ImageEditTarget) => {
     setStep("choose")
@@ -78,7 +79,7 @@ export function InlineImageEditor({ children }: { children: ReactNode }) {
   function choosePhoto(url: string) {
     if (!target) return
     if (target.aspect) {
-      setPending({ url, focal: CENTER_FOCAL })
+      setPending({ url, focal: CENTER_FOCAL, zoom: 1 })
       setStep("frame")
       return
     }
@@ -149,12 +150,16 @@ export function InlineImageEditor({ children }: { children: ReactNode }) {
                   size="sm"
                   disabled={uploading}
                   onClick={() => {
-                    setPending({ url: target?.currentUrl ?? "", focal: target?.currentFocal || CENTER_FOCAL })
+                    setPending({
+                      url: target?.currentUrl ?? "",
+                      focal: target?.currentFocal || CENTER_FOCAL,
+                      zoom: target?.currentZoom ?? 1,
+                    })
                     setStep("frame")
                   }}
                 >
                   <Crop className="size-3.5" aria-hidden="true" />
-                  Adjust framing
+                  Crop &amp; Position
                 </Button>
               ) : null}
               {hasPhoto ? (
@@ -194,9 +199,10 @@ export function InlineImageEditor({ children }: { children: ReactNode }) {
       <Dialog open={target !== null && step === "frame" && pending !== null} onOpenChange={(next) => !next && setStep("choose")}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Frame the photo</DialogTitle>
+            <DialogTitle>Crop &amp; Position</DialogTitle>
             <DialogDescription>
-              The frame has the exact shape of this spot. Whatever is inside it is what visitors see.
+              The frame has the exact shape of this spot. Drag and zoom the photo; whatever is inside is what visitors see.
+              The original file is never changed.
             </DialogDescription>
           </DialogHeader>
           {target?.aspect && pending ? (
@@ -205,8 +211,9 @@ export function InlineImageEditor({ children }: { children: ReactNode }) {
               url={pending.url}
               aspect={target.aspect}
               initialFocal={pending.focal}
-              onSave={(focal) => {
-                target.apply(pending.url, focal)
+              initialZoom={pending.zoom}
+              onSave={(frame) => {
+                target.apply(pending.url, frame)
                 close()
               }}
               onCancel={() => setStep("choose")}

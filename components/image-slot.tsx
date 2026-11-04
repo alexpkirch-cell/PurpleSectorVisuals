@@ -1,6 +1,7 @@
 import Image from "next/image"
 import { Camera } from "lucide-react"
 
+import { frameStyle, type PhotoFrame } from "@/lib/focal-point"
 import { cn } from "@/lib/utils"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
 
@@ -21,6 +22,10 @@ interface ImageSlotProps {
   imageAlt?: string
   /** Size the slot to the photo's own proportions instead of filling a parent frame. */
   natural?: boolean
+  /** `cover` fills the whole frame, cropping the photo. Defaults to `contain`, which never crops. */
+  fit?: "contain" | "cover"
+  /** Saved framing for a `cover` slot: which part of the photo stays visible, and how far it is zoomed. */
+  frame?: PhotoFrame
 }
 
 export function ImageSlot({
@@ -35,6 +40,8 @@ export function ImageSlot({
   imageUrl,
   imageAlt,
   natural = false,
+  fit = "contain",
+  frame,
 }: ImageSlotProps) {
   const resolvedUrl =
     imageUrl ?? (slotKey && overrides ? overrides[slotKey] : undefined)
@@ -63,7 +70,8 @@ export function ImageSlot({
           alt={imageAlt ?? label ?? "Site asset"}
           fill
           sizes="(max-width: 768px) 100vw, 50vw"
-          className={cn("h-full w-full object-contain", imageClassName)}
+          style={fit === "cover" ? frameStyle(frame) : undefined}
+          className={cn("h-full w-full", fit === "cover" ? "object-cover" : "object-contain", imageClassName)}
         />
       </div>
     )

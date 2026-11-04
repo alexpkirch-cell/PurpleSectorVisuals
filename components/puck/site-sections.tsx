@@ -10,7 +10,12 @@ import {
   type DisciplineImages,
   type DisciplinesText,
 } from "@/components/home/disciplines-section"
-import { DualSplitSection, type DualSplitImages, type DualSplitText } from "@/components/home/dual-split-section"
+import {
+  DualSplitSection,
+  type DualSplitFrames,
+  type DualSplitImages,
+  type DualSplitText,
+} from "@/components/home/dual-split-section"
 import { HeroCarousel3D, type HeroPhoto } from "@/components/home/hero-carousel-3d"
 import type { SiteSlotOverrides } from "@/lib/site-slots"
 
@@ -29,8 +34,16 @@ export function StudioBlock({ images, text }: { images: CoreIdentityImages; text
   return <CoreIdentitySection overrides={useContext(SiteSlotsContext)} images={images} text={text} />
 }
 
-export function DualSplitBlock({ images, text }: { images: DualSplitImages; text?: DualSplitText }) {
-  return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} text={text} />
+export function DualSplitBlock({
+  images,
+  frames,
+  text,
+}: {
+  images: DualSplitImages
+  frames?: DualSplitFrames
+  text?: DualSplitText
+}) {
+  return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} frames={frames} text={text} />
 }
 
 export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "overrides">) {

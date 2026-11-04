@@ -5,10 +5,10 @@ import { Camera } from "lucide-react"
 
 import { useEditMode } from "@/components/puck/edit-mode"
 import { EditableImage } from "@/components/puck/inline-edit"
-import { CENTER_FOCAL } from "@/lib/focal-point"
+import { frameStyle, type PhotoFrame } from "@/lib/focal-point"
 import { cn } from "@/lib/utils"
 
-export type GridPhoto = { src: string; alt?: string; focal?: string }
+export type GridPhoto = { src: string; alt?: string } & PhotoFrame
 
 export const GRID_TEXT_DEFAULTS = {
   eyebrow: "Selected frames",
@@ -37,7 +37,7 @@ function SlotFill({ photo, index }: { photo: GridPhoto; index: number }) {
         src={photo.src}
         alt={photo.alt || `Photo ${index + 1}`}
         loading="lazy"
-        style={{ objectPosition: photo.focal || CENTER_FOCAL }}
+        style={frameStyle(photo)}
         className="absolute inset-0 size-full object-cover"
       />
     )

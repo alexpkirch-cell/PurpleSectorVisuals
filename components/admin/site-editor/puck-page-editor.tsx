@@ -110,18 +110,25 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
           data: { ...currentItem, props },
         })
       }
-      // Fixed-shape slots store their focal point next to the photo URL: `items.2.src` -> `items.2.focal`.
+      // Fixed-shape slots store their framing next to the photo URL: `items.2.src` -> `items.2.focal` and `items.2.zoom`,
+      // or `alexMain` -> `alexMainFocal` and `alexMainZoom`.
       const isFramed = photo?.getAttribute("data-psv-fit") === "cover"
-      const focalPath = path.endsWith("src") ? `${path.slice(0, -3)}focal` : `${path}Focal`
+      const framePath = (key: "focal" | "zoom") =>
+        path.endsWith(".src") ? `${path.slice(0, -3)}${key}` : `${path}${key === "focal" ? "Focal" : "Zoom"}`
+      const focalPath = framePath("focal")
+      const zoomPath = framePath("zoom")
       const slotShape = photo?.firstElementChild as HTMLElement | null
       // offsetWidth/Height ignore CSS transforms (tilted polaroids) and the canvas zoom, so they give the true ratio.
       const aspect = isFramed && slotShape?.offsetWidth && slotShape.offsetHeight ? slotShape.offsetWidth / slotShape.offsetHeight : undefined
 
-      const setPhoto = (url: string, focal?: string) => {
+      const setPhoto = (url: string, frame?: { focal: string; zoom: number }) => {
         const currentItem = latest.current.getPuck().getItemById(componentId)
         if (!currentItem) return
         const withPhoto = setDeep(currentItem.props, path, url)
-        write(isFramed ? setDeep(withPhoto, focalPath, url ? (focal ?? "50% 50%") : "") : withPhoto)
+        if (!isFramed) return write(withPhoto)
+        // A removed photo drops its framing; a new one without a saved framing starts centered at 1x.
+        const withFocal = setDeep(withPhoto, focalPath, url ? (frame?.focal ?? "50% 50%") : "")
+        write(setDeep(withFocal, zoomPath, url ? (frame?.zoom ?? 1) : 1))
       }
 
       const slot = path.match(/^(.+)\.(\d+)\.src$/)
@@ -135,6 +142,7 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
         currentUrl: (readPath(item.props, path) as string | undefined) ?? "",
         aspect,
         currentFocal: aspect ? (readPath(item.props, focalPath) as string | undefined) : undefined,
+        currentZoom: aspect ? (readPath(item.props, zoomPath) as number | undefined) : undefined,
         apply: setPhoto,
         clear: () => setPhoto(""),
         deleteSlot:
