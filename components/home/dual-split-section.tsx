@@ -1,11 +1,13 @@
 "use client"
 
 import Link from "@/components/puck/edit-mode"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { ArrowUpRight } from "lucide-react"
 
 import { ImageSlot } from "@/components/image-slot"
+import { EditableImage } from "@/components/puck/inline-edit"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
+import { withTextDefaults } from "@/lib/text-defaults"
 import { cn } from "@/lib/utils"
 
 type Side = "alex" | "gabe" | null
@@ -20,7 +22,8 @@ export const DUAL_SPLIT_TEXT_DEFAULTS = {
   viewProfileLabel: "View Profile",
 }
 
-export type DualSplitText = Partial<typeof DUAL_SPLIT_TEXT_DEFAULTS>
+/** Strings on the live site; React nodes inside the editor, where each one is an inline text editor. */
+export type DualSplitText = { [K in keyof typeof DUAL_SPLIT_TEXT_DEFAULTS]?: ReactNode }
 
 const creatorConfig = [
   {
@@ -55,7 +58,7 @@ export function DualSplitSection({
   images?: DualSplitImages
   text?: DualSplitText
 }) {
-  const copy = { ...DUAL_SPLIT_TEXT_DEFAULTS, ...text }
+  const copy = withTextDefaults(DUAL_SPLIT_TEXT_DEFAULTS, text)
   const creators = creatorConfig.map((creator) => ({
     ...creator,
     name: creator.key === "alex" ? copy.alexName : copy.gabeName,
@@ -121,18 +124,20 @@ export function DualSplitSection({
 
               <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 items-center justify-center py-10">
                 <div className="relative aspect-[3/4] w-[70%]">
-                  <ImageSlot
-                    aspect="3:4 Slot"
-                    label={creator.slotLabel}
-                    slotKey={`home.dual-split.${creator.key}.main`}
-                    overrides={overrides}
-                    imageUrl={imageFor(`${creator.key}Main`)}
-                    className={cn(
-                      "transition-all duration-500 ease-out",
-                      isHovered &&
-                        "border-[#e829f1] shadow-[0_0_28px_rgba(232,41,241,0.28)]"
-                    )}
-                  />
+                  <EditableImage path={`${creator.key}Main`}>
+                    <ImageSlot
+                      aspect="3:4 Slot"
+                      label={creator.slotLabel}
+                      slotKey={`home.dual-split.${creator.key}.main`}
+                      overrides={overrides}
+                      imageUrl={imageFor(`${creator.key}Main`)}
+                      className={cn(
+                        "transition-all duration-500 ease-out",
+                        isHovered &&
+                          "border-[#e829f1] shadow-[0_0_28px_rgba(232,41,241,0.28)]"
+                      )}
+                    />
+                  </EditableImage>
                   {creator.cards.map((card, i) => (
                     <div
                       key={card}
@@ -141,19 +146,21 @@ export function DualSplitSection({
                         cardOffsets[i]
                       )}
                     >
-                      <ImageSlot
-                        aspect=""
-                        label={card}
-                        compact
-                        slotKey={`home.dual-split.${creator.key}.card.${i}`}
-                        overrides={overrides}
-                        imageUrl={imageFor(`${creator.key}Card${i}`)}
-                        className={cn(
-                          "transition-all duration-500 ease-out",
-                          isHovered &&
-                            "border-[#e829f1] shadow-[0_0_20px_rgba(232,41,241,0.24)]"
-                        )}
-                      />
+                      <EditableImage path={`${creator.key}Card${i}`}>
+                        <ImageSlot
+                          aspect=""
+                          label={card}
+                          compact
+                          slotKey={`home.dual-split.${creator.key}.card.${i}`}
+                          overrides={overrides}
+                          imageUrl={imageFor(`${creator.key}Card${i}`)}
+                          className={cn(
+                            "transition-all duration-500 ease-out",
+                            isHovered &&
+                              "border-[#e829f1] shadow-[0_0_20px_rgba(232,41,241,0.24)]"
+                          )}
+                        />
+                      </EditableImage>
                     </div>
                   ))}
                 </div>
@@ -186,13 +193,15 @@ export function DualSplitSection({
                 </p>
               </div>
               <div className="aspect-[3/4] w-full">
-                <ImageSlot
-                  aspect="3:4 Slot"
-                  label={creator.slotLabel}
-                  slotKey={`home.dual-split.${creator.key}.main`}
-                  overrides={overrides}
-                  imageUrl={imageFor(`${creator.key}Main`)}
-                />
+                <EditableImage path={`${creator.key}Main`}>
+                  <ImageSlot
+                    aspect="3:4 Slot"
+                    label={creator.slotLabel}
+                    slotKey={`home.dual-split.${creator.key}.main`}
+                    overrides={overrides}
+                    imageUrl={imageFor(`${creator.key}Main`)}
+                  />
+                </EditableImage>
               </div>
             </Link>
 
@@ -202,14 +211,16 @@ export function DualSplitSection({
                   key={card}
                   className="aspect-[3/4] w-32 shrink-0 snap-start"
                 >
-                  <ImageSlot
-                    aspect=""
-                    label={card}
-                    compact
-                    slotKey={`home.dual-split.${creator.key}.card.${i}`}
-                    overrides={overrides}
-                    imageUrl={imageFor(`${creator.key}Card${i}`)}
-                  />
+                  <EditableImage path={`${creator.key}Card${i}`}>
+                    <ImageSlot
+                      aspect=""
+                      label={card}
+                      compact
+                      slotKey={`home.dual-split.${creator.key}.card.${i}`}
+                      overrides={overrides}
+                      imageUrl={imageFor(`${creator.key}Card${i}`)}
+                    />
+                  </EditableImage>
                 </div>
               ))}
             </div>

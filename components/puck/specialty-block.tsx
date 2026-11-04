@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 
+import { EditableImage, EditOnly } from "@/components/puck/inline-edit"
+
 export const SPECIALTY_TYPES = [
   "Portraits",
   "Athletics",
@@ -40,11 +42,21 @@ export function SpecialtyBlock({ name, description, image, imageAlt }: Specialty
         }
       >
         {image ? (
-          <div className="w-full overflow-hidden rounded-3xl border border-zinc-800 shadow-2xl shadow-black/60">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image} alt={imageAlt} className="block h-auto w-full" />
-          </div>
-        ) : null}
+          <EditableImage path="image">
+            <div className="w-full overflow-hidden rounded-3xl border border-zinc-800 shadow-2xl shadow-black/60">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={image} alt={imageAlt} className="block h-auto w-full object-contain" />
+            </div>
+          </EditableImage>
+        ) : (
+          <EditOnly>
+            <EditableImage path="image">
+              <div className="mb-8 flex h-40 w-full items-center justify-center rounded-3xl border border-dashed border-zinc-700 bg-zinc-900/60 text-sm text-zinc-400">
+                Click to add a photo (optional)
+              </div>
+            </EditableImage>
+          </EditOnly>
+        )}
         <div className="flex flex-col">
           <p className="font-heading text-xs font-semibold uppercase tracking-[0.3em] text-[#e829f1]">Specialty</p>
           <h2 className="mt-4 text-balance font-heading text-4xl font-bold tracking-tight text-foreground sm:text-5xl">

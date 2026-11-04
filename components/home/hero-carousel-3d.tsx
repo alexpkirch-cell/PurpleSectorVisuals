@@ -8,6 +8,7 @@ import useSWR from "swr"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { useEditMode } from "@/components/puck/edit-mode"
+import { EditableImage } from "@/components/puck/inline-edit"
 
 export const HERO_SLOT_LABELS = [
   "SLOT 01 // PORTRAIT",
@@ -204,8 +205,9 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
     >
       {isEditing ? (
         <div className="absolute inset-0 z-10 grid grid-cols-2 content-center gap-3 p-4 sm:grid-cols-4">
-          {tiles.map((tile) => (
-            <div key={tile.key} className="flex flex-col items-center justify-center gap-2">
+          {tiles.map((tile, tileIndex) => (
+            <EditableImage key={tile.key} path={`card${tileIndex + 1}`}>
+            <div className="flex flex-col items-center justify-center gap-2">
               {tile.src ? (
                 <Image
                   src={tile.src}
@@ -225,6 +227,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
                 </div>
               )}
             </div>
+            </EditableImage>
           ))}
         </div>
       ) : showSkeleton ? (

@@ -3,8 +3,10 @@ import type { ReactNode } from "react"
 import Link from "@/components/puck/edit-mode"
 
 import { ImageSlot } from "@/components/image-slot"
+import { EditableImage } from "@/components/puck/inline-edit"
 import { disciplines } from "@/lib/site-data"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
+import { withTextDefaults } from "@/lib/text-defaults"
 
 const CARD_SPANS = [
   "lg:col-span-2",
@@ -37,9 +39,8 @@ export const DISCIPLINES_TEXT_DEFAULTS = {
   commercialDescription: "Brand-ready imagery built to move product and perception.",
 }
 
-export type DisciplinesText = Partial<Omit<typeof DISCIPLINES_TEXT_DEFAULTS, "heading">> & {
-  heading?: ReactNode
-}
+/** Strings on the live site; React nodes inside the editor, where each one is an inline text editor. */
+export type DisciplinesText = { [K in keyof typeof DISCIPLINES_TEXT_DEFAULTS]?: ReactNode }
 
 export function DisciplinesSection({
   overrides,
@@ -52,7 +53,7 @@ export function DisciplinesSection({
   hrefs?: DisciplineHrefs
   text?: DisciplinesText
 }) {
-  const copy = { ...DISCIPLINES_TEXT_DEFAULTS, ...text }
+  const copy = withTextDefaults(DISCIPLINES_TEXT_DEFAULTS, text)
 
   return (
     <section className="w-full bg-[#09090b]">
@@ -81,14 +82,16 @@ export function DisciplinesSection({
               className={`group relative flex h-96 flex-col justify-end overflow-hidden rounded-3xl border border-zinc-800/80 transition-all duration-500 ease-out hover:scale-[1.02] hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)] ${CARD_SPANS[index] ?? ""}`}
             >
               <div className="absolute inset-0">
-                <ImageSlot
-                  aspect={discipline.aspect}
-                  label=""
-                  className="border-none"
-                  slotKey={`home.discipline.${discipline.name.toLowerCase()}`}
-                  overrides={overrides}
-                  imageUrl={images?.[discipline.name.toLowerCase()] || undefined}
-                />
+                <EditableImage path={discipline.name.toLowerCase()}>
+                  <ImageSlot
+                    aspect={discipline.aspect}
+                    label=""
+                    className="border-none"
+                    slotKey={`home.discipline.${discipline.name.toLowerCase()}`}
+                    overrides={overrides}
+                    imageUrl={images?.[discipline.name.toLowerCase()] || undefined}
+                  />
+                </EditableImage>
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090b] via-[#09090b]/40 to-transparent" />
               <div className="relative z-10 p-6">

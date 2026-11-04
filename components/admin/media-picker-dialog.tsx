@@ -11,7 +11,10 @@ import { cn } from "@/lib/utils"
 
 type MediaPickerBase = {
   /** A single button element; it becomes the dialog's trigger itself, so there is no wrapper to tab through. */
-  trigger: ReactElement
+  trigger?: ReactElement
+  /** Drive the dialog from outside (for example from a click on the editor canvas) instead of through a trigger. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   title?: string
 }
 
@@ -62,7 +65,8 @@ function FilterSelect({
  */
 export function MediaPickerDialog(props: MediaPickerDialogProps) {
   const { trigger, title = "Choose from Gallery" } = props
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = props.open ?? internalOpen
   const [shooter, setShooter] = useState("")
   const [editor, setEditor] = useState("")
   const [category, setCategory] = useState("")
@@ -78,7 +82,8 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
   const selectedUrl = props.multiple ? undefined : props.selectedUrl
 
   function handleOpenChange(next: boolean) {
-    setOpen(next)
+    setInternalOpen(next)
+    props.onOpenChange?.(next)
     if (!next) setPicked(new Map())
   }
 
@@ -106,7 +111,7 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={trigger} />
+      {trigger ? <DialogTrigger render={trigger} /> : null}
       <DialogContent className="flex max-h-[88vh] flex-col gap-4 sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

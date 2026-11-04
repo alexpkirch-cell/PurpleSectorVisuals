@@ -1,9 +1,12 @@
+import type { ReactNode } from "react"
 import { Camera } from "lucide-react"
 import Link from "@/components/puck/edit-mode"
 
 import { ImageSlot } from "@/components/image-slot"
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
+import { EditableImage } from "@/components/puck/inline-edit"
 import type { SiteSlotOverrides } from "@/lib/site-slot-definitions"
+import { withTextDefaults } from "@/lib/text-defaults"
 
 export const STUDIO_GRID_MIN = 3
 export const STUDIO_GRID_MAX = 12
@@ -25,7 +28,8 @@ export const STUDIO_TEXT_DEFAULTS = {
   buttonLabel: "View Our Work",
 }
 
-export type StudioText = Partial<typeof STUDIO_TEXT_DEFAULTS>
+/** Strings on the live site; React nodes inside the editor, where each one is an inline text editor. */
+export type StudioText = { [K in keyof typeof STUDIO_TEXT_DEFAULTS]?: ReactNode }
 
 function resolveGallery(images?: CoreIdentityImages) {
   const source = images?.gallery ?? (images ? [images.reel, images.sports, images.portrait, ...(images.bts ?? [])] : [])
@@ -43,8 +47,8 @@ export function CoreIdentitySection({
   images?: CoreIdentityImages
   text?: StudioText
 }) {
-  const copy = { ...STUDIO_TEXT_DEFAULTS, ...text }
-  const paragraphs = copy.body.split(/\n{2,}/).filter(Boolean)
+  const copy = withTextDefaults(STUDIO_TEXT_DEFAULTS, text)
+  const paragraphs = typeof copy.body === "string" ? copy.body.split(/\n{2,}/).filter(Boolean) : null
   const slots = resolveGallery(images)
   const lightboxImages: LightboxImage[] = slots.flatMap((src, i) =>
     src ? [{ src, title: `Studio photo ${i + 1}`, category: "The Studio" }] : [],
@@ -61,14 +65,18 @@ export function CoreIdentitySection({
             <h2 className="mt-4 text-balance font-heading text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
               {copy.heading}
             </h2>
-            {paragraphs.map((paragraph, index) => (
-              <p
-                key={index}
-                className={`${index === 0 ? "mt-6" : "mt-4"} text-pretty text-base leading-relaxed text-zinc-400`}
-              >
-                {paragraph}
-              </p>
-            ))}
+            {paragraphs ? (
+              paragraphs.map((paragraph, index) => (
+                <p
+                  key={index}
+                  className={`${index === 0 ? "mt-6" : "mt-4"} text-pretty text-base leading-relaxed text-zinc-400`}
+                >
+                  {paragraph}
+                </p>
+              ))
+            ) : (
+              <div className="mt-6 whitespace-pre-line text-pretty text-base leading-relaxed text-zinc-400">{copy.body}</div>
+            )}
 
             <Link
               href="/work"
@@ -84,33 +92,36 @@ export function CoreIdentitySection({
             {slots.map((src, i) => {
               if (!src) {
                 return (
-                  <div key={i} className="relative aspect-square w-full overflow-hidden rounded-2xl">
-                    <ImageSlot
-                      aspect="1:1 Slot"
-                      label={`Studio ${i + 1}`}
-                      compact
-                      slotKey={i === 0 ? "home.core-identity" : undefined}
-                      overrides={i === 0 ? overrides : undefined}
-                    />
-                  </div>
+                  <EditableImage key={i} path={`images.${i}.src`}>
+                    <div className="relative aspect-square w-full overflow-hidden rounded-2xl">
+                      <ImageSlot
+                        aspect="1:1 Slot"
+                        label={`Studio ${i + 1}`}
+                        compact
+                        slotKey={i === 0 ? "home.core-identity" : undefined}
+                        overrides={i === 0 ? overrides : undefined}
+                      />
+                    </div>
+                  </EditableImage>
                 )
               }
 
               const lightboxIndex = lightboxImages.findIndex((item) => item.src === src)
               return (
-                <LightboxTrigger
-                  key={i}
-                  images={lightboxImages}
-                  startIndex={Math.max(lightboxIndex, 0)}
-                  className="block w-full overflow-hidden rounded-2xl"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
-                  <img
-                    src={src}
-                    alt={`Studio photo ${i + 1}`}
-                    className="block h-auto w-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
-                  />
-                </LightboxTrigger>
+                <EditableImage key={i} path={`images.${i}.src`}>
+                  <LightboxTrigger
+                    images={lightboxImages}
+                    startIndex={Math.max(lightboxIndex, 0)}
+                    className="block w-full overflow-hidden rounded-2xl"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
+                    <img
+                      src={src}
+                      alt={`Studio photo ${i + 1}`}
+                      className="block h-auto w-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
+                    />
+                  </LightboxTrigger>
+                </EditableImage>
               )
             })}
           </div>
