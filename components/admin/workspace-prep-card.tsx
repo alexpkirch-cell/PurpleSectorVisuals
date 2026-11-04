@@ -20,7 +20,7 @@ export function WorkspacePrepCard({ shoot }: { shoot: Shoot }) {
   const otherLinks = links.filter((link) => !isImageLink(link))
 
   return (
-    <section aria-labelledby="workspace-prep" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+    <section aria-labelledby="workspace-prep" className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 id="workspace-prep" className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
           <ClipboardList className="size-4 text-primary" aria-hidden="true" />

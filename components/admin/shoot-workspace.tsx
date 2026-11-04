@@ -67,46 +67,48 @@ export function ShootWorkspace({
         </div>
       </div>
 
-      {/* Panel 1 (Overview) and the finances and splits controls */}
+      {/*
+        One strict two-column grid. The shoot modal contributes the header (full width), then Overview and
+        Finances & Splits as row 1; the extras below add Prep and Agreement as row 2 and Final Delivery, which
+        spans both columns, as row 3.
+      */}
       <ShootDetailSheet
         variant="page"
         shoot={shoot}
         bookingTiers={bookingTiers}
         bookingAddons={bookingAddons}
         onUpdated={setShoot}
+        pageExtras={
+          <>
+            <WorkspacePrepCard shoot={shoot} />
+            <WorkspaceAgreementCard shoot={shoot} onUpdated={setShoot} />
+
+            <section
+              aria-labelledby="workspace-delivery"
+              className="col-span-1 flex min-w-0 flex-col gap-4 rounded-xl border border-primary/30 bg-card p-5 lg:col-span-2"
+            >
+              <div className="flex flex-col gap-1">
+                <h2 id="workspace-delivery" className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
+                  <Images className="size-4 text-primary" aria-hidden="true" />
+                  Final Delivery
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  High-resolution photos for {shoot.client_name}. They unlock in the client&apos;s vault when the shoot
+                  reaches Delivered &amp; Settled.
+                </p>
+              </div>
+
+              {shoot.vault_id ? (
+                <VaultDeliveryUploader vaultId={shoot.vault_id} wide />
+              ) : (
+                <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                  No vault yet. Photos can be added once the shoot moves to Awaiting Signature &amp; Retainer.
+                </p>
+              )}
+            </section>
+          </>
+        }
       />
-
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        {/* Panel 2 */}
-        <WorkspacePrepCard shoot={shoot} />
-        {/* Panel 3 */}
-        <WorkspaceAgreementCard shoot={shoot} onUpdated={setShoot} />
-      </div>
-
-      {/* Panel 4 */}
-      <section
-        aria-labelledby="workspace-delivery"
-        className="flex flex-col gap-4 rounded-xl border-2 border-primary/50 bg-card p-5 sm:p-6"
-      >
-        <div className="flex flex-col gap-1">
-          <h2 id="workspace-delivery" className="flex items-center gap-2 font-heading text-lg font-medium text-foreground">
-            <Images className="size-5 text-primary" aria-hidden="true" />
-            Final Delivery
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            High-resolution photos for {shoot.client_name}. They unlock in the client&apos;s vault when the shoot reaches
-            Delivered &amp; Settled.
-          </p>
-        </div>
-
-        {shoot.vault_id ? (
-          <VaultDeliveryUploader vaultId={shoot.vault_id} wide />
-        ) : (
-          <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-            No vault yet. Photos can be added once the shoot moves to Awaiting Signature &amp; Retainer.
-          </p>
-        )}
-      </section>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

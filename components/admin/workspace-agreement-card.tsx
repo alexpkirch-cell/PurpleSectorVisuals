@@ -63,7 +63,7 @@ export function WorkspaceAgreementCard({ shoot, onUpdated }: { shoot: Shoot; onU
   const countersigned = Boolean(legal?.countersignedAt)
 
   return (
-    <section aria-labelledby="workspace-agreement" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+    <section aria-labelledby="workspace-agreement" className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 id="workspace-agreement" className="flex items-center gap-2 font-heading text-base font-medium text-foreground">
           <FileSignature className="size-4 text-primary" aria-hidden="true" />

@@ -18,6 +18,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Trash2,
+  UserRound,
   Wallet,
   XCircle,
 } from "lucide-react"
@@ -109,7 +110,8 @@ function PageDescription({ children }: { children: ReactNode }) {
 
 /** Tabs inside the slide-over sheet; side-by-side sections on the full-screen workspace page. */
 function PanelGroup({ isPage, children }: { isPage: boolean; children: ReactNode }) {
-  if (isPage) return <div className="grid items-start gap-6 xl:grid-cols-2">{children}</div>
+  // The workspace page owns the grid, so panels become direct grid items there.
+  if (isPage) return <>{children}</>
 
   return (
     <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
@@ -145,7 +147,10 @@ function Panel({
   }
 
   return (
-    <section aria-labelledby={`workspace-${value}`} className={`${className ?? ""} rounded-xl border border-border bg-card p-5`}>
+    <section
+      aria-labelledby={`workspace-${value}`}
+      className={`${className ?? ""} min-w-0 rounded-xl border border-border bg-card p-5`}
+    >
       <h2 id={`workspace-${value}`} className="font-heading text-base font-medium text-foreground">
         {title}
       </h2>
@@ -159,6 +164,7 @@ export function ShootDetailSheet({
   bookingTiers,
   bookingAddons,
   variant = "sheet",
+  pageExtras,
   onOpenChange,
   onUpdated,
   onDeclined,
@@ -169,6 +175,8 @@ export function ShootDetailSheet({
   bookingAddons: BookingAddon[]
   /** "page" renders the same controls full width, without the slide-over sheet. */
   variant?: "sheet" | "page"
+  /** Page variant only: more cards that join the same two-column grid after the overview and finances cards. */
+  pageExtras?: ReactNode
   onOpenChange?: (open: boolean) => void
   onUpdated: (shoot: Shoot) => void
   onDeclined?: (shoot: Shoot) => void
@@ -345,7 +353,7 @@ export function ShootDetailSheet({
 
   const content = shoot && (
           <>
-            <HeaderRoot className="flex flex-row items-start justify-between gap-2 pr-10">
+            <HeaderRoot className="flex flex-row items-start justify-between gap-2 pr-10 lg:col-span-2">
               <div>
                 <Title>{shoot.client_name}</Title>
                 <Description>
@@ -384,7 +392,7 @@ export function ShootDetailSheet({
             </HeaderRoot>
 
             {isNewInquiry ? (
-              <div className="flex flex-col gap-4 px-4">
+              <div className="flex flex-col gap-4 px-4 lg:col-span-2">
                 <div className="flex flex-col gap-1.5 rounded-md border border-dashed border-border bg-accent/20 p-3">
                   <span className="text-xs font-medium text-foreground">New inquiry</span>
                   <p className="text-xs text-muted-foreground">
@@ -445,61 +453,100 @@ export function ShootDetailSheet({
             ) : (
               <PanelGroup isPage={isPage}>
                 <Panel isPage={isPage} value="overview" title="Overview" className="flex flex-col gap-4">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="client-name">Full name</Label>
-                      <Input id="client-name" value={clientName} onChange={(event) => setClientName(event.target.value)} />
+                  <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+                    <span className="text-xs font-medium text-foreground">Client contact</span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <Label htmlFor="client-name">Full name</Label>
+                        <div className="relative">
+                          <UserRound className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-name"
+                            className="h-9 pl-9"
+                            value={clientName}
+                            onChange={(event) => setClientName(event.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="client-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-email"
+                            type="email"
+                            className="h-9 pl-9"
+                            value={clientEmail}
+                            onChange={(event) => setClientEmail(event.target.value)}
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="client-phone">Phone</Label>
+                        <div className="relative">
+                          <Phone className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+                          <Input
+                            id="client-phone"
+                            type="tel"
+                            className="h-9 pl-9"
+                            value={clientPhone}
+                            onChange={(event) => setClientPhone(event.target.value)}
+                            placeholder="Not provided"
+                            autoComplete="off"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="client-email">Email</Label>
-                      <Input id="client-email" type="email" value={clientEmail} onChange={(event) => setClientEmail(event.target.value)} />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="client-phone">Phone</Label>
-                      <Input id="client-phone" type="tel" value={clientPhone} onChange={(event) => setClientPhone(event.target.value)} placeholder="Not provided" />
-                    </div>
-                    <InfoRow label="Package selected" value={shoot.shoot_type} />
-                    <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
                   </div>
 
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="shoot-location">Location</Label>
-                      {mapsUrlFor(shoot) && (
-                        <a
-                          href={mapsUrlFor(shoot) ?? undefined}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                          <MapPin className="size-3" aria-hidden="true" />
-                          Open in Maps
-                          <ExternalLink className="size-3" aria-hidden="true" />
-                        </a>
-                      )}
+                  <div className="flex flex-col gap-3 rounded-md border border-border p-3">
+                    <span className="text-xs font-medium text-foreground">Shoot logistics</span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <InfoRow label="Package selected" value={shoot.shoot_type} />
+                      <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
                     </div>
-                    <LocationAutocomplete
-                      id="shoot-location"
-                      value={location}
-                      onChange={(selection) => {
-                        setLocation(selection.location)
-                        setLocationMapsUrl(selection.mapsUrl)
-                      }}
-                      placeholder="Search a venue or address"
-                    />
-                  </div>
 
-                  {shoot.shoot_date && (
-                    <a
-                      href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
-                    >
-                      <CalendarPlus className="size-3.5" />
-                      Add to Google Calendar
-                    </a>
-                  )}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="shoot-location">Location</Label>
+                        {mapsUrlFor(shoot) && (
+                          <a
+                            href={mapsUrlFor(shoot) ?? undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <MapPin className="size-3" aria-hidden="true" />
+                            Open in Maps
+                            <ExternalLink className="size-3" aria-hidden="true" />
+                          </a>
+                        )}
+                      </div>
+                      <LocationAutocomplete
+                        id="shoot-location"
+                        value={location}
+                        onChange={(selection) => {
+                          setLocation(selection.location)
+                          setLocationMapsUrl(selection.mapsUrl)
+                        }}
+                        placeholder="Search a venue or address"
+                      />
+                    </div>
+
+                    {shoot.shoot_date && (
+                      <a
+                        href={buildGoogleCalendarUrl(shoot, vaultLink || null) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start gap-2" })}
+                      >
+                        <CalendarPlus className="size-3.5" />
+                        Add to Google Calendar
+                      </a>
+                    )}
+                  </div>
 
                   <div className="flex flex-col gap-2 rounded-md border border-border p-3">
                     <span className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
@@ -556,7 +603,7 @@ export function ShootDetailSheet({
                   </Button>
                 </Panel>
 
-                <Panel isPage={isPage} value="finances" title="Finances and splits" className="flex flex-col gap-4">
+                <Panel isPage={isPage} value="finances" title="Finances &amp; Splits" className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="totalPrice">Total Contract Price</Label>
@@ -857,7 +904,14 @@ export function ShootDetailSheet({
           </>
   )
 
-  if (isPage) return <div className="flex flex-col gap-6">{content}</div>
+  if (isPage) {
+    return (
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {content}
+        {pageExtras}
+      </div>
+    )
+  }
 
   return (
     <Sheet open={!!shoot} onOpenChange={onOpenChange}>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, Search, X } from "lucide-react"
 import useSWR from "swr"
 
@@ -47,6 +48,11 @@ const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
   { key: "editors", label: "Editors", numeric: true },
 ]
 
+/** Reports always open the shoot's own workspace (or the draft vault's), never the client profile. */
+function workspaceHref(row: ReportRow) {
+  return `/admin/shoots/${row.workspaceId}`
+}
+
 function statusLabel(status: string) {
   if (status === "draft") return "Draft"
   return STATUS_LABELS[status as keyof typeof STATUS_LABELS] ?? status
@@ -87,6 +93,7 @@ const fieldClass =
   "mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
 
 export function ReportsSearch({ personnel }: { personnel: string[] }) {
+  const router = useRouter()
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [filters, setFilters] = useState<Omit<ReportFilters, "q">>({})
@@ -280,10 +287,17 @@ export function ReportsSearch({ personnel }: { personnel: string[] }) {
               </tr>
             ) : null}
             {rows.map((row) => (
-              <tr key={row.id} className="border-b border-border last:border-b-0 hover:bg-accent/30">
+              <tr
+                key={row.id}
+                onClick={(event) => {
+                  if ((event.target as HTMLElement).closest("a, button, input, select, summary")) return
+                  router.push(workspaceHref(row))
+                }}
+                className="cursor-pointer border-b border-border last:border-b-0 hover:bg-accent/30"
+              >
                 <th scope="row" className="px-4 py-3 text-left font-normal">
                   <Link
-                    href={`/admin/shoots/${row.workspaceId}`}
+                    href={workspaceHref(row)}
                     className="font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                   >
                     {row.clientName}
