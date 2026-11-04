@@ -42,6 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LinkifiedText } from "@/components/admin/linkified-text"
 import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
@@ -98,29 +99,6 @@ function PaymentStatusPill({
   )
 }
 
-/** Turns pasted inspiration links into real links so the admin can open them. */
-function LinkifiedText({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(https?:\/\/[^\s]+)/g).map((part, index) =>
-        /^https?:\/\//.test(part) ? (
-          <a
-            key={index}
-            href={part}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary underline underline-offset-2"
-          >
-            {part}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </>
-  )
-}
-
 function PageTitle({ children }: { children: ReactNode }) {
   return <h1 className="font-heading text-2xl font-medium text-foreground">{children}</h1>
 }
@@ -131,7 +109,7 @@ function PageDescription({ children }: { children: ReactNode }) {
 
 /** Tabs inside the slide-over sheet; side-by-side sections on the full-screen workspace page. */
 function PanelGroup({ isPage, children }: { isPage: boolean; children: ReactNode }) {
-  if (isPage) return <div className="grid items-start gap-6 xl:grid-cols-3">{children}</div>
+  if (isPage) return <div className="grid items-start gap-6 xl:grid-cols-2">{children}</div>
 
   return (
     <Tabs defaultValue="overview" className="flex flex-1 flex-col gap-4 px-4">
@@ -524,9 +502,27 @@ export function ShootDetailSheet({
                   )}
 
                   <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                      <Baby className="size-3.5" />
-                      Minor status
+                    <span className="flex items-center justify-between gap-2 text-xs font-medium text-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Baby className="size-3.5" />
+                        Minor status
+                      </span>
+                      {shoot.vault_pin ? (
+                        <Badge
+                          variant="outline"
+                          className={
+                            shoot.vault_is_minor
+                              ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                              : "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          }
+                        >
+                          {shoot.vault_is_minor ? "Minor: guardian signed" : "Adult confirmed"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          Not collected yet
+                        </Badge>
+                      )}
                     </span>
                     {shoot.vault_is_minor ? (
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -652,6 +648,7 @@ export function ShootDetailSheet({
                   </Button>
                 </Panel>
 
+                {!isPage && (
                 <Panel isPage={isPage} value="vault" title="Vault, prep and delivery" className="flex flex-col gap-4">
                   {shoot.vault_pin ? (
                     <div className="flex flex-col gap-3 rounded-md border border-border p-3">
@@ -854,6 +851,7 @@ export function ShootDetailSheet({
                     </>
                   )}
                 </Panel>
+                )}
               </PanelGroup>
             )}
           </>

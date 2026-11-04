@@ -62,7 +62,7 @@ async function selectVaultPhotos(vaultId: string) {
     SELECT id, bucket, storage_path, thumb_path, file_name, width, height, size_bytes
     FROM vault_photos
     WHERE vault_id = ${vaultId}
-    ORDER BY created_at ASC, file_name ASC
+    ORDER BY sort_order ASC NULLS LAST, created_at ASC, file_name ASC
   `
   return rows
 }
@@ -108,10 +108,11 @@ export async function recordVaultPhoto(
   const title = (input.title ?? "").trim().slice(0, MAX_TITLE_LENGTH)
 
   await sql`
-    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height)
+    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height, sort_order)
     VALUES (
       ${vaultId}, ${VAULT_PHOTOS_BUCKET}, ${input.storagePath}, ${input.thumbPath}, ${fileName}, ${input.contentType},
-      ${input.sizeBytes}, ${input.width}, ${input.height}
+      ${input.sizeBytes}, ${input.width}, ${input.height},
+      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM vault_photos WHERE vault_id = ${vaultId})
     )
   `
 
@@ -137,8 +138,9 @@ export async function attachMediaToVault(vaultId: string, mediaIds: string[]): P
   if (mediaIds.length === 0) return 0
 
   const { rowCount } = await sql`
-    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height)
-    SELECT ${vaultId}, m.bucket, m.storage_path, NULL, m.file_name, m.content_type, m.size_bytes, m.width, m.height
+    INSERT INTO vault_photos (vault_id, bucket, storage_path, thumb_path, file_name, content_type, size_bytes, width, height, sort_order)
+    SELECT ${vaultId}, m.bucket, m.storage_path, NULL, m.file_name, m.content_type, m.size_bytes, m.width, m.height,
+      (SELECT COALESCE(MAX(sort_order), -1) FROM vault_photos WHERE vault_id = ${vaultId}) + ROW_NUMBER() OVER (ORDER BY m.created_at)
     FROM media_library m
     WHERE m.id = ANY(${mediaIds}::uuid[])
       AND m.public_url IS NOT NULL
@@ -150,6 +152,21 @@ export async function attachMediaToVault(vaultId: string, mediaIds: string[]): P
 
   revalidatePath("/admin/operations")
   return rowCount ?? 0
+}
+
+/** Persists the admin's drag-free reorder; `orderedIds` is the new first-to-last order the client will see. */
+export async function reorderVaultPhotos(vaultId: string, orderedIds: string[]): Promise<void> {
+  await requireAdmin()
+  if (orderedIds.length === 0) return
+
+  await sql`
+    UPDATE vault_photos p
+    SET sort_order = (u.position - 1)::int
+    FROM unnest(${orderedIds}::uuid[]) WITH ORDINALITY AS u(id, position)
+    WHERE p.id = u.id AND p.vault_id = ${vaultId}
+  `
+
+  revalidatePath("/admin/operations")
 }
 
 export async function deleteVaultPhoto(photoId: string): Promise<void> {

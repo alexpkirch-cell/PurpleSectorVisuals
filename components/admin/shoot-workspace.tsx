@@ -2,22 +2,23 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Upload } from "lucide-react"
+import { ArrowLeft, ExternalLink, Images, Upload } from "lucide-react"
 
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
+import { WorkspaceAgreementCard } from "@/components/admin/workspace-agreement-card"
+import { WorkspacePrepCard } from "@/components/admin/workspace-prep-card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { buttonVariants } from "@/components/ui/button"
 import { STATUS_LABELS } from "@/lib/operations"
 
 /**
- * Full-screen control room for one client's shoot. It reuses the exact controls from the Operations
- * shoot modal (pricing, 51/49 and comped splits, settlement ledger, countersign, prep notes and the
- * Final Delivery photos), so both places always behave the same.
+ * Single-view dashboard for one client's shoot: editable overview and finances, the client's prep
+ * submission, the executed service agreement, and Final Delivery photo management. The overview and
+ * finances controls are the same ones used in the Operations shoot modal, so both always behave alike.
  */
 export function ShootWorkspace({
   initialShoot,
@@ -66,6 +67,7 @@ export function ShootWorkspace({
         </div>
       </div>
 
+      {/* Panel 1 (Overview) and the finances and splits controls */}
       <ShootDetailSheet
         variant="page"
         shoot={shoot}
@@ -73,6 +75,38 @@ export function ShootWorkspace({
         bookingAddons={bookingAddons}
         onUpdated={setShoot}
       />
+
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        {/* Panel 2 */}
+        <WorkspacePrepCard shoot={shoot} />
+        {/* Panel 3 */}
+        <WorkspaceAgreementCard shoot={shoot} onUpdated={setShoot} />
+      </div>
+
+      {/* Panel 4 */}
+      <section
+        aria-labelledby="workspace-delivery"
+        className="flex flex-col gap-4 rounded-xl border-2 border-primary/50 bg-card p-5 sm:p-6"
+      >
+        <div className="flex flex-col gap-1">
+          <h2 id="workspace-delivery" className="flex items-center gap-2 font-heading text-lg font-medium text-foreground">
+            <Images className="size-5 text-primary" aria-hidden="true" />
+            Final Delivery
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            High-resolution photos for {shoot.client_name}. They unlock in the client&apos;s vault when the shoot reaches
+            Delivered &amp; Settled.
+          </p>
+        </div>
+
+        {shoot.vault_id ? (
+          <VaultDeliveryUploader vaultId={shoot.vault_id} wide />
+        ) : (
+          <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+            No vault yet. Photos can be added once the shoot moves to Awaiting Signature &amp; Retainer.
+          </p>
+        )}
+      </section>
 
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">

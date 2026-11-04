@@ -37,7 +37,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const { rows: photos } = await sql<{ bucket: string; storage_path: string; file_name: string }>`
-    SELECT bucket, storage_path, file_name FROM vault_photos WHERE vault_id = ${vaultId} ORDER BY created_at ASC, file_name ASC
+    SELECT bucket, storage_path, file_name FROM vault_photos WHERE vault_id = ${vaultId} ORDER BY sort_order ASC NULLS LAST, created_at ASC, file_name ASC
   `
   if (photos.length === 0) {
     return NextResponse.json({ error: "No photos found" }, { status: 404 })

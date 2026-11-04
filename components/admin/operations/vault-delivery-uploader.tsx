@@ -1,7 +1,7 @@
 "use client"
 
 import { useId, useRef, useState, type DragEvent } from "react"
-import { ImagePlus, Images, Loader2, Trash2 } from "lucide-react"
+import { ArrowLeft, ArrowRight, ImagePlus, Images, Loader2, Trash2, Upload } from "lucide-react"
 import { toast } from "sonner"
 import useSWR from "swr"
 
@@ -9,6 +9,7 @@ import {
   attachMediaToVault,
   deleteVaultPhoto,
   listVaultPhotosAdmin,
+  reorderVaultPhotos,
   type VaultPhotoView,
 } from "@/app/actions/vault-photos"
 import type { MediaItem } from "@/app/actions/media-library"
@@ -20,7 +21,7 @@ import { cn } from "@/lib/utils"
 
 const UPLOAD_CONCURRENCY = 3
 
-export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
+export function VaultDeliveryUploader({ vaultId, wide = false }: { vaultId: string; wide?: boolean }) {
   const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
@@ -94,15 +95,34 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
     }
   }
 
+  async function handleMove(index: number, direction: -1 | 1) {
+    if (!photos) return
+    const target = index + direction
+    if (target < 0 || target >= photos.length) return
+
+    const reordered = [...photos]
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+
+    // Show the new order immediately, then save it; fall back to the server order if saving fails.
+    await mutate(reordered, { revalidate: false })
+    try {
+      await reorderVaultPhotos(
+        vaultId,
+        reordered.map((photo) => photo.id)
+      )
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the new order")
+      await mutate()
+    }
+  }
+
   const percent = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-2">
         <Label>Final delivery photos</Label>
-        <span className="text-[0.65rem] text-muted-foreground">
-          {photos ? `${photos.length} attached` : ""}
-        </span>
+        <span className="text-[0.65rem] text-muted-foreground">{photos ? `${photos.length} attached` : ""}</span>
       </div>
 
       <label
@@ -114,12 +134,13 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
         onDragLeave={() => setDragActive(false)}
         onDrop={handleDrop}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-6 text-center transition-colors hover:border-primary/60 hover:bg-muted/40 has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+          "flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 text-center transition-colors hover:border-primary/60 hover:bg-muted/40 has-[:focus-visible]:border-ring has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+          wide ? "py-10" : "py-6",
           dragActive && "border-primary bg-primary/5",
           uploading && "cursor-not-allowed opacity-60"
         )}
       >
-        <ImagePlus className="size-5 text-muted-foreground" aria-hidden="true" />
+        <ImagePlus className={cn("text-muted-foreground", wide ? "size-8" : "size-5")} aria-hidden="true" />
         <span className="text-xs font-medium text-foreground">Drop final high-res photos here or click to browse</span>
         <span className="text-[0.65rem] text-muted-foreground">
           Originals are kept untouched for the client&apos;s download.
@@ -139,17 +160,30 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
         />
       </label>
 
-      <MediaPickerDialog
-        multiple
-        title="Attach from Gallery"
-        onSelectMany={(items) => void attachFromGallery(items)}
-        trigger={
-          <Button type="button" variant="outline" size="sm" disabled={uploading}>
-            <Images className="size-4" aria-hidden="true" />
-            Choose from Gallery
-          </Button>
-        }
-      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="flex-1 basis-40"
+          disabled={uploading}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="size-4" aria-hidden="true" />
+          Upload from Computer
+        </Button>
+        <MediaPickerDialog
+          multiple
+          title="Attach from Gallery"
+          onSelectMany={(items) => void attachFromGallery(items)}
+          trigger={
+            <Button type="button" variant="outline" size="sm" className="flex-1 basis-40" disabled={uploading}>
+              <Images className="size-4" aria-hidden="true" />
+              Choose from Gallery
+            </Button>
+          }
+        />
+      </div>
 
       {progress ? (
         <div className="flex flex-col gap-1.5" aria-live="polite">
@@ -173,8 +207,8 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
       {isLoading ? (
         <div className="h-24 animate-pulse rounded-lg bg-muted" role="status" aria-label="Loading photos" />
       ) : photos && photos.length > 0 ? (
-        <ul className="columns-3 gap-2">
-          {photos.map((photo) => (
+        <ul className={cn("gap-2", wide ? "columns-2 sm:columns-3 lg:columns-4" : "columns-3")}>
+          {photos.map((photo, index) => (
             <li
               key={photo.id}
               className="group relative mb-2 break-inside-avoid overflow-hidden rounded-md border border-border bg-muted"
@@ -186,12 +220,17 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
               ) : (
                 <div className="aspect-[3/2] w-full animate-pulse bg-muted" />
               )}
+
+              <span className="absolute top-1 left-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-background/85 px-1 text-[0.65rem] font-medium text-foreground backdrop-blur-sm">
+                {index + 1}
+              </span>
+
               <button
                 type="button"
                 onClick={() => handleDelete(photo)}
                 disabled={deletingId === photo.id}
-                aria-label={`Delete ${photo.fileName}`}
-                className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-background/85 text-foreground opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+                aria-label={`Remove ${photo.fileName}`}
+                className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-background/85 text-foreground opacity-100 backdrop-blur-sm transition-opacity hover:bg-destructive hover:text-white focus-visible:opacity-100 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
               >
                 {deletingId === photo.id ? (
                   <Loader2 className="size-3 animate-spin" aria-hidden="true" />
@@ -199,6 +238,27 @@ export function VaultDeliveryUploader({ vaultId }: { vaultId: string }) {
                   <Trash2 className="size-3" aria-hidden="true" />
                 )}
               </button>
+
+              <div className="absolute inset-x-1 bottom-1 flex justify-between opacity-100 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover:opacity-100">
+                <button
+                  type="button"
+                  onClick={() => void handleMove(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Move ${photo.fileName} earlier`}
+                  className="flex size-6 items-center justify-center rounded-full bg-background/85 backdrop-blur-sm disabled:opacity-40"
+                >
+                  <ArrowLeft className="size-3" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleMove(index, 1)}
+                  disabled={index === photos.length - 1}
+                  aria-label={`Move ${photo.fileName} later`}
+                  className="flex size-6 items-center justify-center rounded-full bg-background/85 backdrop-blur-sm disabled:opacity-40"
+                >
+                  <ArrowRight className="size-3" aria-hidden="true" />
+                </button>
+              </div>
             </li>
           ))}
         </ul>
