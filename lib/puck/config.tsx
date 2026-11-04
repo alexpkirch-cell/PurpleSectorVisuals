@@ -1,4 +1,4 @@
-import type { Config, CustomField, Fields, TextField } from "@measured/puck"
+import type { ComponentConfig, Config, CustomField, Fields, TextField } from "@measured/puck"
 
 import { STUDIO_GRID_MAX, STUDIO_GRID_MIN, STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
 import { DISCIPLINES_TEXT_DEFAULTS } from "@/components/home/disciplines-section"
@@ -9,6 +9,13 @@ import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
 import { ImageFieldInput } from "@/components/puck/image-field"
 import { EditableImage } from "@/components/puck/inline-edit"
+import {
+  GRID_TEXT_DEFAULTS,
+  MasonryGallerySection,
+  ScatteredCollageSection,
+  StandardGridSection,
+  type GridPhoto,
+} from "@/components/puck/smart-grids"
 import {
   BookingFormBlock,
   DemoVaultBlock,
@@ -95,6 +102,41 @@ const DISCIPLINE_TEXT_KEYS = [
   ),
 ] as const
 
+const GRID_TEXT_KEYS = ["eyebrow", "heading"] as const
+const emptyGridPhoto = (): GridPhoto => ({ src: "", alt: "", focal: "" })
+
+/** A layout module from the "Add Section" group: it starts with empty, clickable photo slots that the admin fills in on the canvas. */
+function gridBlock(
+  label: string,
+  Section: (props: { photos: GridPhoto[]; text: { eyebrow?: string; heading?: string } }) => React.ReactNode,
+  { slots, max }: { slots: number; max: number }
+): ComponentConfig<GridProps> {
+  return {
+    label,
+    fields: {
+      ...(inlineTextFields(GRID_TEXT_KEYS) as Record<(typeof GRID_TEXT_KEYS)[number], TextField>),
+      items: {
+        type: "array",
+        label: "Photos (click a photo on the page to change it)",
+        min: 1,
+        max,
+        arrayFields: {
+          src: imageField("Photo"),
+          alt: { type: "text", label: "Alt text (describe the photo)" },
+        },
+        defaultItemProps: emptyGridPhoto(),
+        getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
+      },
+    },
+    defaultProps: {
+      ...pickText(GRID_TEXT_DEFAULTS, GRID_TEXT_KEYS),
+      items: Array.from({ length: slots }, emptyGridPhoto),
+    },
+    resolveData: ({ props }) => ({ props: { ...props, ...fillText(props, GRID_TEXT_DEFAULTS, GRID_TEXT_KEYS) } }),
+    render: (props) => <Section photos={props.items ?? []} text={pickText(props, GRID_TEXT_KEYS)} />,
+  }
+}
+
 type StudioPhoto = { src: string }
 const STUDIO_DEFAULT_SLOTS = 6
 const emptyStudioPhotos = (): StudioPhoto[] => Array.from({ length: STUDIO_DEFAULT_SLOTS }, () => ({ src: "" }))
@@ -161,7 +203,12 @@ const DISCIPLINE_LABELS: Record<(typeof DISCIPLINE_FIELD_KEYS)[number], string> 
   commercial: "Commercial",
 }
 
+export type GridProps = { eyebrow?: string; heading?: string; items: GridPhoto[] }
+
 export type PuckComponents = {
+  StandardGrid: GridProps
+  MasonryGallery: GridProps
+  ScatteredCollage: GridProps
   Hero: HeroProps
   Text: {
     eyebrow: string
@@ -245,6 +292,11 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     render: ({ children }) => <div className="min-h-screen w-full bg-[#09090b] text-foreground">{children}</div>,
   },
   categories: {
+    grids: {
+      title: "Add Section",
+      defaultExpanded: true,
+      components: ["StandardGrid", "MasonryGallery", "ScatteredCollage"],
+    },
     sections: {
       title: "Homepage sections",
       components: ["Hero", "Text", "Studio", "DualSplit", "Disciplines", "JoinRoster"],
@@ -256,6 +308,10 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     },
   },
   components: {
+    StandardGrid: gridBlock("Standard Grid (2x3)", StandardGridSection, { slots: 6, max: 12 }),
+    MasonryGallery: gridBlock("Masonry Gallery", MasonryGallerySection, { slots: 8, max: 16 }),
+    ScatteredCollage: gridBlock("Scattered Collage", ScatteredCollageSection, { slots: 5, max: 8 }),
+
     Hero: {
       label: "Hero Section",
       fields: Object.fromEntries(

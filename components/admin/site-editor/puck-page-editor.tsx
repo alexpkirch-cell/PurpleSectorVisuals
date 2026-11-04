@@ -96,9 +96,18 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
           data: { ...currentItem, props },
         })
       }
-      const setPhoto = (url: string) => {
+      // Fixed-shape slots store their focal point next to the photo URL: `items.2.src` -> `items.2.focal`.
+      const isFramed = photo?.getAttribute("data-psv-fit") === "cover"
+      const focalPath = path.endsWith("src") ? `${path.slice(0, -3)}focal` : `${path}Focal`
+      const slotShape = photo?.firstElementChild as HTMLElement | null
+      // offsetWidth/Height ignore CSS transforms (tilted polaroids) and the canvas zoom, so they give the true ratio.
+      const aspect = isFramed && slotShape?.offsetWidth && slotShape.offsetHeight ? slotShape.offsetWidth / slotShape.offsetHeight : undefined
+
+      const setPhoto = (url: string, focal?: string) => {
         const currentItem = latest.current.puck.getItemById(componentId)
-        if (currentItem) write(setDeep(currentItem.props, path, url))
+        if (!currentItem) return
+        const withPhoto = setDeep(currentItem.props, path, url)
+        write(isFramed ? setDeep(withPhoto, focalPath, url ? (focal ?? "50% 50%") : "") : withPhoto)
       }
 
       const slot = path.match(/^(.+)\.(\d+)\.src$/)
@@ -110,6 +119,8 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
       open({
         label: slot ? `Photo ${slotIndex + 1}` : "Photo",
         currentUrl: (readPath(item.props, path) as string | undefined) ?? "",
+        aspect,
+        currentFocal: aspect ? (readPath(item.props, focalPath) as string | undefined) : undefined,
         apply: setPhoto,
         clear: () => setPhoto(""),
         deleteSlot:
