@@ -207,6 +207,9 @@ export function ShootDetailSheet({
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("0")
   const [notes, setNotes] = useState("")
+  const [clientName, setClientName] = useState("")
+  const [clientEmail, setClientEmail] = useState("")
+  const [clientPhone, setClientPhone] = useState("")
   const [location, setLocation] = useState("")
   const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -232,6 +235,9 @@ export function ShootDetailSheet({
       setEditors(editorsOf(shoot))
       setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
       setNotes(shoot.notes ?? "")
+      setClientName(shoot.client_name)
+      setClientEmail(shoot.client_email)
+      setClientPhone(shoot.client_phone ?? "")
       setLocation(shoot.location ?? "")
       setLocationMapsUrl(shoot.location_maps_url)
     }
@@ -268,8 +274,14 @@ export function ShootDetailSheet({
       const price = Math.max(0, Number(totalPrice) || 0)
 
       const trimmedLocation = location.trim()
+      const trimmedClientName = clientName.trim()
+      const trimmedClientEmail = clientEmail.trim()
+      const trimmedClientPhone = clientPhone.trim()
       const locationChanged = trimmedLocation !== (shoot.location ?? "")
       await updateShoot(shoot.id, {
+        clientName: trimmedClientName,
+        clientEmail: trimmedClientEmail,
+        clientPhone: trimmedClientPhone || null,
         basePrice: price,
         travelFee: 0,
         notes: notes || null,
@@ -284,6 +296,9 @@ export function ShootDetailSheet({
       })
       onUpdated({
         ...shoot,
+        client_name: trimmedClientName || shoot.client_name,
+        client_email: trimmedClientEmail || shoot.client_email,
+        client_phone: trimmedClientPhone || null,
         base_price: String(price),
         travel_fee: "0",
         total_price: String(price),
@@ -301,7 +316,7 @@ export function ShootDetailSheet({
             }
           : {}),
       })
-      toast.success("Shoot updated")
+      toast.success("Client details updated")
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save shoot")
     } finally {
@@ -453,9 +468,18 @@ export function ShootDetailSheet({
               <PanelGroup isPage={isPage}>
                 <Panel isPage={isPage} value="overview" title="Overview" className="flex flex-col gap-4">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <InfoRow label="Full name" value={shoot.client_name} />
-                    <InfoRow label="Email" value={shoot.client_email} />
-                    <InfoRow label="Phone" value={shoot.client_phone ?? "Not provided"} />
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="client-name">Full name</Label>
+                      <Input id="client-name" value={clientName} onChange={(event) => setClientName(event.target.value)} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="client-email">Email</Label>
+                      <Input id="client-email" type="email" value={clientEmail} onChange={(event) => setClientEmail(event.target.value)} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="client-phone">Phone</Label>
+                      <Input id="client-phone" type="tel" value={clientPhone} onChange={(event) => setClientPhone(event.target.value)} placeholder="Not provided" />
+                    </div>
                     <InfoRow label="Package selected" value={shoot.shoot_type} />
                     <InfoRow label="Preferred date" value={formatDate(shoot.shoot_date)} />
                   </div>

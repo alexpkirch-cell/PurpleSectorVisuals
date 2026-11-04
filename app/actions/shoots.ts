@@ -430,6 +430,9 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
 export async function updateShoot(
   id: string,
   fields: Partial<{
+    clientName: string
+    clientEmail: string
+    clientPhone: string | null
     basePrice: number
     travelFee: number
     assignedShooter: string | null
@@ -448,6 +451,9 @@ export async function updateShoot(
 
   await sql`
     UPDATE shoots SET
+      client_name = COALESCE(NULLIF(BTRIM(${fields.clientName ?? null}), ''), client_name),
+      client_email = COALESCE(NULLIF(BTRIM(${fields.clientEmail ?? null}), ''), client_email),
+      client_phone = CASE WHEN ${fields.clientPhone !== undefined}::boolean THEN NULLIF(BTRIM(${fields.clientPhone ?? null}), '') ELSE client_phone END,
       location = CASE WHEN ${locationChanged}::boolean THEN ${location} ELSE location END,
       location_maps_url = CASE WHEN ${locationChanged}::boolean THEN ${locationMapsUrl} ELSE location_maps_url END,
       base_price = COALESCE(${fields.basePrice ?? null}, base_price),
