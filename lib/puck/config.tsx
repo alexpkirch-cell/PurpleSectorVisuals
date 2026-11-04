@@ -5,6 +5,7 @@ import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
 import { ImageFieldInput } from "@/components/puck/image-field"
+import { StudioPhotosField, type StudioPhoto } from "@/components/puck/studio-photos-field"
 import {
   BookingFormBlock,
   DemoVaultBlock,
@@ -56,6 +57,9 @@ const imageField = (label: string): CustomField<string> => ({
   label,
   render: ({ value, onChange }) => <ImageFieldInput value={value ?? ""} onChange={onChange} />,
 })
+
+const STUDIO_DEFAULT_SLOTS = 6
+const emptyStudioPhotos = (): StudioPhoto[] => Array.from({ length: STUDIO_DEFAULT_SLOTS }, () => ({ src: "" }))
 
 const PHOTO_INFO_KEYS = ["title", "category", "shooter", "camera", "lens", "settings"] as const
 type PhotoInfo = Record<(typeof PHOTO_INFO_KEYS)[number], string>
@@ -385,15 +389,22 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       label: "The Studio",
       fields: {
         images: {
-          type: "array",
-          label: "Studio photos (add as many as you like)",
-          arrayFields: { src: imageField("Photo") },
-          defaultItemProps: { src: "" },
-          getItemSummary: (_item, i) => `Photo ${(i ?? 0) + 1}`,
-        },
+          type: "custom",
+          label: "Studio photos",
+          render: ({ value, onChange }) => <StudioPhotosField value={value} onChange={onChange} />,
+        } as CustomField<StudioPhoto[] | undefined>,
       },
       defaultProps: {
-        images: Array.from({ length: 6 }, () => ({ src: "" })),
+        images: emptyStudioPhotos(),
+      },
+      // Saved layouts that predate the photo field have no `images`; give them their empty slots (carrying over any legacy photos)
+      // so the panel always lists every slot the canvas shows.
+      resolveData: ({ props }) => {
+        const legacy = [props.reel, props.sports, props.portrait, ...(props.bts ?? []).map((item) => item?.src)]
+        const current = Array.isArray(props.images) ? props.images : []
+        const length = Math.max(STUDIO_DEFAULT_SLOTS, current.length, legacy.length)
+        const images = Array.from({ length }, (_, i) => ({ src: current[i]?.src ?? (current.length ? "" : legacy[i]) ?? "" }))
+        return { props: { ...props, images } }
       },
       render: ({ images, reel, sports, portrait, bts }) => (
         <StudioBlock

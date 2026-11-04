@@ -12,7 +12,7 @@ const HOME_LAYOUT = {
   content: [
     { type: "Hero", props: { id: "home-hero" } },
     { type: "Text", props: { id: "home-how-we-work", ...HOW_WE_WORK_DEFAULTS } },
-    { type: "Studio", props: { id: "home-studio" } },
+    { type: "Studio", props: { id: "home-studio", images: Array.from({ length: 6 }, () => ({ src: "" })) } },
     { type: "DualSplit", props: { id: "home-dual-split" } },
     { type: "Disciplines", props: { id: "home-disciplines" } },
     { type: "JoinRoster", props: { id: "home-join-roster" } },

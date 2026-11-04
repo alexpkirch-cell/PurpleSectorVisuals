@@ -18,11 +18,10 @@ type ImageFieldInputProps = {
   onChange: (value: string) => void
 }
 
-export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) {
+/** Browser-direct upload to the public site-assets bucket, shared by every image control in the site editor. */
+export function useImageUpload(onChange: (value: string) => void) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const [showUrl, setShowUrl] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleFile(file: File | undefined) {
@@ -50,11 +49,19 @@ export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) 
     }
   }
 
-  function openPicker(event: { preventDefault: () => void; stopPropagation: () => void }) {
-    event.preventDefault()
-    event.stopPropagation()
+  function openPicker(event?: { preventDefault: () => void; stopPropagation: () => void }) {
+    event?.preventDefault()
+    event?.stopPropagation()
     if (!uploading) inputRef.current?.click()
   }
+
+  return { inputRef, uploading, error, handleFile, openPicker }
+}
+
+export function ImageFieldInput({ value = "", onChange }: ImageFieldInputProps) {
+  const { inputRef, uploading, error, handleFile, openPicker } = useImageUpload(onChange)
+  const [dragging, setDragging] = useState(false)
+  const [showUrl, setShowUrl] = useState(false)
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault()

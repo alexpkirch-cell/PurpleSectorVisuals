@@ -79,25 +79,12 @@ export function CoreIdentitySection({
             </Link>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {/* Photos keep the proportions they were shot in; only empty placeholders are square. */}
+          <div className="grid grid-cols-2 items-start gap-3 sm:grid-cols-3">
             {slots.map((src, i) => {
-              const lightboxIndex = src ? lightboxImages.findIndex((item) => item.src === src) : -1
-              return (
-                <div key={i} className="relative aspect-square w-full overflow-hidden rounded-2xl">
-                  {src ? (
-                    <LightboxTrigger
-                      images={lightboxImages}
-                      startIndex={Math.max(lightboxIndex, 0)}
-                      className="absolute inset-0"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
-                      <img
-                        src={src}
-                        alt={`Studio photo ${i + 1}`}
-                        className="size-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
-                      />
-                    </LightboxTrigger>
-                  ) : (
+              if (!src) {
+                return (
+                  <div key={i} className="relative aspect-square w-full overflow-hidden rounded-2xl">
                     <ImageSlot
                       aspect="1:1 Slot"
                       label={`Studio ${i + 1}`}
@@ -105,8 +92,25 @@ export function CoreIdentitySection({
                       slotKey={i === 0 ? "home.core-identity" : undefined}
                       overrides={i === 0 ? overrides : undefined}
                     />
-                  )}
-                </div>
+                  </div>
+                )
+              }
+
+              const lightboxIndex = lightboxImages.findIndex((item) => item.src === src)
+              return (
+                <LightboxTrigger
+                  key={i}
+                  images={lightboxImages}
+                  startIndex={Math.max(lightboxIndex, 0)}
+                  className="block w-full overflow-hidden rounded-2xl"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- CMS photo URLs */}
+                  <img
+                    src={src}
+                    alt={`Studio photo ${i + 1}`}
+                    className="block h-auto w-full rounded-2xl border border-zinc-800 object-contain transition-transform duration-500 ease-out hover:scale-[1.03]"
+                  />
+                </LightboxTrigger>
               )
             })}
           </div>
