@@ -12,7 +12,15 @@ import { Button } from "@/components/ui/button"
 
 function formatTimestamp(iso: string | null) {
   if (!iso) return "Not recorded"
-  return new Date(iso).toLocaleString("en-US", { dateStyle: "long", timeStyle: "medium", timeZoneName: "short" })
+  return new Date(iso).toLocaleString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZoneName: "short",
+  })
 }
 
 function Fact({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
