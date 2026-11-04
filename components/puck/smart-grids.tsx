@@ -116,7 +116,7 @@ export function ScatteredCollageSection({ photos, text }: { photos: GridPhoto[];
     <section className="w-full overflow-hidden bg-[#09090b]">
       <div className="mx-auto max-w-6xl px-6 py-20 sm:px-10">
         <GridHeader text={text} />
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,13rem),1fr))] gap-x-8 gap-y-12 pb-8">
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10.5rem),1fr))] gap-x-6 gap-y-12 pb-8">
           {visible.map(({ photo, index }, position) => (
             <figure
               key={index}

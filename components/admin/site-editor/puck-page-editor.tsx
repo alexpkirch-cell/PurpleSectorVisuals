@@ -168,10 +168,53 @@ function PreviewFrame({ children, document: frameDocument }: { children: ReactNo
   )
 }
 
+const CLICK_MOVE_TOLERANCE = 5
+
+/** Components stay draggable, and a plain click now also appends them to the page and brings the new block into view. */
+function ComponentListItem({ name, children }: { name: string; children: ReactNode }) {
+  const { appState, dispatch } = usePuck()
+  const pointerStart = useRef<{ x: number; y: number } | null>(null)
+
+  function insertAtEnd() {
+    const id = `${name}-${crypto.randomUUID()}`
+    const index = appState.data.content.length
+    const zone = "root:default-zone"
+    dispatch({ type: "insert", componentType: name, destinationIndex: index, destinationZone: zone, id })
+    dispatch({ type: "setUi", ui: { itemSelector: { index, zone } } })
+    // The canvas renders the new block on the next frame; scroll once it exists.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() =>
+        document
+          .querySelector("iframe")
+          ?.contentDocument?.querySelector(`[data-puck-component="${id}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" })
+      )
+    )
+  }
+
+  return (
+    <div
+      onPointerDownCapture={(event) => {
+        pointerStart.current = { x: event.clientX, y: event.clientY }
+      }}
+      onClick={(event) => {
+        const start = pointerStart.current
+        // A drag also ends in a click; only a stationary press counts as "add this".
+        if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > CLICK_MOVE_TOLERANCE) return
+        insertAtEnd()
+      }}
+      title="Click to add to the page, or drag it into place"
+    >
+      {children}
+    </div>
+  )
+}
+
 // Text is edited by typing on the canvas, so the sidebar hides the text inputs that would duplicate that (photo inputs hide
 // themselves, see `imageField`). Text fields that are not editable inline (alt text, links, SEO) stay visible.
 const overrides: Partial<Overrides> = {
   iframe: PreviewFrame,
+  componentItem: ComponentListItem,
   fieldTypes: {
     text: ({ field, children }) => ((field as { contentEditable?: boolean }).contentEditable ? null : <>{children}</>),
     textarea: ({ field, children }) => ((field as { contentEditable?: boolean }).contentEditable ? null : <>{children}</>),
