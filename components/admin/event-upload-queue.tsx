@@ -91,7 +91,10 @@ export function EventUploadQueue({ vaults, shooters, editors }: { vaults: Assign
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between"><p className="text-sm font-medium">Photos Queued ({files.length})</p><Button type="button" variant="ghost" size="sm" onClick={() => { files.forEach((file) => URL.revokeObjectURL(file.previewUrl)); setFiles([]) }}>Clear</Button></div>
               <ul className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-4">
-                {files.map((queued) => <li key={queued.id} className="relative overflow-hidden rounded-md border border-border">{/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}<img src={queued.previewUrl} alt={queued.file.name} className="block aspect-square h-auto w-full object-contain" /><button type="button" aria-label={`Remove ${queued.file.name}`} onClick={() => { URL.revokeObjectURL(queued.previewUrl); setFiles((current) => current.filter((file) => file.id !== queued.id)) }} className="absolute right-1 top-1 rounded-full bg-background/90 p-1"><X className="size-3" /></button></li>)}
+                {files.map((queued) => <li key={queued.id} className="relative overflow-hidden rounded-md border border-border">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+                    <img src={queued.previewUrl} alt={queued.file.name} className="block aspect-square h-auto w-full object-contain" />
+                    <button type="button" aria-label={`Remove ${queued.file.name}`} onClick={() => { URL.revokeObjectURL(queued.previewUrl); setFiles((current) => current.filter((file) => file.id !== queued.id)) }} className="absolute right-1 top-1 rounded-full bg-background/90 p-1"><X className="size-3" /></button></li>)}
               </ul>
             </div>
           ) : null}

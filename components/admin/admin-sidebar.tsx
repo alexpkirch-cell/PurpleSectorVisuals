@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Briefcase,
+  BookUser,
+  FileBarChart,
   GalleryVerticalEnd,
   KeyRound,
   LayoutGrid,
@@ -28,6 +30,8 @@ const navLinks: NavLink[] = [
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/operations", label: "Operations", icon: Briefcase },
   { href: "/admin/active-vaults", label: "Active Vaults", icon: KeyRound },
+  { href: "/admin/clients", label: "Client Directory", icon: BookUser },
+  { href: "/admin/reports", label: "Reports & Search", icon: FileBarChart },
 ]
 
 const eventLink: NavLink = { href: "/admin/event-upload", label: "Event Uploads", icon: ScanFace }
