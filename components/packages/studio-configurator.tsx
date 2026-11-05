@@ -69,8 +69,13 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
 
   function selectCategory(category: PackageCategory) {
     setActiveCategory(category)
-    const first = packages.find((p) => p.category === category)
-    setActivePackageId(first?.id ?? null)
+    const cheapest = packages
+      .filter((p) => p.category === category)
+      .reduce<ServicePackage | null>(
+        (lowest, pkg) => (!lowest || Number(pkg.base_price) < Number(lowest.base_price) ? pkg : lowest),
+        null,
+      )
+    setActivePackageId(cheapest?.id ?? null)
     setSelectedAddOnIds(new Set())
   }
 
