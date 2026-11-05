@@ -20,7 +20,8 @@ import {
 import { createShootInquiry } from "@/app/actions/shoots"
 import { PACKAGE_CATEGORIES, type ServicePackage } from "@/lib/packages"
 
-const UNSURE_LABEL = "Not sure yet — let's chat!"
+const CUSTOM_PROJECT_LABEL = "Custom Project / Not Sure Yet"
+const CUSTOM_TIER_PARAM = "custom"
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
@@ -42,6 +43,7 @@ export function UnifiedBookingForm({
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [shootType, setShootType] = useState(() => {
+    if (preselectedTier === CUSTOM_TIER_PARAM) return CUSTOM_PROJECT_LABEL
     if (preselectedTier && packages.some((p) => p.title === preselectedTier)) {
       return preselectedTier
     }
@@ -69,7 +71,7 @@ export function UnifiedBookingForm({
         clientName: String(formData.get("clientName") ?? ""),
         clientEmail: String(formData.get("clientEmail") ?? ""),
         clientPhone: String(formData.get("clientPhone") ?? ""),
-        shootType: shootType || UNSURE_LABEL,
+        shootType: shootType || CUSTOM_PROJECT_LABEL,
         shootDate: String(formData.get("shootDate") ?? "") || undefined,
         location: String(formData.get("location") ?? ""),
         notes: [
@@ -134,8 +136,8 @@ export function UnifiedBookingForm({
               <SelectValue placeholder="Select a package" className="truncate" />
             </SelectTrigger>
             <SelectContent className="w-[--radix-select-trigger-width] min-w-full max-w-[95vw]">
-              <SelectItem value={UNSURE_LABEL} className="whitespace-normal break-words">
-                {UNSURE_LABEL}
+              <SelectItem value={CUSTOM_PROJECT_LABEL} className="whitespace-normal break-words">
+                {CUSTOM_PROJECT_LABEL}
               </SelectItem>
               {groupedPackages.map((group) => (
                 <SelectGroup key={group.category}>
@@ -163,7 +165,12 @@ export function UnifiedBookingForm({
 
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="notes">Notes</Label>
-        <Textarea id="notes" name="notes" rows={3} placeholder="Anything else we should know?" />
+        <Textarea
+          id="notes"
+          name="notes"
+          rows={3}
+          placeholder="Describe your vision, or let us know if you aren't sure which package fits best."
+        />
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

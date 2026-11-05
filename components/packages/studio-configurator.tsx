@@ -120,6 +120,10 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
     router.push(`/book?${params.toString()}`)
   }
 
+  function handleCustomQuote() {
+    router.push("/book?tier=custom")
+  }
+
   if (categoriesWithPackages.length === 0) {
     return (
       <div className="mx-auto flex min-h-svh max-w-3xl flex-col items-center justify-center px-6 text-center">
@@ -292,13 +296,22 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                 </p>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={handleBookSetup}
-              className="inline-flex items-center justify-center rounded-full bg-[#e829f1] px-8 py-3.5 text-sm font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Book This Setup
-            </button>
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-6">
+              <button
+                type="button"
+                onClick={handleCustomQuote}
+                className="rounded-full px-2 py-2 text-center text-sm font-medium text-zinc-400 underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none sm:text-right"
+              >
+                Not sure? Request a custom quote.
+              </button>
+              <button
+                type="button"
+                onClick={handleBookSetup}
+                className="inline-flex items-center justify-center rounded-full bg-[#e829f1] px-8 py-3.5 text-sm font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Book This Setup
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
