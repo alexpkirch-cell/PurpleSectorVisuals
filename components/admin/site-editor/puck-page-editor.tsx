@@ -39,10 +39,6 @@ const RESIZE_OBSERVER_MESSAGES = [
 // notification was deferred to the next frame; nothing is broken, so keep it away from the dev error overlay.
 function ignoreResizeObserverError(event: ErrorEvent) {
   if (RESIZE_OBSERVER_MESSAGES.includes(event.message)) {
-    ;(window as unknown as { __roDbg?: string[] }).__roDbg = [
-      ...((window as unknown as { __roDbg?: string[] }).__roDbg ?? []),
-      `${event.currentTarget === window ? "main" : "frame"}@${Math.round(performance.now())}`,
-    ]
     event.stopImmediatePropagation()
     event.preventDefault()
   }
