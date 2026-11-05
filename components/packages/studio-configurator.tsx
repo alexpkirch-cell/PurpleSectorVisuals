@@ -58,12 +58,13 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   )
 
   // Physical print products are handled at checkout, not as a configurator
-  // add-on, and add-ons always list cheapest first.
+  // add-on. Add-ons list cheapest first, with $0 inquiry items (e.g. a season
+  // pass) last. Only the selected package's add-ons are ever rendered or counted.
   const visibleAddOns = useMemo(
     () =>
       (activePackage?.add_ons ?? [])
         .filter((addOn) => !/print/i.test(addOn.name))
-        .sort((a, b) => a.price - b.price),
+        .sort((a, b) => Number(a.price === 0) - Number(b.price === 0) || a.price - b.price),
     [activePackage],
   )
 
@@ -242,7 +243,10 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
             {visibleAddOns.length === 0 ? (
               <p className="text-sm text-zinc-500">No add-ons available for this package.</p>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div
+                key={activePackage.id}
+                className="flex flex-col gap-4 duration-200 animate-in fade-in-0 motion-reduce:animate-none"
+              >
                 {visibleAddOns.map((addOn) => (
                   <div
                     key={addOn.id}
