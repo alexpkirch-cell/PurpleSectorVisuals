@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils"
 // Shares its marker with lib/defer-resize-observer so the module-level patch becomes a no-op afterwards.
 const EARLY_RESIZE_OBSERVER_GUARD = `(function(){
 var M=["ResizeObserver loop completed with undelivered notifications.","ResizeObserver loop limit exceeded"];
-window.addEventListener("error",function(e){if(M.indexOf(e.message)!==-1){e.stopImmediatePropagation();e.preventDefault()}},true);
+window.addEventListener("error",function(e){if(M.indexOf(e.message)!==-1){window.__roDbg=(window.__roDbg||[]).concat("main@"+Math.round(performance.now()));e.stopImmediatePropagation();e.preventDefault()}},true);
 var K=Symbol.for("psv.deferredResizeObserver");var N=window.ResizeObserver;
 if(!N||window[K])return;window[K]=true;
 window.ResizeObserver=class extends N{constructor(cb){var f=0,p=[];super(function(en,ob){p=p.concat(en);if(f)return;f=requestAnimationFrame(function(){f=0;var b=p;p=[];cb(b,ob)})})}};
