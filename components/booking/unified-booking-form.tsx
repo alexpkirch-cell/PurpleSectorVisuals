@@ -128,7 +128,7 @@ export function UnifiedBookingForm({
         <Input id="clientEmail" name="clientEmail" type="email" required autoComplete="email" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="shootType">Shoot type / package</Label>
           <Select value={shootType} onValueChange={(value) => setShootType(value ?? "")}>
