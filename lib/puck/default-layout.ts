@@ -50,52 +50,10 @@ const BLANK_PAGE_LAYOUT = {
 
 const pageRoot = (title: string, description: string) => ({ props: { title, description } })
 
-const SHOT_TITLES = {
-  Alex: [
-    { title: "Apex Sprint", category: "Sports" },
-    { title: "Studio Light", category: "Portraits" },
-    { title: "Chrome & Rain", category: "Automotive" },
-    { title: "Grid Walk", category: "Events" },
-    { title: "Braking Point", category: "Sports" },
-    { title: "Visor Up", category: "Portraits" },
-  ],
-  Gabe: [
-    { title: "Night Circuit", category: "Automotive" },
-    { title: "Paddock Pass", category: "Events" },
-    { title: "Full Throttle", category: "Sports" },
-    { title: "Off Track", category: "Portraits" },
-    { title: "Garage Hour", category: "Automotive" },
-    { title: "Podium Spray", category: "Events" },
-  ],
-}
-
-function creatorLayout(
-  name: "Alex" | "Gabe",
-  description: string,
-  role: string,
-  bio: string,
-  specialties: string[]
-): Data {
+function creatorCardLayout(slug: "alex" | "gabe", name: string, description: string): Data {
   return {
     root: pageRoot(`${name} | Purple Sector Visuals`, description),
-    content: [
-      {
-        type: "CreatorProfile",
-        props: {
-          id: `${name.toLowerCase()}-profile`,
-          name,
-          role,
-          bio,
-          specialties: specialties.map((tag) => ({ tag })),
-          heroImage: "",
-          shotsHeading: "Selected work",
-          galleryLabel: "Full gallery",
-          shots: SHOT_TITLES[name].map((shot) => ({ src: "", ...shot })),
-          ctaLine: `Ready to shoot with ${name}?`,
-          bookLabel: `Book with ${name}`,
-        },
-      },
-    ],
+    content: [{ type: "CreatorCard", props: { id: `${slug}-creator-card`, slug } }],
   } as Data
 }
 
@@ -179,20 +137,16 @@ function builtInLayout(path: string, text: SiteTextDefaults): Data | null {
         ],
       } as Data
     case "/alex":
-      return creatorLayout(
+      return creatorCardLayout(
+        "alex",
         "Alex",
-        "Alex shoots sports and automotive for Purple Sector Visuals — high-speed action frozen with precision and light.",
-        "Sports & Automotive",
-        "Alex shoots the exact frame where speed becomes still — the apex, the launch, the moment tires break loose. High-speed action and automotive motion, captured with precision.",
-        ["Track & Field", "Automotive Motion", "High-Speed Action"]
+        "Alex shoots sports and automotive for Purple Sector Visuals — high-speed action frozen with precision and light."
       )
     case "/gabe":
-      return creatorLayout(
+      return creatorCardLayout(
+        "gabe",
         "Gabe",
-        "Gabe shoots portraits and events for Purple Sector Visuals — candid atmosphere and character captured with a documentary eye.",
-        "Portraits & Events",
-        "Gabe builds atmosphere and tone into every frame. Drawn to unscripted moments, his work sits between documentary and portraiture — waiting for the frame no one else caught.",
-        ["Portraits", "Live Events", "Atmospheric Composition"]
+        "Gabe shoots portraits and events for Purple Sector Visuals — candid atmosphere and character captured with a documentary eye."
       )
     case "/vault":
       return {

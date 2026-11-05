@@ -1,8 +1,7 @@
 "use client"
 
-import { createContext, useContext, type ComponentProps, type ReactNode } from "react"
+import { createContext, useContext, type ReactNode } from "react"
 
-import { CreatorPage } from "@/components/creator-page"
 import { CoreIdentitySection, type StudioText } from "@/components/home/core-identity-section"
 import {
   DisciplinesSection,
@@ -45,10 +44,6 @@ export function DualSplitBlock({
   text?: DualSplitText
 }) {
   return <DualSplitSection overrides={useContext(SiteSlotsContext)} images={images} frames={frames} text={text} />
-}
-
-export function CreatorBlock(props: Omit<ComponentProps<typeof CreatorPage>, "overrides">) {
-  return <CreatorPage {...props} overrides={useContext(SiteSlotsContext)} />
 }
 
 export function DisciplinesBlock({

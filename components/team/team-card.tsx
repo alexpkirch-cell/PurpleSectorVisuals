@@ -5,6 +5,7 @@ import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { User } from "lucide-react"
 
+import { isFounderSlug } from "@/lib/shooter-link"
 import { isVideoUrl, type DirectoryMember } from "@/lib/team-directory"
 import { cn } from "@/lib/utils"
 
@@ -45,7 +46,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
 
   return (
     <Link
-      href={`/team/${member.slug}`}
+      href={isFounderSlug(member.slug) ? `/${member.slug}` : `/team/${member.slug}`}
       aria-label={`View ${member.name}'s profile`}
       className="group block rounded-3xl pt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >

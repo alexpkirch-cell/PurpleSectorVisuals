@@ -1,31 +1,9 @@
-import type { Metadata } from "next"
+import { FounderPage, founderMetadata } from "@/components/team/founder-page"
 
-import { CreatorPage } from "@/components/creator-page"
-import { renderSavedLayout } from "@/components/puck/saved-layout"
-import { withSavedMetadata } from "@/lib/page-layouts"
-import { getSiteSlots } from "@/lib/site-slots"
-
-export function generateMetadata(): Promise<Metadata> {
-  return withSavedMetadata("/gabe", {
-    title: "Gabe | Purple Sector Visuals",
-    description:
-      "Gabe shoots portraits and events for Purple Sector Visuals — candid atmosphere and character captured with a documentary eye.",
-  })
+export function generateMetadata() {
+  return founderMetadata("gabe")
 }
 
-export default async function GabePage() {
-  const saved = await renderSavedLayout("/gabe")
-  if (saved) return saved
-
-  const overrides = await getSiteSlots()
-
-  return (
-    <CreatorPage
-      name="Gabe"
-      role="Portraits & Events"
-      bio="Gabe builds atmosphere and tone into every frame. Drawn to unscripted moments, his work sits between documentary and portraiture — waiting for the frame no one else caught."
-      specialties={["Portraits", "Live Events", "Atmospheric Composition"]}
-      overrides={overrides}
-    />
-  )
+export default function GabePage() {
+  return <FounderPage slug="gabe" />
 }
