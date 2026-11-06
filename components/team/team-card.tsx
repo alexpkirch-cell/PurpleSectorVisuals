@@ -5,6 +5,7 @@ import Link from "next/link"
 import { motion, useReducedMotion } from "framer-motion"
 import { User } from "lucide-react"
 
+import { isFounderSlug } from "@/lib/shooter-link"
 import { isVideoUrl, type DirectoryMember } from "@/lib/team-directory"
 import { cn } from "@/lib/utils"
 
@@ -24,7 +25,7 @@ function HighlightBox({ url, active, dimmed }: { url: string; active: boolean; d
         <video src={url} muted loop playsInline autoPlay preload="metadata" aria-hidden="true" className="size-full object-cover" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" loading="lazy" className="size-full object-contain" />
+        <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
       )}
     </motion.div>
   )
@@ -45,7 +46,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
 
   return (
     <Link
-      href={`/team/${member.slug}`}
+      href={isFounderSlug(member.slug) ? `/${member.slug}` : `/team/${member.slug}`}
       aria-label={`View ${member.name}'s profile`}
       className="group block rounded-3xl pt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >

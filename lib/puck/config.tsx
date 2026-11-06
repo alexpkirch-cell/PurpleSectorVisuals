@@ -3,10 +3,10 @@ import type { ComponentConfig, Config, CustomField, Fields, TextField } from "@m
 import { STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
 import { DISCIPLINES_TEXT_DEFAULTS } from "@/components/home/disciplines-section"
 import { DUAL_SPLIT_TEXT_DEFAULTS } from "@/components/home/dual-split-section"
-import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
 import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
+import { CreatorCardBlock } from "@/components/puck/creator-card-block"
 import { ImageFieldInput } from "@/components/puck/image-field"
 import { EditableImage } from "@/components/puck/inline-edit"
 import {
@@ -26,7 +26,6 @@ import {
   type BlockWidth,
 } from "@/components/puck/page-blocks"
 import {
-  CreatorBlock,
   DisciplinesBlock,
   DualSplitBlock,
   HeroBlock,
@@ -257,18 +256,7 @@ export type PuckComponents = {
   BookingForm: { width: BlockWidth }
   VaultLogin: { eyebrow: string; heading: string; body: string }
   DemoVault: { eyebrow: string; heading: string; body: string; photos: { src: string }[] }
-  CreatorProfile: {
-    name: "Alex" | "Gabe"
-    role: string
-    bio: string
-    specialties: { tag: string }[]
-    heroImage: string
-    shotsHeading: string
-    galleryLabel: string
-    ctaLine: string
-    bookLabel: string
-    shots: { src: string; title: string; category: string }[]
-  }
+  CreatorCard: { slug: string }
 }
 
 export type PuckRootProps = {
@@ -298,7 +286,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
     content: { title: "Content", components: ["PageHeader", "Image", "Specialty", "BookingButton"] },
     pages: {
       title: "Page sections",
-      components: ["WorkGallery", "PackagesConfigurator", "BookingForm", "CreatorProfile", "VaultLogin", "DemoVault"],
+      components: ["WorkGallery", "PackagesConfigurator", "BookingForm", "CreatorCard", "VaultLogin", "DemoVault"],
     },
   },
   components: {
@@ -310,7 +298,8 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       label: "Hero Section",
       fields: Object.fromEntries(
         HERO_FIELD_KEYS.flatMap((key, i) => [
-          [key, imageField(`Photo ${i + 1}: ${HERO_SLOT_LABELS[i]}`)],
+          // The canvas shows the live flying carousel, where photos cannot be clicked, so uploads live in the sidebar.
+          [key, imageField(`Hero photo ${i + 1}`, { inline: false })],
           [
             `${key}Info`,
             { type: "object", label: `Photo ${i + 1} details (shown when clicked)`, objectFields: photoInfoFields },
@@ -654,62 +643,20 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       render: ({ puck: _puck, ...props }) => <DemoVaultBlock {...props} />,
     },
 
-    CreatorProfile: {
-      label: "Photographer Profile",
+    CreatorCard: {
+      label: "Creator Card",
       fields: {
-        name: {
-          type: "radio",
-          label: "Photographer",
+        slug: {
+          type: "select",
+          label: "Roster member (details come from Crew & Roster)",
           options: [
-            { label: "Alex", value: "Alex" },
-            { label: "Gabe", value: "Gabe" },
+            { label: "Alex", value: "alex" },
+            { label: "Gabe", value: "gabe" },
           ],
         },
-        role: { type: "text", label: "Role / specialty line" },
-        bio: { type: "textarea", label: "Bio" },
-        specialties: {
-          type: "array",
-          label: "Specialty tags",
-          arrayFields: { tag: { type: "text", label: "Tag" } },
-          defaultItemProps: { tag: "New specialty" },
-          getItemSummary: (item) => item.tag || "Tag",
-        },
-        heroImage: imageField("Hero portrait", { inline: false }),
-        shotsHeading: { type: "text", label: "Gallery heading" },
-        galleryLabel: { type: "text", label: "Full gallery link label" },
-        shots: {
-          type: "array",
-          label: "Selected work",
-          arrayFields: {
-            src: imageField("Photo", { inline: false }),
-            title: { type: "text", label: "Title" },
-            category: { type: "text", label: "Category" },
-          },
-          defaultItemProps: { src: "", title: "New shot", category: "Sports" },
-          getItemSummary: (item, i) => item.title || `Shot ${(i ?? 0) + 1}`,
-        },
-        ctaLine: { type: "text", label: "Booking bar text" },
-        bookLabel: { type: "text", label: "Booking button label" },
       },
-      defaultProps: {
-        name: "Alex",
-        role: "",
-        bio: "",
-        specialties: [],
-        heroImage: "",
-        shotsHeading: "Selected work",
-        galleryLabel: "Full gallery",
-        ctaLine: "Ready to shoot?",
-        bookLabel: "Book now",
-        shots: [],
-      },
-      render: ({ specialties, shots, puck: _puck, ...rest }) => (
-        <CreatorBlock
-          {...rest}
-          specialties={specialties.map((item) => item.tag)}
-          shotContent={shots}
-        />
-      ),
+      defaultProps: { slug: "alex" },
+      render: ({ slug, puck }) => <CreatorCardBlock slug={slug} members={blockMetadata(puck).members ?? []} />,
     },
   },
 }

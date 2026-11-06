@@ -16,17 +16,18 @@ export const RESERVED_ROOT_SEGMENTS = [
 ]
 
 /**
- * Pages with their own route files. They render a layout saved from the editor when one exists and
- * fall back to their code defaults otherwise, so they are fully editable here.
+ * Published pages with their own route files. They render a layout saved from the editor when one exists and
+ * fall back to their code defaults otherwise, so they are fully editable here. The home page ("/") is handled separately.
+ * Labels for pages in the site navigation come from the navigation itself (see PageNavigator).
  */
 export const BUILT_IN_PAGES = [
-  { path: "/work", label: "Work" },
+  { path: "/work", label: "Portfolio" },
   { path: "/packages", label: "Packages" },
+  { path: "/vault", label: "Vault" },
   { path: "/book", label: "Book" },
   { path: "/contact", label: "Contact" },
   { path: "/alex", label: "Alex" },
   { path: "/gabe", label: "Gabe" },
-  { path: "/vault", label: "Vault" },
   { path: "/vault/demo", label: "Vault demo" },
 ] as const
 

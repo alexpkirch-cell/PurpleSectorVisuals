@@ -9,6 +9,9 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { PACKAGE_CATEGORIES, type PackageCategory, type ServicePackage } from "@/lib/packages"
 
+/** A deliverable written as "Perfect for: ..." is shown as its own callout rather than a checklist item. */
+const PERFECT_FOR = /^perfect for\s*:?\s*/i
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
     value,
@@ -55,19 +58,25 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   )
 
   // Physical print products are handled at checkout, not as a configurator
-  // add-on, and add-ons always list cheapest first.
+  // add-on. Add-ons list cheapest first, with $0 inquiry items (e.g. a season
+  // pass) last. Only the selected package's add-ons are ever rendered or counted.
   const visibleAddOns = useMemo(
     () =>
       (activePackage?.add_ons ?? [])
         .filter((addOn) => !/print/i.test(addOn.name))
-        .sort((a, b) => a.price - b.price),
+        .sort((a, b) => Number(a.price === 0) - Number(b.price === 0) || a.price - b.price),
     [activePackage],
   )
 
   function selectCategory(category: PackageCategory) {
     setActiveCategory(category)
-    const first = packages.find((p) => p.category === category)
-    setActivePackageId(first?.id ?? null)
+    const cheapest = packages
+      .filter((p) => p.category === category)
+      .reduce<ServicePackage | null>(
+        (lowest, pkg) => (!lowest || Number(pkg.base_price) < Number(lowest.base_price) ? pkg : lowest),
+        null,
+      )
+    setActivePackageId(cheapest?.id ?? null)
     setSelectedAddOnIds(new Set())
   }
 
@@ -109,6 +118,10 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
       tier: activePackage.title,
     })
     router.push(`/book?${params.toString()}`)
+  }
+
+  function handleCustomQuote() {
+    router.push("/book?tier=custom")
   }
 
   if (categoriesWithPackages.length === 0) {
@@ -167,6 +180,9 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
             <div className="flex flex-col gap-3">
               {categoryPackages.map((pkg) => {
                 const active = pkg.id === activePackage.id
+                const perfectForLine = pkg.deliverables.find((item) => PERFECT_FOR.test(item))
+                const perfectFor = perfectForLine?.replace(PERFECT_FOR, "").trim()
+                const features = pkg.deliverables.filter((item) => item !== perfectForLine)
                 return (
                   <button
                     key={pkg.id}
@@ -179,25 +195,32 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                         : "border-zinc-800/80 bg-[#121214]/60 hover:border-zinc-700",
                     )}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h2 className="font-heading text-xl font-bold tracking-tight text-foreground">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h2 className="text-balance font-heading text-xl font-bold tracking-tight text-foreground">
                           {pkg.title}
                         </h2>
                         {pkg.duration ? (
                           <p className="mt-1 text-sm text-zinc-500">{pkg.duration}</p>
                         ) : null}
                       </div>
-                      <div className="flex items-baseline gap-1.5 shrink-0">
-                        <span className="font-heading text-2xl font-bold text-foreground">
-                          {formatCurrency(Number(pkg.base_price))}
-                        </span>
-                      </div>
+                      <span className="shrink-0 font-heading text-2xl font-bold tabular-nums text-foreground">
+                        {formatCurrency(Number(pkg.base_price))}
+                      </span>
                     </div>
 
-                    {pkg.deliverables.length > 0 ? (
+                    {perfectFor ? (
+                      <p className="text-pretty rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm leading-relaxed text-zinc-300">
+                        <span className="mr-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#e829f1]">
+                          Perfect for
+                        </span>
+                        {perfectFor}
+                      </p>
+                    ) : null}
+
+                    {features.length > 0 ? (
                       <ul className="flex flex-col gap-2">
-                        {pkg.deliverables.map((feature) => (
+                        {features.map((feature) => (
                           <li key={feature} className="flex items-start gap-2.5 text-sm text-foreground">
                             <Check
                               className={cn(
@@ -205,7 +228,7 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                                 active ? "text-[#e829f1]" : "text-zinc-600",
                               )}
                             />
-                            <span className="leading-relaxed">{feature}</span>
+                            <span className="min-w-0 text-pretty leading-relaxed">{feature}</span>
                           </li>
                         ))}
                       </ul>
@@ -217,27 +240,34 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
           </div>
 
           {/* Interactive add-ons for the selected base package */}
-          <div className="flex h-fit flex-col gap-4 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-8">
+          <div className="flex h-fit flex-col gap-4 rounded-3xl border border-zinc-800/80 bg-[#121214]/60 p-6 sm:p-8 lg:sticky lg:top-28">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
               Add-Ons for {activePackage.title}
             </p>
             {visibleAddOns.length === 0 ? (
               <p className="text-sm text-zinc-500">No add-ons available for this package.</p>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div
+                key={activePackage.id}
+                className="flex flex-col gap-4 duration-200 animate-in fade-in-0 motion-reduce:animate-none"
+              >
                 {visibleAddOns.map((addOn) => (
                   <div
                     key={addOn.id}
                     className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 px-4 py-3.5"
                   >
-                    <Label htmlFor={`addon-${addOn.id}`} className="flex-1 cursor-pointer text-sm font-normal text-foreground">
+                    <Label
+                      htmlFor={`addon-${addOn.id}`}
+                      className="min-w-0 flex-1 cursor-pointer text-pretty text-sm font-normal leading-snug text-foreground"
+                    >
                       {addOn.name}
                     </Label>
-                    <span className="text-sm font-medium text-[#e829f1]">
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-[#e829f1]">
                       {/retainer agreement/i.test(addOn.name) ? "-15% total" : `+${formatCurrency(addOn.price)}`}
                     </span>
                     <Switch
                       id={`addon-${addOn.id}`}
+                      className="shrink-0"
                       checked={selectedAddOnIds.has(addOn.id)}
                       onCheckedChange={(checked) => toggleAddOn(addOn.id, checked)}
                     />
@@ -266,13 +296,22 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                 </p>
               ) : null}
             </div>
-            <button
-              type="button"
-              onClick={handleBookSetup}
-              className="inline-flex items-center justify-center rounded-full bg-[#e829f1] px-8 py-3.5 text-sm font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Book This Setup
-            </button>
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-6">
+              <button
+                type="button"
+                onClick={handleCustomQuote}
+                className="rounded-full px-2 py-2 text-center text-sm font-medium text-zinc-400 underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none sm:text-right"
+              >
+                Not sure? Request a custom quote.
+              </button>
+              <button
+                type="button"
+                onClick={handleBookSetup}
+                className="inline-flex items-center justify-center rounded-full bg-[#e829f1] px-8 py-3.5 text-sm font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Book This Setup
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -35,7 +35,7 @@ export function MemberHero({ member }: { member: DirectoryMember }) {
   const hasCutout = Boolean(member.cutout_image_url)
 
   return (
-    <section className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 overflow-hidden px-4 pt-32 sm:px-6 lg:min-h-[min(88svh,1000px)] lg:flex-row lg:items-end lg:gap-8">
+    <section className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 overflow-hidden px-4 pt-32 sm:px-6 lg:flex-row lg:items-end lg:gap-8">
       {hasCutout ? (
         <motion.div
           className="relative order-2 flex h-[62svh] items-end justify-center lg:order-1 lg:h-[min(82svh,900px)] lg:w-1/2"
@@ -54,7 +54,7 @@ export function MemberHero({ member }: { member: DirectoryMember }) {
 
       <motion.div
         className={cn(
-          "relative z-10 order-1 flex flex-col gap-8 pb-12 lg:order-2 lg:pb-24",
+          "relative z-10 order-1 flex flex-col gap-8 pb-12 lg:order-2",
           hasCutout ? "lg:w-1/2" : "max-w-2xl"
         )}
         initial={{ opacity: 0, x: 40 * offset }}

@@ -24,7 +24,7 @@ type PuckPageEditorProps = {
   paths: string[]
   initialData: Data
   slotOverrides: SiteSlotOverrides
-  blockMetadata: Pick<PuckBlockMetadata, "packages" | "portfolioItems">
+  blockMetadata: Pick<PuckBlockMetadata, "packages" | "portfolioItems" | "members">
 }
 
 // Must run before Puck constructs any observer, so patch at module load rather than in an effect.
