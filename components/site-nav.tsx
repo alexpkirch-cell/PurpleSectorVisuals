@@ -86,7 +86,7 @@ export function SiteNav() {
       </nav>
 
       {open && (
-        <div className="absolute inset-x-4 top-[calc(100%+0.5rem)] rounded-3xl border border-zinc-800/60 bg-zinc-950/95 p-4 backdrop-blur-md md:hidden">
+        <div className="absolute inset-x-4 top-[calc(100%+0.5rem)] overflow-hidden rounded-3xl border border-zinc-800/60 bg-zinc-950/95 p-4 backdrop-blur-md md:hidden">
           <ul className="flex flex-col gap-1">
             {navLinks.map((link) => (
               <li key={link.href}>
@@ -103,7 +103,7 @@ export function SiteNav() {
               </li>
             ))}
           </ul>
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex w-full min-w-0 items-center gap-2">
             <Link
               href="/admin/login"
               onClick={() => setOpen(false)}
@@ -120,7 +120,7 @@ export function SiteNav() {
               onClick={() => setOpen(false)}
               className={cn(
                 buttonVariants(),
-                "w-full rounded-full bg-zinc-900 text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+                "min-w-0 flex-1 rounded-full bg-zinc-900 text-foreground transition-all duration-500 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
               )}
             >
               Book Session
