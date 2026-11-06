@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { splitTotal } from "@/lib/payment-terms"
+import type { AssignedShooter } from "@/lib/settlement"
 import { createClient } from "@/lib/supabase/server"
 import { allocateVaultPin } from "@/lib/vault-pin"
 import type { SettlementItem, Shoot } from "@/app/actions/shoots"
@@ -33,7 +34,7 @@ export interface GenerateVaultAndSendLinkInput {
   confirmedTime: string | null
   confirmedLocation: string | null
   totalPrice: number
-  assignedShooters: string[]
+  assignedShooters: AssignedShooter[]
   assignedEditors: string[]
 }
 
@@ -83,9 +84,11 @@ export async function generateVaultAndSendLink(
       location = COALESCE(${input.confirmedLocation}, location),
       shoot_date = ${shootDate},
       base_price = ${input.totalPrice},
+      total_price = ${input.totalPrice},
+      is_comped = false,
       travel_fee = 0,
-      assigned_shooter = ${input.assignedShooters.join(", ") || null},
-      assigned_editor = ${input.assignedEditors.join(", ") || null},
+      assigned_shooters = ${JSON.stringify(input.assignedShooters.filter((shooter) => shooter.name.trim()))},
+      assigned_editors = ${JSON.stringify(input.assignedEditors.filter((name) => name.trim()))},
       status = 'awaiting_signature'
     WHERE id = ${id}
   `

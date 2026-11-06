@@ -9,9 +9,11 @@ const CANVAS_HEIGHT = 140
 
 interface SignaturePadProps {
   onChange: (dataUrl: string | null) => void
+  /** Locks the pad (for example until the agreement has been read). */
+  disabled?: boolean
 }
 
-export function SignaturePad({ onChange }: SignaturePadProps) {
+export function SignaturePad({ onChange, disabled = false }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef(false)
   const [hasInk, setHasInk] = useState(false)
@@ -44,6 +46,7 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (disabled) return
     const ctx = prepareContext()
     if (!ctx) return
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -87,11 +90,20 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative overflow-hidden rounded-xl border border-border bg-white">
+      <div
+        className={`relative overflow-hidden rounded-xl border border-border bg-white transition-opacity ${
+          disabled ? "opacity-50" : ""
+        }`}
+      >
         <canvas
           ref={canvasRef}
-          aria-label="Signature pad. Draw your signature with a finger, stylus or mouse."
-          className="block w-full touch-none cursor-crosshair"
+          aria-label={
+            disabled
+              ? "Signature pad, locked until you have scrolled to the end of the agreement."
+              : "Signature pad. Draw your signature with a finger, stylus or mouse."
+          }
+          aria-disabled={disabled}
+          className={`block w-full touch-none ${disabled ? "cursor-not-allowed" : "cursor-crosshair"}`}
           style={{ height: CANVAS_HEIGHT }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
@@ -99,13 +111,13 @@ export function SignaturePad({ onChange }: SignaturePadProps) {
           onPointerCancel={handlePointerEnd}
         />
         {!hasInk && (
-          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-neutral-400">
-            Sign here
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-sm text-neutral-500">
+            {disabled ? "Read to the end of the agreement to unlock" : "Sign here"}
           </span>
         )}
       </div>
       <div className="flex justify-end">
-        <Button type="button" variant="ghost" size="sm" onClick={handleClear} disabled={!hasInk}>
+        <Button type="button" variant="ghost" size="sm" onClick={handleClear} disabled={!hasInk || disabled}>
           <Eraser className="h-4 w-4" />
           Clear
         </Button>
