@@ -2,9 +2,12 @@ import type { Metadata } from "next"
 import { Suspense } from "react"
 
 import { GalleryGrid } from "@/components/gallery-grid"
-import { listPortfolioItems } from "@/app/actions/portfolio"
+import { listGalleryItems } from "@/app/actions/portfolio"
 import { renderSavedLayout } from "@/components/puck/saved-layout"
 import { withSavedMetadata } from "@/lib/page-layouts"
+
+// The gallery order is re-rolled for every visitor, so this page must never be served from a static cache.
+export const dynamic = "force-dynamic"
 
 export function generateMetadata(): Promise<Metadata> {
   return withSavedMetadata("/work", {
@@ -18,7 +21,7 @@ export default async function WorkPage() {
   const saved = await renderSavedLayout("/work")
   if (saved) return saved
 
-  const items = await listPortfolioItems()
+  const items = await listGalleryItems()
 
   return (
     <div className="mx-auto min-h-svh max-w-6xl px-6 pb-24 pt-36 sm:px-10">

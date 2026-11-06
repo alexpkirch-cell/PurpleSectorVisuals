@@ -1,14 +1,13 @@
 "use client"
 
-import { useRef, useState, type DragEvent } from "react"
-import { ArrowLeft, ArrowRight, ImagePlus, Images, Loader2, Plus, Trash2, Upload, X } from "lucide-react"
+import { useRef, useState } from "react"
+import { ArrowLeft, ArrowRight, Images, Loader2, Plus, Upload, X } from "lucide-react"
 
 import { MediaPickerDialog } from "@/components/admin/media-picker-dialog"
 import { Button } from "@/components/ui/button"
 import { PUBLIC_SITE_ASSETS_BUCKET } from "@/lib/storage-buckets"
 import { isVideoUrl } from "@/lib/team-directory"
 import { uploadPublicImage } from "@/lib/upload-public-image"
-import { cn } from "@/lib/utils"
 
 const MAX_BYTES = 50 * 1024 * 1024
 const IMAGE_EXTENSION = /\.(jpe?g|png|webp|gif|avif)$/i
@@ -20,129 +19,6 @@ function isImageFile(file: File) {
 
 function isVideoFile(file: File) {
   return file.type.startsWith("video/") || VIDEO_EXTENSION.test(file.name)
-}
-
-const checkerboard =
-  "bg-[length:16px_16px] bg-[position:0_0,8px_8px] bg-[image:conic-gradient(var(--color-muted)_25%,transparent_0_50%,var(--color-muted)_0_75%,transparent_0)]"
-
-export function CutoutUploader({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const [dragging, setDragging] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleFile(file: File | undefined) {
-    if (!file) return
-    if (!isImageFile(file)) {
-      setError("Choose an image file. A transparent PNG or WebP works best.")
-      return
-    }
-    if (file.size > MAX_BYTES) {
-      setError("That image is over 50 MB. Export a smaller version and try again.")
-      return
-    }
-    setUploading(true)
-    setError(null)
-    try {
-      onChange(await uploadPublicImage(PUBLIC_SITE_ASSETS_BUCKET, "team", file))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed")
-    } finally {
-      setUploading(false)
-      if (inputRef.current) inputRef.current.value = ""
-    }
-  }
-
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault()
-    setDragging(false)
-    void handleFile(event.dataTransfer.files?.[0])
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div
-        onDragOver={(event) => {
-          event.preventDefault()
-          setDragging(true)
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-        className={cn(
-          "relative flex h-56 w-full items-center justify-center overflow-hidden rounded-lg border border-dashed border-border opacity-100 transition-colors",
-          checkerboard,
-          dragging && "border-primary"
-        )}
-      >
-        {value ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="Cutout preview" className="absolute inset-0 size-full object-contain object-bottom" />
-        ) : (
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading}
-            className="flex size-full flex-col items-center justify-center gap-2 bg-background/80 px-4 text-center text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ImagePlus className="size-6" aria-hidden="true" />
-            <span>Drop a cutout here or click to browse</span>
-            <span className="text-xs">Transparent PNG or WebP, up to 50 MB</span>
-          </button>
-        )}
-        {uploading ? (
-          <div
-            role="status"
-            className="absolute inset-0 flex items-center justify-center gap-2 bg-background/80 text-sm text-foreground"
-          >
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-            Uploading...
-          </div>
-        ) : null}
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/png, image/webp, image/avif, image/jpeg"
-        className="sr-only"
-        tabIndex={-1}
-        aria-label="Upload cutout image"
-        onChange={(event) => void handleFile(event.target.files?.[0])}
-      />
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="flex-1 basis-36"
-          disabled={uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          <Upload className="size-4" />
-          Upload from Computer
-        </Button>
-        <MediaPickerDialog
-          selectedUrl={value}
-          onSelect={(url) => onChange(url)}
-          trigger={
-            <Button type="button" variant="outline" size="sm" className="flex-1 basis-36" disabled={uploading}>
-              <Images className="size-4" />
-              Choose from Gallery
-            </Button>
-          }
-        />
-        {value ? (
-          <Button type="button" variant="ghost" size="icon" className="size-8" onClick={() => onChange("")} aria-label="Remove cutout">
-            <Trash2 className="size-4" />
-          </Button>
-        ) : null}
-      </div>
-      {error ? (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  )
 }
 
 const MAX_HIGHLIGHTS = 24

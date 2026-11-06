@@ -1,7 +1,7 @@
 "use client"
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
 
 import type { PortfolioItem } from "@/app/actions/portfolio"
 import { PhotoLightbox, type LightboxImage } from "@/components/photo-lightbox"
@@ -20,6 +20,27 @@ const CATEGORY_TO_DISCIPLINE: Record<PortfolioCategory, Discipline> = {
 
 const filters: (Discipline | "All")[] = ["All", "Portraits", "Sports", "Automotive", "Events", "Commercial"]
 
+// Matches the old `columns-2 sm:columns-3 lg:columns-4` breakpoints.
+const WIDE_QUERY = "(min-width: 1024px)"
+const MEDIUM_QUERY = "(min-width: 640px)"
+const SERVER_COLUMNS = 4
+
+function subscribeToColumns(onChange: () => void) {
+  const lists = [window.matchMedia(WIDE_QUERY), window.matchMedia(MEDIUM_QUERY)]
+  lists.forEach((list) => list.addEventListener("change", onChange))
+  return () => lists.forEach((list) => list.removeEventListener("change", onChange))
+}
+
+function currentColumns() {
+  if (window.matchMedia(WIDE_QUERY).matches) return 4
+  return window.matchMedia(MEDIUM_QUERY).matches ? 3 : 2
+}
+
+/** CSS columns fill top to bottom, which would stack the first (starred) photos down one column. Dealing items out across columns keeps the sort order readable left to right. */
+function useColumnCount() {
+  return useSyncExternalStore(subscribeToColumns, currentColumns, () => SERVER_COLUMNS)
+}
+
 export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -31,6 +52,13 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
     if (active === "All") return items
     return items.filter((item) => itemCategories(item).some((category) => CATEGORY_TO_DISCIPLINE[category] === active))
   }, [items, active])
+
+  const columnCount = useColumnCount()
+  const columns = useMemo(() => {
+    const dealt: { item: PortfolioItem; index: number }[][] = Array.from({ length: columnCount }, () => [])
+    filtered.forEach((item, index) => dealt[index % columnCount].push({ item, index }))
+    return dealt
+  }, [filtered, columnCount])
 
   const [openIndex, setOpenIndex] = useState<number | null>(null)
   const lightboxImages: LightboxImage[] = useMemo(
@@ -46,7 +74,7 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
         lens: item.lens,
         settings: item.settings,
       })),
-    [filtered],
+    [filtered, active],
   )
 
   function setFilter(value: Discipline | "All") {
@@ -80,36 +108,40 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
         ))}
       </div>
 
-      <div className="mt-8 columns-2 gap-3 sm:columns-3 lg:columns-4">
-        {filtered.map((item, i) => (
-          <div
-            key={item.id}
-            role="button"
-            tabIndex={0}
-            aria-label={`View ${item.title} larger`}
-            onClick={() => setOpenIndex(i)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault()
-                setOpenIndex(i)
-              }
-            }}
-            className="group relative mb-3 block cursor-zoom-in break-inside-avoid overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are served from the public portfolio-images bucket */}
-            <img
-              src={item.image_url || "/placeholder.svg"}
-              alt={item.title}
-              crossOrigin="anonymous"
-              loading="lazy"
-              className="block h-auto w-full transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
-            />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-              <div className="px-4 text-center">
-                <p className="text-sm font-medium text-foreground">{item.title}</p>
-                <p className="text-xs text-zinc-300">{CATEGORY_TO_DISCIPLINE[item.category]}</p>
+      <div className="mt-8 flex items-start gap-3">
+        {columns.map((column, columnIndex) => (
+          <div key={columnIndex} className="flex min-w-0 flex-1 flex-col gap-3">
+            {column.map(({ item, index }) => (
+              <div
+                key={item.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`View ${item.title} larger`}
+                onClick={() => setOpenIndex(index)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault()
+                    setOpenIndex(index)
+                  }
+                }}
+                className="group relative block cursor-zoom-in overflow-hidden rounded-2xl border border-zinc-800/80 transition-colors duration-300 ease-out hover:border-[#e829f1] hover:shadow-[0_0_24px_rgba(232,41,241,0.22)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- portfolio images are served from the public portfolio-images bucket */}
+                <img
+                  src={item.image_url || "/placeholder.svg"}
+                  alt={item.title}
+                  crossOrigin="anonymous"
+                  loading={index < columnCount * 2 ? "eager" : "lazy"}
+                  className="block h-auto w-full transition-all duration-500 ease-in-out group-hover:scale-105 group-hover:blur-[3px]"
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                  <div className="px-4 text-center">
+                    <p className="text-sm font-medium text-foreground">{item.title}</p>
+                    <p className="text-xs text-zinc-300">{CATEGORY_TO_DISCIPLINE[item.category]}</p>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         ))}
       </div>

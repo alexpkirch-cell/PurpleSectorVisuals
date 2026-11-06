@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import { sortGallery } from "@/lib/gallery-sort"
 import { createClient } from "@/lib/supabase/server"
 import { isPortfolioCategory, type PortfolioCategory } from "@/lib/portfolio-categories"
 import { withPublicImageUrl } from "@/lib/portfolio-image-url"
@@ -48,7 +49,7 @@ async function requireAdmin() {
   }
 }
 
-/** Public read of every portfolio item, newest-featured first, for the /work page. */
+/** Every portfolio item in manual order (the order set by drag and drop in the Portfolio CMS). */
 export async function listPortfolioItems(): Promise<PortfolioItem[]> {
   try {
     const { rows } = await sql<PortfolioItem>`
@@ -66,6 +67,14 @@ export async function listPortfolioItems(): Promise<PortfolioItem[]> {
     if (restError) throw new Error(`Could not load portfolio: ${restError.message}`)
     return ((data ?? []) as PortfolioItem[]).map(withPublicImageUrl)
   }
+}
+
+/** Gallery order for one page load: starred photos first in random order, then the rest weighted toward recent uploads. */
+export async function listGalleryItems(): Promise<PortfolioItem[]> {
+  return sortGallery(await listPortfolioItems(), {
+    isFeatured: (item) => item.featured,
+    getDate: (item) => item.created_at,
+  })
 }
 
 /** Admin-only version, same shape, used by the Portfolio Content Manager. */
