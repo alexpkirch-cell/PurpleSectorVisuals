@@ -1,6 +1,7 @@
 "use server"
 
 import { sql } from "@/lib/db"
+import { sortGallery } from "@/lib/gallery-sort"
 import { parsePublicStorageUrl } from "@/lib/media-library"
 import { requireAdmin } from "@/lib/require-admin"
 
@@ -17,12 +18,17 @@ export interface MediaItem {
   editor: string | null
   categories: string[]
   title: string
+  /** True when the same photo is starred in the Portfolio CMS. */
+  featured: boolean
+  createdAt: string
 }
 
 export interface MediaFilters {
   shooter?: string | null
   editor?: string | null
   category?: string | null
+  /** `newest` (default) lists by upload date; `gallery` puts starred photos first in random order, then favors recent uploads. */
+  order?: "newest" | "gallery"
 }
 
 export interface MediaLibraryResult {
@@ -48,11 +54,14 @@ interface MediaRow {
   editor: string | null
   categories: string[] | null
   title: string
+  featured: boolean
+  created_at: string | Date
 }
 
 /**
- * Every previously uploaded public photo, newest first. Private client deliveries are never listed
- * here, so nothing picked from the gallery can expose a client's photos on the public site.
+ * Every previously uploaded public photo, newest first (or in gallery order, see `MediaFilters.order`).
+ * Private client deliveries are never listed here, so nothing picked from the gallery can expose a
+ * client's photos on the public site.
  */
 export async function listMediaLibrary(filters: MediaFilters = {}): Promise<MediaLibraryResult> {
   await requireAdmin()
@@ -60,16 +69,23 @@ export async function listMediaLibrary(filters: MediaFilters = {}): Promise<Medi
   const shooter = filters.shooter || null
   const editor = filters.editor || null
   const category = filters.category || null
+  const galleryOrder = filters.order === "gallery"
 
   const [{ rows }, { rows: options }] = await Promise.all([
+    // In gallery order starred photos sort first, so the row limit can never push a starred photo out of the list.
     sql<MediaRow>`
-      SELECT id, public_url, file_name, width, height, shooter, editor, categories, title
+      SELECT id, public_url, file_name, width, height, shooter, editor, categories, title, created_at,
+        EXISTS (
+          SELECT 1 FROM portfolio_items p WHERE p.featured AND p.image_url = media_library.public_url
+        ) AS featured
       FROM media_library
       WHERE public_url IS NOT NULL
         AND (${shooter}::text IS NULL OR shooter = ${shooter})
         AND (${editor}::text IS NULL OR editor = ${editor})
         AND (${category}::text IS NULL OR ${category}::text = ANY(categories))
-      ORDER BY created_at DESC
+      ORDER BY (${galleryOrder}::boolean AND EXISTS (
+          SELECT 1 FROM portfolio_items p WHERE p.featured AND p.image_url = media_library.public_url
+        )) DESC, created_at DESC
       LIMIT ${MAX_LIBRARY_ITEMS}
     `,
     sql<{ shooters: string[]; editors: string[]; categories: string[] }>`
@@ -83,18 +99,22 @@ export async function listMediaLibrary(filters: MediaFilters = {}): Promise<Medi
     `,
   ])
 
+  const items: MediaItem[] = rows.map((row) => ({
+    id: row.id,
+    url: row.public_url,
+    fileName: row.file_name,
+    width: row.width,
+    height: row.height,
+    shooter: row.shooter,
+    editor: row.editor,
+    categories: row.categories ?? [],
+    title: row.title,
+    featured: row.featured,
+    createdAt: new Date(row.created_at).toISOString(),
+  }))
+
   return {
-    items: rows.map((row) => ({
-      id: row.id,
-      url: row.public_url,
-      fileName: row.file_name,
-      width: row.width,
-      height: row.height,
-      shooter: row.shooter,
-      editor: row.editor,
-      categories: row.categories ?? [],
-      title: row.title,
-    })),
+    items: galleryOrder ? sortGallery(items, { isFeatured: (item) => item.featured, getDate: (item) => item.createdAt }) : items,
     shooters: options[0]?.shooters ?? [],
     editors: options[0]?.editors ?? [],
     categories: options[0]?.categories ?? [],

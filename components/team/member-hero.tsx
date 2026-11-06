@@ -38,17 +38,20 @@ export function MemberHero({ member }: { member: DirectoryMember }) {
     <section className="relative mx-auto flex w-full max-w-7xl flex-col gap-10 overflow-hidden px-4 pt-32 sm:px-6 lg:flex-row lg:items-end lg:gap-8">
       {hasCutout ? (
         <motion.div
-          className="relative order-2 flex h-[62svh] items-end justify-center lg:order-1 lg:h-[min(82svh,900px)] lg:w-1/2"
+          className="relative order-2 flex items-end justify-center lg:order-1 lg:h-[min(82svh,900px)] lg:w-1/2"
           initial={{ opacity: 0, x: -60 * offset }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.9, ease: "easeOut" }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={member.cutout_image_url as string}
-            alt={member.name}
-            className="max-h-full w-auto max-w-full object-contain object-bottom drop-shadow-[0_30px_50px_rgba(0,0,0,0.6)]"
-          />
+          {/* Cutouts are cropped to 3:4 when uploaded; the fixed frame plus cover/center keeps any other file from stretching. */}
+          <div className="relative aspect-[3/4] w-full max-w-md lg:h-full lg:w-auto lg:max-w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={member.cutout_image_url as string}
+              alt={member.name}
+              className="absolute inset-0 size-full object-cover object-center drop-shadow-[0_30px_50px_rgba(0,0,0,0.6)]"
+            />
+          </div>
         </motion.div>
       ) : null}
 

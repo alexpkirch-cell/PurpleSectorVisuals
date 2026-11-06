@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type ReactElement } from "react"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, Star } from "lucide-react"
 import useSWR from "swr"
 
 import { listMediaLibrary, type MediaItem } from "@/app/actions/media-library"
@@ -72,10 +72,18 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
   const [category, setCategory] = useState("")
   const [picked, setPicked] = useState<Map<string, MediaItem>>(new Map())
 
+  // Every time the dialog opens it gets a fresh random gallery order; the order then stays put while the admin browses.
+  const [wasOpen, setWasOpen] = useState(false)
+  const [session, setSession] = useState(0)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setSession((current) => current + 1)
+  }
+
   const { data, error, isLoading } = useSWR(
-    open ? ["media-library", shooter, editor, category] : null,
-    () => listMediaLibrary({ shooter, editor, category }),
-    { revalidateOnFocus: false, keepPreviousData: true }
+    open ? ["media-library", shooter, editor, category, session] : null,
+    () => listMediaLibrary({ shooter, editor, category, order: "gallery" }),
+    { revalidateOnFocus: false, revalidateIfStale: false, keepPreviousData: true }
   )
 
   const multiple = props.multiple === true
@@ -116,7 +124,7 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Every photo uploaded so far. Pick one to reuse it; the existing file is used, never duplicated.
+            Every photo uploaded so far, starred photos first. Pick one to reuse it; the existing file is used, never duplicated.
           </DialogDescription>
         </DialogHeader>
 
@@ -173,34 +181,42 @@ export function MediaPickerDialog(props: MediaPickerDialogProps) {
               {hasFilters ? "No photos match these filters." : "No photos uploaded yet."}
             </p>
           ) : (
-            <ul className="columns-2 gap-2 sm:columns-3 md:columns-4">
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
               {data.items.map((item) => {
                 const isPicked = multiple ? picked.has(item.id) : item.url === selectedUrl
                 return (
-                  <li key={item.id} className="mb-2 break-inside-avoid">
+                  <li key={item.id}>
                     <button
                       type="button"
                       onClick={() => choose(item)}
                       aria-pressed={isPicked}
                       aria-label={`${multiple ? "Toggle" : "Select"} ${item.title || item.fileName}`}
                       className={cn(
-                        "group relative block w-full overflow-hidden rounded-md border bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+                        "group relative block aspect-square w-full overflow-hidden rounded-md border bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
                         isPicked ? "border-primary ring-2 ring-primary" : "border-border"
                       )}
-                      style={item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={item.url}
                         alt={item.title || item.fileName}
                         loading="lazy"
-                        className="block h-auto w-full"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                       {item.shooter || item.editor ? (
                         <span className="absolute inset-x-0 bottom-0 truncate bg-background/85 px-1.5 py-1 text-left text-[0.65rem] text-foreground opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                           {[item.shooter && `Shot ${item.shooter}`, item.editor && `Edit ${item.editor}`]
                             .filter(Boolean)
                             .join(" · ")}
+                        </span>
+                      ) : null}
+                      {item.featured ? (
+                        <span
+                          title="Starred in the portfolio"
+                          className="absolute left-1.5 top-1.5 flex size-5 items-center justify-center rounded-full bg-background/85 text-primary"
+                        >
+                          <Star className="size-3" fill="currentColor" aria-hidden="true" />
+                          <span className="sr-only">Starred</span>
                         </span>
                       ) : null}
                       {isPicked ? (

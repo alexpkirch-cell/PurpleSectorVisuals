@@ -56,7 +56,10 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
 
         {hasCutout ? (
           <motion.div
-            className={cn("absolute bottom-0 h-[calc(100%+6rem)] w-[44%]", reversed ? "right-0" : "left-0")}
+            className={cn(
+              "absolute bottom-0 aspect-[3/4] w-[44%] lg:h-[calc(100%+6rem)] lg:w-auto lg:max-w-[44%]",
+              reversed ? "right-0" : "left-0"
+            )}
             style={{ transformOrigin: "50% 100%" }}
             whileHover={reduceMotion ? undefined : { scale: 1.05 }}
             transition={{ type: "spring", stiffness: 260, damping: 22 }}
@@ -65,7 +68,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
             <img
               src={member.cutout_image_url as string}
               alt={member.name}
-              className="absolute inset-0 size-full object-contain object-bottom drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)]"
+              className="absolute inset-0 size-full object-cover object-center drop-shadow-[0_20px_30px_rgba(0,0,0,0.5)]"
             />
           </motion.div>
         ) : (
@@ -116,7 +119,7 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
 
           {visibleMedia.length > 0 ? (
             <ul
-              className="flex items-center gap-2"
+              className="flex flex-wrap items-center gap-2"
               aria-label={`${member.name} highlight media`}
               onMouseLeave={() => setHoveredBox(null)}
             >

@@ -1,7 +1,7 @@
 import type { Data } from "@measured/puck"
 
 import { listActivePackages } from "@/app/actions/packages"
-import { listPortfolioItems, type PortfolioItem } from "@/app/actions/portfolio"
+import { listGalleryItems, type PortfolioItem } from "@/app/actions/portfolio"
 import type { ServicePackage } from "@/lib/packages"
 import type { DirectoryMember } from "@/lib/team-directory"
 import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
@@ -27,7 +27,7 @@ export async function getBlockMetadata(
 
   const [packages, portfolioItems, members] = await Promise.all([
     wants(NEEDS_PACKAGES) ? listActivePackages() : Promise.resolve([]),
-    wants(NEEDS_PORTFOLIO) ? listPortfolioItems() : Promise.resolve([]),
+    wants(NEEDS_PORTFOLIO) ? listGalleryItems() : Promise.resolve([]),
     wants(NEEDS_MEMBERS) ? getActiveDirectoryMembers() : Promise.resolve([]),
   ])
 
