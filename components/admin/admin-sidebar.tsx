@@ -136,7 +136,7 @@ export function AdminMobileNav({ displayName }: { displayName: string }) {
         >
           <Menu className="size-5" aria-hidden="true" />
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 max-w-[85vw] gap-0 bg-card px-4 py-6 sm:max-w-72">
+        <SheetContent side="left" className="gap-0 bg-card px-4 py-6">
           <SheetTitle className="sr-only">Admin navigation</SheetTitle>
           <SheetDescription className="sr-only">Move between the admin sections.</SheetDescription>
           <AdminNavContent displayName={displayName} onNavigate={() => setOpen(false)} />
