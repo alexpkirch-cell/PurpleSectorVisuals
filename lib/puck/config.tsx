@@ -3,7 +3,6 @@ import type { ComponentConfig, Config, CustomField, Fields, TextField } from "@m
 import { STUDIO_TEXT_DEFAULTS } from "@/components/home/core-identity-section"
 import { DISCIPLINES_TEXT_DEFAULTS } from "@/components/home/disciplines-section"
 import { DUAL_SPLIT_TEXT_DEFAULTS } from "@/components/home/dual-split-section"
-import { HERO_SLOT_LABELS } from "@/components/home/hero-carousel-3d"
 import { HOW_WE_WORK_DEFAULTS, HowWeWorkSection } from "@/components/home/how-we-work-section"
 import { JoinTheRosterSection } from "@/components/home/join-the-roster-section"
 import { BookingButton } from "@/components/puck/booking-button"
@@ -300,7 +299,7 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       fields: Object.fromEntries(
         HERO_FIELD_KEYS.flatMap((key, i) => [
           // The canvas shows the live flying carousel, where photos cannot be clicked, so uploads live in the sidebar.
-          [key, imageField(`Photo ${i + 1}: ${HERO_SLOT_LABELS[i]}`, { inline: false })],
+          [key, imageField(`Hero photo ${i + 1}`, { inline: false })],
           [
             `${key}Info`,
             { type: "object", label: `Photo ${i + 1} details (shown when clicked)`, objectFields: photoInfoFields },
