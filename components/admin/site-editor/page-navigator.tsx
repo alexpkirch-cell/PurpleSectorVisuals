@@ -4,7 +4,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { editorHref } from "@/lib/editor-paths"
-import { BUILT_IN_PAGES } from "@/lib/page-layout-paths"
+import { BUILT_IN_PAGES, isBuiltInPagePath } from "@/lib/page-layout-paths"
+import { navLinks } from "@/lib/site-data"
 import { cn } from "@/lib/utils"
 
 type PageNavigatorProps = {
@@ -33,26 +34,40 @@ function PageTab({ href, active, children }: { href: string; active: boolean; ch
   )
 }
 
+function Divider() {
+  return <span aria-hidden className="mx-2 h-5 w-px shrink-0 bg-border" />
+}
+
+// The first tabs are the live site navigation, in the same order and with the same names. Pages the navigation links to
+// but that are not editable here (the team directory) are left out.
+const NAV_TABS = navLinks.filter((link) => link.href === "/" || isBuiltInPagePath(link.href))
+const NAV_PATHS: string[] = NAV_TABS.map((link) => link.href)
+
+// Published pages that are reached from buttons and profile links instead of the navigation.
+const OTHER_TABS = BUILT_IN_PAGES.filter((page) => !NAV_PATHS.includes(page.path))
+
 export function PageNavigator({ path, editablePaths }: PageNavigatorProps) {
-  const builtInPaths: string[] = BUILT_IN_PAGES.map((page) => page.path)
-  const custom = Array.from(new Set(editablePaths.concat(path))).filter(
-    (value) => value !== "/" && !builtInPaths.includes(value)
-  )
-  custom.sort((a, b) => a.localeCompare(b))
+  const builtInPaths: string[] = ["/", ...BUILT_IN_PAGES.map((page) => page.path)]
+  const custom = Array.from(new Set(editablePaths.concat(path)))
+    .filter((value) => !builtInPaths.includes(value))
+    .sort((a, b) => a.localeCompare(b))
 
   return (
     <nav aria-label="Site pages" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-      <PageTab href="/" active={path === "/"}>
-        Home
-      </PageTab>
-      {BUILT_IN_PAGES.map((page) => (
+      {NAV_TABS.map((link) => (
+        <PageTab key={link.href} href={link.href} active={link.href === path}>
+          {link.label}
+        </PageTab>
+      ))}
+      <Divider />
+      {OTHER_TABS.map((page) => (
         <PageTab key={page.path} href={page.path} active={page.path === path}>
           {page.label}
         </PageTab>
       ))}
       {custom.length > 0 ? (
         <>
-          <span aria-hidden className="mx-2 h-5 w-px shrink-0 bg-border" />
+          <Divider />
           {custom.map((value) => (
             <PageTab key={value} href={value} active={value === path}>
               {value}

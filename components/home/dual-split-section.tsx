@@ -84,7 +84,7 @@ export function DualSplitSection({
       </div>
 
       {/* Desktop fluid split */}
-      <div className="mx-auto hidden min-h-[75vh] w-full max-w-6xl px-6 pb-12 sm:px-10 md:flex">
+      <div className="mx-auto hidden w-full max-w-6xl px-6 sm:px-10 md:flex">
         {creators.map((creator) => {
           const isHovered = hovered === creator.key
           const isOther = hovered !== null && hovered !== creator.key
@@ -127,7 +127,7 @@ export function DualSplitSection({
                 </p>
               </div>
 
-              <div className="relative z-10 mx-auto flex w-full max-w-sm flex-1 items-center justify-center py-10">
+              <div className="relative z-10 mx-auto flex w-full max-w-sm items-center justify-center py-10">
                 <div className="relative aspect-[3/4] w-[70%]">
                   <EditableImage path={`${creator.key}Main`} fit="cover">
                     <ImageSlot
@@ -189,7 +189,7 @@ export function DualSplitSection({
       </div>
 
       {/* Mobile stacked profiles */}
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-6 pb-12 md:hidden">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-14 px-6 pb-6 md:hidden">
         {creators.map((creator) => (
           <div key={creator.key} className="flex flex-col gap-6">
             <Link href={creator.href} className="flex flex-col gap-6">

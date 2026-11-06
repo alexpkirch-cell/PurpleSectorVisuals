@@ -2,13 +2,11 @@
 
 import { useMemo, useRef, useSyncExternalStore } from "react"
 import Image from "next/image"
-import { Camera } from "lucide-react"
 import { motion, useReducedMotion } from "framer-motion"
 import useSWR from "swr"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
 import { useEditMode } from "@/components/puck/edit-mode"
-import { EditableImage } from "@/components/puck/inline-edit"
 
 export const HERO_SLOT_LABELS = [
   "SLOT 01 // PORTRAIT",
@@ -44,7 +42,7 @@ type Tile = {
   label: string
   src: string
   photo?: HeroPhoto
-  /** Index into the lightbox gallery; -1 for an empty editor slot. */
+  /** Index into the lightbox gallery. */
   galleryIndex: number
 }
 
@@ -138,23 +136,14 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   const sectionRef = useRef<HTMLDivElement>(null)
   const reduceMotion = useReducedMotion()
 
-  // The server shuffles the portfolio on every request; the editor skips it so its slots stay editable.
-  const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>(isEditing ? null : "/api/portfolio/random", fetcher, {
+  // The server shuffles the portfolio on every request; the editor loads it too, so the canvas shows what visitors see.
+  const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>("/api/portfolio/random", fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     shouldRetryOnError: false,
   })
 
   const { tiles, gallery } = useMemo(() => {
-    if (isEditing) {
-      const editorTiles: Tile[] = HERO_SLOT_LABELS.map((label, i) => {
-        const photo = photos?.[i]
-        const src = photo?.src?.trim() || ""
-        return { key: label, label, src, photo, galleryIndex: -1 }
-      })
-      return { tiles: editorTiles, gallery: [] as LightboxImage[] }
-    }
-
     const featured = HERO_SLOT_LABELS.flatMap((label, i) => {
       const photo = photos?.[i]
       const src = photo?.src?.trim() || ""
@@ -185,16 +174,16 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       result.push({ key: `${item.src}-${i}`, label: item.label, src: item.src, photo: item.photo, galleryIndex: i % unique.length })
     }
     return { tiles: result, gallery: galleryImages }
-  }, [data, isEditing, photos])
+  }, [data, photos])
 
-  const showSkeleton = !isEditing && tiles.length === 0 && isLoading
+  const showSkeleton = tiles.length === 0 && isLoading
 
   // False during SSR and hydration, true afterwards, so the random paths never cause a hydration mismatch.
   const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
   const flyingCount = Math.min(tiles.length, MAX_TILES)
   const paths = useMemo(
-    () => (mounted && !isEditing ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i)) : []),
-    [mounted, isEditing, flyingCount],
+    () => (mounted ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i)) : []),
+    [mounted, flyingCount],
   )
 
   return (
@@ -203,34 +192,7 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       className="relative isolate flex h-[80vh] w-full items-center justify-center overflow-hidden bg-black"
       aria-label="Purple Sector Visuals showcase"
     >
-      {isEditing ? (
-        <div className="absolute inset-0 z-10 grid grid-cols-2 content-center gap-3 p-4 sm:grid-cols-4">
-          {tiles.map((tile, tileIndex) => (
-            <EditableImage key={tile.key} path={`card${tileIndex + 1}`}>
-            <div className="flex flex-col items-center justify-center gap-2">
-              {tile.src ? (
-                <Image
-                  src={tile.src}
-                  alt={tile.photo?.title || tile.label}
-                  width={0}
-                  height={0}
-                  sizes="25vw"
-                  unoptimized={!isOptimizable(tile.src)}
-                  style={{ width: "100%", height: "auto" }}
-                  className="max-h-[30vh] w-full object-contain"
-                />
-              ) : (
-                <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 border-2 border-dashed border-zinc-400/70 bg-zinc-500/25 p-2 text-center text-zinc-300">
-                  <Camera className="size-6 sm:size-8" aria-hidden="true" />
-                  <span className="font-mono text-[9px] uppercase tracking-[0.2em] sm:text-[10px]">{tile.label}</span>
-                  <span className="text-[10px] text-zinc-400">Click to upload</span>
-                </div>
-              )}
-            </div>
-            </EditableImage>
-          ))}
-        </div>
-      ) : showSkeleton ? (
+      {showSkeleton ? (
         <div className={`absolute inset-0 m-auto aspect-[3/2] h-fit animate-pulse bg-zinc-800 ${TILE_WIDTH}`} role="status" aria-label="Loading photo" />
       ) : (
         tiles.slice(0, MAX_TILES).map((tile, index) => {

@@ -299,7 +299,8 @@ export const puckConfig: Config<PuckComponents, PuckRootProps> = {
       label: "Hero Section",
       fields: Object.fromEntries(
         HERO_FIELD_KEYS.flatMap((key, i) => [
-          [key, imageField(`Photo ${i + 1}: ${HERO_SLOT_LABELS[i]}`)],
+          // The canvas shows the live flying carousel, where photos cannot be clicked, so uploads live in the sidebar.
+          [key, imageField(`Photo ${i + 1}: ${HERO_SLOT_LABELS[i]}`, { inline: false })],
           [
             `${key}Info`,
             { type: "object", label: `Photo ${i + 1} details (shown when clicked)`, objectFields: photoInfoFields },

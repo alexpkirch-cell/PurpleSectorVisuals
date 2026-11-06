@@ -25,7 +25,7 @@ function HighlightBox({ url, active, dimmed }: { url: string; active: boolean; d
         <video src={url} muted loop playsInline autoPlay preload="metadata" aria-hidden="true" className="size-full object-cover" />
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" loading="lazy" className="size-full object-contain" />
+        <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
       )}
     </motion.div>
   )
