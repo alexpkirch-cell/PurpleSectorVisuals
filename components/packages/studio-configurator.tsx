@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { PACKAGE_CATEGORIES, type PackageCategory, type ServicePackage } from "@/lib/packages"
 
+const DEFAULT_CATEGORY: PackageCategory = "Portraits"
+
 /** A deliverable written as "Perfect for: ..." is shown as its own callout rather than a checklist item. */
 const PERFECT_FOR = /^perfect for\s*:?\s*/i
 
@@ -26,22 +28,24 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
     [packages],
   )
 
-  // The cheapest package across every category, so the configurator always
-  // opens on the lowest-priced option rather than just the first category.
-  const cheapestOverall = useMemo(
-    () =>
-      packages.reduce<ServicePackage | null>(
-        (cheapest, pkg) =>
-          !cheapest || Number(pkg.base_price) < Number(cheapest.base_price) ? pkg : cheapest,
+  // Opens on Portraits with its cheapest package selected. If Portraits has no packages
+  // yet, it falls back to the cheapest package across every category.
+  const initialSelection = useMemo(() => {
+    const cheapestIn = (list: ServicePackage[]) =>
+      list.reduce<ServicePackage | null>(
+        (cheapest, pkg) => (!cheapest || Number(pkg.base_price) < Number(cheapest.base_price) ? pkg : cheapest),
         null,
-      ),
-    [packages],
-  )
+      )
+    const portraits = cheapestIn(packages.filter((p) => p.category === DEFAULT_CATEGORY))
+    const start = portraits ?? cheapestIn(packages)
+    return {
+      category: start?.category ?? categoriesWithPackages[0] ?? null,
+      packageId: start?.id ?? null,
+    }
+  }, [packages, categoriesWithPackages])
 
-  const [activeCategory, setActiveCategory] = useState<PackageCategory | null>(
-    cheapestOverall?.category ?? categoriesWithPackages[0] ?? null,
-  )
-  const [activePackageId, setActivePackageId] = useState<string | null>(cheapestOverall?.id ?? null)
+  const [activeCategory, setActiveCategory] = useState<PackageCategory | null>(initialSelection.category)
+  const [activePackageId, setActivePackageId] = useState<string | null>(initialSelection.packageId)
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set())
 
   const categoryPackages = useMemo(

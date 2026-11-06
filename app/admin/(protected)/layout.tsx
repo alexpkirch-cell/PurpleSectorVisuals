@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
+import { AdminMobileNav, AdminSidebar } from "@/components/admin/admin-sidebar"
 import { ResizeObserverGuard } from "@/components/admin/resize-observer-guard"
 
 export default async function AdminLayout({
@@ -29,9 +29,12 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background md:flex-row">
       <AdminSidebar displayName={profile.display_name} />
-      <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-8 sm:px-6 lg:px-8 lg:py-10">{children}</main>
+      <div className="flex w-full min-w-0 flex-1 flex-col">
+        <AdminMobileNav displayName={profile.display_name} />
+        <main className="w-full min-w-0 flex-1 overflow-x-hidden px-4 py-6 sm:px-6 md:py-8 lg:px-8 lg:py-10">{children}</main>
+      </div>
     </div>
   )
 }

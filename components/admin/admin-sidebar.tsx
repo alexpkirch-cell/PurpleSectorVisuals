@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -9,6 +10,7 @@ import {
   GalleryVerticalEnd,
   LayoutGrid,
   LogOut,
+  Menu,
   Package,
   PanelsTopLeft,
   ScanFace,
@@ -16,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
@@ -42,13 +45,15 @@ function isActive(pathname: string, href: string) {
 const itemClass =
   "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 
-export function AdminSidebar({ displayName }: { displayName: string }) {
+/** Brand, links and sign-out, shared by the desktop sidebar and the mobile drawer. */
+function AdminNavContent({ displayName, onNavigate }: { displayName: string; onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
 
   async function handleSignOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
+    onNavigate?.()
     router.replace("/admin/login")
     router.refresh()
   }
@@ -56,7 +61,7 @@ export function AdminSidebar({ displayName }: { displayName: string }) {
   const EventIcon = eventLink.icon
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card px-4 py-6">
+    <>
       <div className="mb-8 flex flex-col gap-1 px-2">
         <span className="font-heading text-[0.65rem] font-bold tracking-[0.18em] text-muted-foreground">
           PURPLE SECTOR VISUALS
@@ -72,6 +77,7 @@ export function AdminSidebar({ displayName }: { displayName: string }) {
             <Link
               key={link.href}
               href={link.href}
+              onClick={onNavigate}
               aria-current={active ? "page" : undefined}
               className={cn(itemClass, active && "bg-accent text-foreground")}
             >
@@ -83,6 +89,7 @@ export function AdminSidebar({ displayName }: { displayName: string }) {
 
         <Link
           href={eventLink.href}
+          onClick={onNavigate}
           aria-current={isActive(pathname, eventLink.href) ? "page" : undefined}
           className={cn(
             "mt-3 flex items-center gap-2.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-primary/20",
@@ -101,6 +108,45 @@ export function AdminSidebar({ displayName }: { displayName: string }) {
           Sign out
         </button>
       </div>
+    </>
+  )
+}
+
+/** Fixed sidebar for md and wider screens. Phones use `AdminMobileNav` instead. */
+export function AdminSidebar({ displayName }: { displayName: string }) {
+  return (
+    <aside className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card px-4 py-6 md:flex">
+      <AdminNavContent displayName={displayName} />
     </aside>
+  )
+}
+
+/** Top bar with a hamburger that opens the navigation as a drawer over the page. Hidden from md up. */
+export function AdminMobileNav({ displayName }: { displayName: string }) {
+  const [open, setOpen] = useState(false)
+  const pathname = usePathname()
+  const current = [...navLinks, eventLink].find((link) => isActive(pathname, link.href))
+
+  return (
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/95 px-4 backdrop-blur md:hidden">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger
+          aria-label="Open admin menu"
+          className="-ml-2 inline-flex size-10 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <Menu className="size-5" aria-hidden="true" />
+        </SheetTrigger>
+        <SheetContent side="left" className="gap-0 bg-card px-4 py-6">
+          <SheetTitle className="sr-only">Admin navigation</SheetTitle>
+          <SheetDescription className="sr-only">Move between the admin sections.</SheetDescription>
+          <AdminNavContent displayName={displayName} onNavigate={() => setOpen(false)} />
+        </SheetContent>
+      </Sheet>
+
+      <div className="flex min-w-0 flex-col leading-tight">
+        <span className="font-heading text-[0.6rem] font-bold tracking-[0.18em] text-muted-foreground">COMMAND CENTER</span>
+        <span className="truncate font-heading text-sm font-medium text-foreground">{current?.label ?? "Admin"}</span>
+      </div>
+    </header>
   )
 }

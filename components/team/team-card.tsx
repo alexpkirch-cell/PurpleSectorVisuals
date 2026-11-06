@@ -48,17 +48,18 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
     <Link
       href={isFounderSlug(member.slug) ? `/${member.slug}` : `/team/${member.slug}`}
       aria-label={`View ${member.name}'s profile`}
-      className="group block rounded-3xl pt-24 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group block rounded-3xl outline-none focus-visible:ring-2 focus-visible:ring-ring md:pt-24"
     >
-      <div className="relative min-h-[26rem]">
+      <div className="relative flex flex-col md:block md:min-h-[26rem]">
         <div className="absolute inset-0 rounded-3xl border border-border bg-card transition-colors duration-300 group-hover:border-primary/50" />
         <div className="pointer-events-none absolute inset-0 rounded-3xl bg-foreground/0 transition-colors duration-300 group-hover:bg-foreground/[0.06]" />
 
         {hasCutout ? (
           <motion.div
             className={cn(
-              "absolute bottom-0 aspect-[3/4] w-[44%] lg:h-[calc(100%+6rem)] lg:w-auto lg:max-w-[44%]",
-              reversed ? "right-0" : "left-0"
+              // Phones: a full-width 3:4 block at the top of the card. md and up: pinned beside the text, popping out of the card on lg.
+              "relative mx-auto mt-6 aspect-[3/4] w-[calc(100%-3rem)] max-w-md md:absolute md:bottom-0 md:mx-0 md:mt-0 md:w-[44%] md:max-w-none lg:h-[calc(100%+6rem)] lg:w-auto lg:max-w-[44%]",
+              reversed ? "md:right-0" : "md:left-0"
             )}
             style={{ transformOrigin: "50% 100%" }}
             whileHover={reduceMotion ? undefined : { scale: 1.05 }}
@@ -74,8 +75,8 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
         ) : (
           <div
             className={cn(
-              "pointer-events-none absolute top-6 bottom-6 flex w-[40%] flex-col items-center justify-end gap-2 rounded-2xl border-2 border-dashed border-muted-foreground/40 bg-muted/30 pb-4",
-              reversed ? "right-6" : "left-6"
+              "pointer-events-none relative mx-6 mt-6 flex h-56 flex-col items-center justify-end gap-2 rounded-2xl border-2 border-dashed border-muted-foreground/40 bg-muted/30 pb-4 md:absolute md:inset-y-6 md:mx-0 md:mt-0 md:h-auto md:w-[40%]",
+              reversed ? "md:right-6" : "md:left-6"
             )}
             aria-hidden="true"
           >
@@ -86,8 +87,8 @@ export function TeamCard({ member, reversed = false }: { member: DirectoryMember
 
         <div
           className={cn(
-            "relative flex min-h-[26rem] w-[54%] flex-col justify-center gap-5 py-8",
-            reversed ? "mr-auto pr-2 pl-6 sm:pl-10" : "ml-auto pr-6 pl-2 sm:pr-10"
+            "relative flex w-full flex-col justify-center gap-5 px-6 py-6 sm:px-8 md:min-h-[26rem] md:w-[54%] md:py-8",
+            reversed ? "md:mr-auto md:pr-2 md:pl-6 lg:pl-10" : "md:ml-auto md:pr-6 md:pl-2 lg:pr-10"
           )}
         >
           <div className="flex flex-col gap-4">
