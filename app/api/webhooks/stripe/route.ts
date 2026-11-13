@@ -3,6 +3,7 @@ import type Stripe from "stripe"
 
 import { getStripeClient } from "@/lib/stripe"
 import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
+import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
 
 interface ShippingDetails {
   name?: string | null
@@ -58,12 +59,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
-  if (event.type === "checkout.session.completed") {
+  if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
     const session = event.data.object as Stripe.Checkout.Session & {
       shipping_details?: ShippingDetails | null
     }
 
-    if (session.metadata?.vaultId) {
+    if (session.metadata?.kind === "roster_gallery") {
+      await recordRosterVaultGalleryPayment(session)
+    } else if (session.metadata?.vaultId) {
       await confirmVaultPayment(session)
     } else {
       const shippingDetails = session.shipping_details ?? session.customer_details ?? null

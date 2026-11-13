@@ -1,22 +1,47 @@
 "use client"
 
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { LockKeyhole, LogOut, ShieldCheck, Users } from "lucide-react"
 
-import { logoutRosterVault, type RosterVaultPlayer } from "@/app/actions/roster-vault"
+import { logoutRosterVault } from "@/app/actions/roster-vault"
+import { startRosterGalleryCheckout } from "@/app/actions/roster-vault-payments"
 import { Button } from "@/components/ui/button"
 
 type RosterVaultData = {
   teamName: string
   parentName: string
-  players: Omit<RosterVaultPlayer, "team_id" | "sort_order" | "is_active">[]
+  players: {
+    id: string
+    display_name: string
+    jersey_number: string
+    cover_image_url: string | null
+    tier_name: string | null
+    tier_price_cents: number | null
+  }[]
 }
 
 export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const firstName = data.parentName.split(/\s+/)[0]
+
+  function unlockGallery(playerId: string) {
+    setCheckoutError(null)
+    startTransition(async () => {
+      const result = await startRosterGalleryCheckout(playerId)
+      if (!result.success) {
+        setCheckoutError(result.error)
+        return
+      }
+      if (result.paid) {
+        router.push(`/vault/roster/${playerId}`)
+        return
+      }
+      window.location.assign(result.url)
+    })
+  }
 
   function signOut() {
     startTransition(async () => {
@@ -42,6 +67,8 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
             {pending ? "Signing out…" : "Sign out"}
           </Button>
         </header>
+
+        {checkoutError ? <p role="alert" className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{checkoutError}</p> : null}
 
         <section className="flex flex-col gap-5" aria-labelledby="players-heading">
           <div className="flex items-end justify-between gap-4">
@@ -87,11 +114,23 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
 
                     <div className="flex flex-1 flex-col items-center gap-3 px-3 pb-4 pt-4 text-center sm:px-4">
                       <h3 className="line-clamp-2 min-h-10 font-heading text-base font-semibold leading-snug text-zinc-100 sm:text-lg">{player.display_name}</h3>
-                      <Button type="button" disabled className="mt-auto w-full cursor-not-allowed border border-zinc-800 bg-zinc-900 text-zinc-500 opacity-100" aria-label={`Unlock gallery for ${player.display_name} (coming soon)`}>
+                      <div className="flex min-h-8 flex-col items-center gap-0.5">
+                        <span className="text-[0.65rem] uppercase tracking-[0.14em] text-zinc-500">{player.tier_name ?? "Gallery tier not set"}</span>
+                        {player.tier_price_cents ? (
+                          <span className="font-mono text-xs text-zinc-300">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(player.tier_price_cents / 100)}</span>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        disabled={pending || !player.tier_price_cents || player.tier_price_cents < 100}
+                        onClick={() => unlockGallery(player.id)}
+                        className="mt-auto w-full border border-fuchsia-500/40 bg-fuchsia-600 text-white hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:opacity-100"
+                        aria-label={`Unlock ${player.display_name}'s gallery${player.tier_price_cents ? ` for ${(player.tier_price_cents / 100).toFixed(2)} dollars` : ""}`}
+                      >
                         <LockKeyhole className="size-3.5" aria-hidden="true" />
-                        Unlock Gallery
+                        {pending ? "Opening checkout…" : "Unlock Gallery"}
                       </Button>
-                      <span className="text-[0.65rem] uppercase tracking-[0.15em] text-zinc-600">Coming soon</span>
+                      {!player.tier_price_cents ? <span className="text-[0.65rem] text-zinc-600">Ask your organizer to set pricing</span> : null}
                     </div>
                   </article>
                 </li>

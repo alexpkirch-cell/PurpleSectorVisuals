@@ -1,22 +1,29 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { ImagePlus, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react"
+import { ImagePlus, Images, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import {
+  createRosterVaultGalleryTier,
   createRosterVaultPlayer,
   createRosterVaultTeam,
   deleteRosterVaultPlayer,
   listRosterVaultPlayers,
+  listRosterVaultPhotosAdmin,
+  listRosterVaultTiers,
+  updateRosterVaultGalleryTier,
   updateRosterVaultPlayer,
   updateRosterVaultTeam,
+  type RosterVaultPhoto,
   type RosterVaultPlayer,
   type RosterVaultTeam,
+  type RosterVaultTier,
 } from "@/app/actions/roster-vault"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { RosterVaultPhotoManager } from "@/components/admin/roster-vault-photo-manager"
 import {
   Dialog,
   DialogContent,
@@ -30,14 +37,19 @@ import { cn } from "@/lib/utils"
 export function RosterVaultManager({
   initialTeams,
   initialPlayers,
+  initialTiers,
 }: {
   initialTeams: RosterVaultTeam[]
   initialPlayers: RosterVaultPlayer[]
+  initialTiers: RosterVaultTier[]
 }) {
   const [teams, setTeams] = useState(initialTeams)
   const [selectedId, setSelectedId] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [players, setPlayers] = useState<RosterVaultPlayer[]>(initialPlayers)
   const [playersLoadedFor, setPlayersLoadedFor] = useState<string | null>(initialTeams[0]?.id ?? null)
+  const [tiers, setTiers] = useState<RosterVaultTier[]>(initialTiers)
+  const [photos, setPhotos] = useState<RosterVaultPhoto[]>([])
+  const [photosFor, setPhotosFor] = useState<string | null>(null)
   const [newTeamOpen, setNewTeamOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -48,9 +60,12 @@ export function RosterVaultManager({
     setSelectedId(id)
     setEditingPlayer(null)
     try {
-      const rows = await listRosterVaultPlayers(id)
+      const [rows, teamTiers] = await Promise.all([listRosterVaultPlayers(id), listRosterVaultTiers(id)])
       setPlayers(rows)
+      setTiers(teamTiers)
       setPlayersLoadedFor(id)
+      setPhotosFor(null)
+      setPhotos([])
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load this roster")
     }
@@ -67,6 +82,7 @@ export function RosterVaultManager({
         setTeams((current) => [team, ...current])
         setPlayers([])
         setPlayersLoadedFor(team.id)
+        setTiers([])
         setSelectedId(team.id)
         setNewTeamOpen(false)
         toast.success("Team created. Access credentials are stored securely.")
@@ -96,6 +112,65 @@ export function RosterVaultManager({
     })
   }
 
+  async function handleCreateTier(formData: FormData) {
+    if (!selectedTeam) return
+    startTransition(async () => {
+      try {
+        const tier = await createRosterVaultGalleryTier({
+          teamId: selectedTeam.id,
+          name: String(formData.get("tierName") ?? ""),
+          priceCents: Math.round(Number(formData.get("priceUsd")) * 100),
+        })
+        setTiers((current) => [...current, tier].sort((a, b) => a.price_cents - b.price_cents))
+        toast.success("Gallery tier created")
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not create tier")
+      }
+    })
+  }
+
+  async function handleUpdateTier(tier: RosterVaultTier, formData: FormData) {
+    startTransition(async () => {
+      try {
+        const updated = {
+          ...tier,
+          name: String(formData.get("tierName") ?? "").trim(),
+          price_cents: Math.round(Number(formData.get("priceUsd")) * 100),
+          is_active: formData.get("isActive") === "on",
+        }
+        await updateRosterVaultGalleryTier({
+          id: tier.id,
+          name: updated.name,
+          priceCents: updated.price_cents,
+          isActive: updated.is_active,
+        })
+        setTiers((current) => current.map((item) => item.id === tier.id ? updated : item))
+        setPlayers((current) => current.map((player) => player.tier_id === tier.id ? {
+          ...player,
+          tier_name: updated.is_active ? updated.name : null,
+          tier_price_cents: updated.is_active ? updated.price_cents : null,
+        } : player))
+        toast.success("Tier pricing saved")
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not save tier")
+      }
+    })
+  }
+
+  async function openPlayerPhotos(playerId: string) {
+    if (photosFor === playerId) {
+      setPhotosFor(null)
+      return
+    }
+    setPhotosFor(playerId)
+    setPhotos([])
+    try {
+      setPhotos(await listRosterVaultPhotosAdmin(playerId))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load gallery photos")
+    }
+  }
+
   async function handleAddPlayer(formData: FormData) {
     if (!selectedTeam) return
     startTransition(async () => {
@@ -105,6 +180,7 @@ export function RosterVaultManager({
           displayName: String(formData.get("displayName") ?? ""),
           jerseyNumber: String(formData.get("jerseyNumber") ?? ""),
           coverImageUrl: String(formData.get("coverImageUrl") ?? ""),
+          tierId: String(formData.get("tierId") ?? "") || null,
         })
         const rows = await listRosterVaultPlayers(selectedTeam.id)
         setPlayers(rows)
@@ -119,11 +195,16 @@ export function RosterVaultManager({
   async function handleUpdatePlayer(player: RosterVaultPlayer, formData: FormData) {
     startTransition(async () => {
       try {
+        const tierId = String(formData.get("tierId") ?? "") || null
+        const selectedTier = tiers.find((tier) => tier.id === tierId) ?? null
         const updated = {
           ...player,
           display_name: String(formData.get("displayName") ?? "").trim(),
           jersey_number: String(formData.get("jerseyNumber") ?? "").trim(),
           cover_image_url: String(formData.get("coverImageUrl") ?? "").trim() || null,
+          tier_id: tierId,
+          tier_name: selectedTier?.name ?? null,
+          tier_price_cents: selectedTier?.price_cents ?? null,
           is_active: formData.get("isActive") === "on",
         }
         await updateRosterVaultPlayer({
@@ -131,6 +212,7 @@ export function RosterVaultManager({
           displayName: updated.display_name,
           jerseyNumber: updated.jersey_number,
           coverImageUrl: updated.cover_image_url ?? "",
+          tierId: updated.tier_id,
           isActive: updated.is_active,
         })
         setPlayers((current) => current.map((item) => item.id === player.id ? updated : item))
@@ -228,6 +310,34 @@ export function RosterVaultManager({
             <p className="mt-3 text-xs text-muted-foreground">Access codes and passwords are hashed and cannot be viewed here. Replacing either immediately changes the team login.</p>
           </section>
 
+          <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5" aria-labelledby="gallery-tiers-heading">
+            <div>
+              <h2 id="gallery-tiers-heading" className="font-heading text-base font-semibold text-foreground">Gallery pricing tiers</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Each player is assigned one tier. Checkout prices are read from here on the server.</p>
+            </div>
+            <form action={handleCreateTier} className="grid gap-3 sm:grid-cols-[1fr_10rem_auto] sm:items-end">
+              <div className="flex flex-col gap-1.5"><Label htmlFor="new-gallery-tier">Tier name</Label><Input id="new-gallery-tier" name="tierName" placeholder="Standard" maxLength={60} required /></div>
+              <div className="flex flex-col gap-1.5"><Label htmlFor="new-gallery-price">Price (USD)</Label><Input id="new-gallery-price" name="priceUsd" type="number" min="1" max="100000" step="0.01" placeholder="39.00" required /></div>
+              <Button type="submit" disabled={pending}><Plus className="size-4" aria-hidden="true" /> Add tier</Button>
+            </form>
+            {tiers.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">Create a price tier, then assign it to players to enable checkout.</p>
+            ) : (
+              <ul className="grid gap-2">
+                {tiers.map((tier) => (
+                  <li key={tier.id} className="rounded-lg border border-border bg-background/50 p-3">
+                    <form action={(formData) => handleUpdateTier(tier, formData)} className="grid gap-3 sm:grid-cols-[1fr_10rem_auto_auto] sm:items-end">
+                      <div className="flex flex-col gap-1.5"><Label htmlFor={`tier-name-${tier.id}`}>Tier</Label><Input id={`tier-name-${tier.id}`} name="tierName" defaultValue={tier.name} required maxLength={60} /></div>
+                      <div className="flex flex-col gap-1.5"><Label htmlFor={`tier-price-${tier.id}`}>Price (USD)</Label><Input id={`tier-price-${tier.id}`} name="priceUsd" type="number" min="1" max="100000" step="0.01" defaultValue={(tier.price_cents / 100).toFixed(2)} required /></div>
+                      <label className="flex h-9 items-center gap-2 text-sm text-muted-foreground"><input type="checkbox" name="isActive" defaultChecked={tier.is_active} className="accent-primary" /> Available</label>
+                      <Button type="submit" size="sm" variant="outline" disabled={pending}>Save</Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5" aria-labelledby="roster-players-heading">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -237,7 +347,7 @@ export function RosterVaultManager({
               <span className="font-mono text-xs text-muted-foreground">{players.length} total</span>
             </div>
 
-            <form id="roster-player-form" action={handleAddPlayer} className="grid gap-3 rounded-lg border border-dashed border-border p-4 sm:grid-cols-[1fr_8rem_1.4fr_auto] sm:items-end">
+            <form id="roster-player-form" action={handleAddPlayer} className="grid gap-3 rounded-lg border border-dashed border-border p-4 sm:grid-cols-[1fr_8rem_1fr_1.4fr_auto] sm:items-end">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-player-name">Player name</Label>
                 <Input id="new-player-name" name="displayName" placeholder="Full name" maxLength={100} required />
@@ -245,6 +355,13 @@ export function RosterVaultManager({
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-player-number">Jersey number</Label>
                 <Input id="new-player-number" name="jerseyNumber" placeholder="24" maxLength={12} required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="new-player-tier">Gallery tier</Label>
+                <select id="new-player-tier" name="tierId" defaultValue="" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none disabled:opacity-50">
+                  <option value="">Not assigned</option>
+                  {tiers.filter((tier) => tier.is_active).map((tier) => <option key={tier.id} value={tier.id}>{tier.name} · ${(tier.price_cents / 100).toFixed(2)}</option>)}
+                </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-player-image">Square cover image URL</Label>
@@ -264,9 +381,16 @@ export function RosterVaultManager({
                 {players.map((player) => (
                   <li key={player.id} className="rounded-lg border border-border bg-background/50 p-3">
                     {editingPlayer === player.id ? (
-                      <form action={(formData) => handleUpdatePlayer(player, formData)} className="grid gap-3 sm:grid-cols-[1fr_7rem_1.4fr_auto_auto] sm:items-end">
+                      <form action={(formData) => handleUpdatePlayer(player, formData)} className="grid gap-3 sm:grid-cols-[1fr_7rem_10rem_1.4fr_auto_auto] sm:items-end">
                         <div className="flex flex-col gap-1.5"><Label htmlFor={`edit-name-${player.id}`}>Player name</Label><Input id={`edit-name-${player.id}`} name="displayName" defaultValue={player.display_name} required /></div>
                         <div className="flex flex-col gap-1.5"><Label htmlFor={`edit-number-${player.id}`}>Number</Label><Input id={`edit-number-${player.id}`} name="jerseyNumber" defaultValue={player.jersey_number} required /></div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label htmlFor={`edit-tier-${player.id}`}>Gallery tier</Label>
+                          <select id={`edit-tier-${player.id}`} name="tierId" defaultValue={player.tier_id ?? ""} className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
+                            <option value="">Not assigned</option>
+                            {tiers.map((tier) => <option key={tier.id} value={tier.id} disabled={!tier.is_active && player.tier_id !== tier.id}>{tier.name}{tier.is_active ? ` · $${(tier.price_cents / 100).toFixed(2)}` : " · Paused"}</option>)}
+                          </select>
+                        </div>
                         <div className="flex flex-col gap-1.5"><Label htmlFor={`edit-image-${player.id}`}>Cover image URL</Label><Input id={`edit-image-${player.id}`} name="coverImageUrl" type="url" defaultValue={player.cover_image_url ?? ""} /></div>
                         <label className="flex h-9 items-center gap-2 text-xs text-muted-foreground"><input type="checkbox" name="isActive" defaultChecked={player.is_active} className="accent-primary" /> Active</label>
                         <div className="flex gap-2"><Button type="submit" size="sm" disabled={pending}>Save</Button><Button type="button" variant="ghost" size="sm" onClick={() => setEditingPlayer(null)}>Cancel</Button></div>
@@ -284,11 +408,21 @@ export function RosterVaultManager({
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-foreground">{player.display_name}</p>
                           <p className="text-xs text-muted-foreground">#{player.jersey_number}{player.is_active ? " · Active" : " · Hidden"}</p>
+                          <p className="text-xs text-muted-foreground">{player.tier_name ? `${player.tier_name} · $${((player.tier_price_cents ?? 0) / 100).toFixed(2)}` : "No gallery tier"}</p>
                         </div>
+                        <Button type="button" variant={photosFor === player.id ? "secondary" : "outline"} size="sm" onClick={() => void openPlayerPhotos(player.id)} aria-pressed={photosFor === player.id}>
+                          <Images className="size-4" aria-hidden="true" />
+                          <span className="hidden sm:inline">Photos</span>
+                        </Button>
                         <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditingPlayer(player.id)} aria-label={`Edit ${player.display_name}`}><Pencil className="size-4" aria-hidden="true" /></Button>
                         <Button type="button" variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={() => void handleDeletePlayer(player)} aria-label={`Delete ${player.display_name}`}><Trash2 className="size-4" aria-hidden="true" /></Button>
                       </div>
                     )}
+                    {photosFor === player.id ? (
+                      <div className="mt-4 border-t border-border pt-4">
+                        <RosterVaultPhotoManager playerId={player.id} photos={photos} onPhotosChange={setPhotos} />
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
