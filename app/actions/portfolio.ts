@@ -84,6 +84,38 @@ export async function listGalleryItems(): Promise<PortfolioItem[]> {
   })
 }
 
+const MAX_PACKAGE_PHOTOS = 60
+
+export interface PackagePhoto {
+  id: string
+  title: string
+  image_url: string
+  /** Natural size when the media library knows it, so the masonry can reserve space before the image loads. */
+  width: number | null
+  height: number | null
+}
+
+/**
+ * Public read for the Packages page: only photos whose Package Type is exactly the one asked for, in the same manual
+ * order as the portfolio. An unknown type returns nothing rather than falling back to everything.
+ */
+export async function listPackagePhotos(packageType: string): Promise<PackagePhoto[]> {
+  const type = packageType.trim().toLowerCase()
+  if (!isPackageType(type)) return []
+
+  const { rows } = await sql<PackagePhoto>`
+    SELECT pi.id, pi.title, pi.image_url, m.width, m.height
+    FROM portfolio_items pi
+    LEFT JOIN LATERAL (
+      SELECT width, height FROM media_library WHERE public_url = pi.image_url LIMIT 1
+    ) m ON true
+    WHERE pi.package_type = ${type}
+    ORDER BY pi.sort_order ASC, pi.created_at DESC
+    LIMIT ${MAX_PACKAGE_PHOTOS}
+  `
+  return rows.map(withPublicImageUrl)
+}
+
 /** Admin-only version, same shape, used by the Portfolio Content Manager. */
 export async function listPortfolioItemsAdmin(): Promise<PortfolioItem[]> {
   await requireAdmin()
