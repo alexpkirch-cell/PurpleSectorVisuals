@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server"
 import { StudioCalendar, type CalendarBlock } from "@/components/admin/studio-calendar"
 import { ExecutiveDashboard } from "@/components/admin/executive-dashboard"
 import { getExecutiveMetrics } from "@/app/actions/dashboard"
+import { listBookingAddons, listBookingTiers } from "@/app/actions/booking-config"
+import { listShoots } from "@/app/actions/shoots"
+import { buildStudioGrid, todayKeyUtc } from "@/lib/calendar-days"
 
 export const metadata: Metadata = {
   title: "Admin | Purple Sector Visuals",
@@ -13,20 +16,25 @@ export const metadata: Metadata = {
 export default async function AdminOverviewPage() {
   const supabase = await createClient()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const windowEnd = new Date(today)
-  windowEnd.setDate(windowEnd.getDate() + 30)
+  // One UTC "today" and one day grid for the whole page, shared with the calendar through plain YYYY-MM-DD keys.
+  const todayKey = todayKeyUtc()
+  const gridDays = buildStudioGrid(todayKey)
 
-  const [{ data: calendarBlocks }, metrics] = await Promise.all([
+  const [{ data: calendarBlocks }, shoots, bookingTiers, bookingAddons, metrics] = await Promise.all([
     supabase
       .from("calendar_blocks")
       .select("id, start_date, end_date, type, label")
-      .lte("start_date", windowEnd.toISOString().slice(0, 10))
-      .gte("end_date", today.toISOString().slice(0, 10))
+      .lte("start_date", gridDays[gridDays.length - 1])
+      .gte("end_date", gridDays[0])
       .order("start_date", { ascending: true }),
+    // The very query the Operations schedule uses, so both calendars always show the same shoots on the same days.
+    listShoots(),
+    listBookingTiers(),
+    listBookingAddons(),
     getExecutiveMetrics(),
   ])
+
+  const scheduledShoots = shoots.filter((shoot) => shoot.status !== "declined")
 
   return (
     <div className="flex min-h-[calc(100svh-4rem)] flex-col gap-8 lg:min-h-[calc(100svh-5rem)]">
@@ -39,7 +47,14 @@ export default async function AdminOverviewPage() {
 
       <ExecutiveDashboard metrics={metrics} />
 
-      <StudioCalendar className="flex-1" blocks={(calendarBlocks ?? []) as CalendarBlock[]} />
+      <StudioCalendar
+        className="flex-1"
+        shoots={scheduledShoots}
+        blocks={(calendarBlocks ?? []) as CalendarBlock[]}
+        todayKey={todayKey}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
+      />
     </div>
   )
 }

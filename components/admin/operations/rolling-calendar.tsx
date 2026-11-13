@@ -5,7 +5,9 @@ import { Archive, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import type { Shoot } from "@/app/actions/shoots"
+import { addDaysToKey, dayOfMonthOfKey, shortLabelOfKey, startOfWeekKey } from "@/lib/calendar-days"
 import {
+  CALENDAR_CHIP_INTERACTION,
   CALENDAR_STATUS_META,
   calendarStatusOf,
   groupShootsByDay,
@@ -17,23 +19,6 @@ const WEEKS_SHOWN = 4
 const DAYS_PER_WEEK = 7
 const MAX_CHIPS_PER_DAY = 3
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const
-
-const parseKey = (key: string) => new Date(`${key}T00:00:00Z`)
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date)
-  next.setUTCDate(next.getUTCDate() + days)
-  return next
-}
-
-const toKey = (date: Date) => date.toISOString().slice(0, 10)
-
-function startOfWeek(key: string) {
-  const date = parseKey(key)
-  return addDays(date, -date.getUTCDay())
-}
-
-const rangeFormat = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
 
 export function RollingCalendar({
   shoots,
@@ -50,9 +35,9 @@ export function RollingCalendar({
   const effectiveOffset = showPast ? weekOffset : Math.max(0, weekOffset)
   const shootsByDay = useMemo(() => groupShootsByDay(shoots), [shoots])
 
-  const windowStart = addDays(startOfWeek(todayKey), effectiveOffset * DAYS_PER_WEEK)
-  const days = Array.from({ length: WEEKS_SHOWN * DAYS_PER_WEEK }, (_, index) => addDays(windowStart, index))
-  const rangeLabel = `${rangeFormat.format(days[0])} - ${rangeFormat.format(days[days.length - 1])}`
+  const windowStartKey = addDaysToKey(startOfWeekKey(todayKey), effectiveOffset * DAYS_PER_WEEK)
+  const dayKeys = Array.from({ length: WEEKS_SHOWN * DAYS_PER_WEEK }, (_, index) => addDaysToKey(windowStartKey, index))
+  const rangeLabel = `${shortLabelOfKey(dayKeys[0])} - ${shortLabelOfKey(dayKeys[dayKeys.length - 1])}`
   const canGoBack = showPast || effectiveOffset > 0
 
   return (
@@ -112,6 +97,7 @@ export function RollingCalendar({
             {CALENDAR_STATUS_META[status].label}
           </li>
         ))}
+        <li className="ml-auto hidden text-muted-foreground/80 sm:block">Select a shoot to open its pipeline</li>
       </ul>
 
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border" role="grid" aria-label="Four week schedule">
@@ -125,8 +111,7 @@ export function RollingCalendar({
           </div>
         ))}
 
-        {days.map((day) => {
-          const key = toKey(day)
+        {dayKeys.map((key) => {
           const dayShoots = shootsByDay.get(key) ?? []
           const isToday = key === todayKey
           const isPast = key < todayKey
@@ -136,6 +121,7 @@ export function RollingCalendar({
             <div
               key={key}
               role="gridcell"
+              data-day={key}
               className={cn(
                 "flex min-h-16 flex-col gap-1 bg-card p-1 sm:min-h-24 sm:p-1.5",
                 isPast && "bg-muted/40",
@@ -147,7 +133,7 @@ export function RollingCalendar({
                   isToday ? "bg-primary text-primary-foreground" : isPast ? "text-muted-foreground" : "text-foreground",
                 )}
               >
-                {day.getUTCDate()}
+                {dayOfMonthOfKey(key)}
               </span>
 
               <div className="flex flex-col gap-0.5">
@@ -158,9 +144,10 @@ export function RollingCalendar({
                       key={shoot.id}
                       type="button"
                       onClick={() => onOpen(shoot)}
-                      title={`${shoot.client_name} - ${CALENDAR_STATUS_META[status].label}`}
+                      title={`${shoot.client_name} - ${CALENDAR_STATUS_META[status].label}. Open pipeline.`}
                       className={cn(
-                        "flex h-2 w-full items-center rounded-sm px-1 text-left text-[0.65rem] font-medium leading-none transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-ring sm:h-5",
+                        "flex h-3.5 w-full items-center rounded-sm px-1 text-left text-[0.65rem] font-medium leading-none sm:h-5",
+                        CALENDAR_CHIP_INTERACTION,
                         CALENDAR_STATUS_META[status].chipClass,
                       )}
                     >

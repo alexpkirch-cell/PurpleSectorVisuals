@@ -21,6 +21,18 @@ import {
   deleteCalendarBlock,
   type CalendarBlockType,
 } from "@/app/actions/admin-calendar"
+import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
+import type { Shoot } from "@/app/actions/shoots"
+import { ShootPipelineDrawer } from "@/components/admin/shoot-pipeline-drawer"
+import { buildStudioGrid, dayOfMonthOfKey, dayKeyOf, eachDayKey, isInStudioWindow } from "@/lib/calendar-days"
+import {
+  CALENDAR_CHIP_INTERACTION,
+  CALENDAR_STATUS_META,
+  calendarStatusOf,
+  groupShootsByDay,
+  type CalendarStatus,
+} from "@/lib/operations"
+import { cn } from "@/lib/utils"
 
 export type CalendarBlock = {
   id: string
@@ -30,55 +42,53 @@ export type CalendarBlock = {
   label: string
 }
 
-function toISODate(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-  return next
-}
-
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[]; className?: string }) {
+/**
+ * Shows the same shoots as the Operations schedule, from the same query and through the same day-key rules, plus the
+ * hand-made busy/booking blocks. Clicking a shoot opens its Client Pipeline view.
+ */
+export function StudioCalendar({
+  shoots,
+  blocks,
+  todayKey,
+  bookingTiers,
+  bookingAddons,
+  className,
+}: {
+  shoots: Shoot[]
+  blocks: CalendarBlock[]
+  /** The UTC day the server rendered, so the grid is identical on the server and in the browser. */
+  todayKey: string
+  bookingTiers: BookingTier[]
+  bookingAddons: BookingAddon[]
+  className?: string
+}) {
   const router = useRouter()
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [selectedShoot, setSelectedShoot] = useState<Shoot | null>(null)
 
-  const today = useMemo(() => {
-    // Anchor to the UTC calendar date (not the browser's local date) so the
-    // server-rendered grid and the client-hydrated grid always agree, even
-    // when the server and the visitor's browser are in different time zones.
-    const now = new Date()
-    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
-  }, [])
+  const dayKeys = useMemo(() => buildStudioGrid(todayKey), [todayKey])
+  const shootsByDay = useMemo(() => groupShootsByDay(shoots), [shoots])
 
-  const days = useMemo(() => {
-    // Pad to start the grid on the most recent Sunday so weekday columns line up.
-    const gridStart = addDays(today, -today.getDay())
-    const totalCells = 30 + today.getDay()
-    const paddedCount = Math.ceil(totalCells / 7) * 7
-    return Array.from({ length: paddedCount }, (_, i) => addDays(gridStart, i))
-  }, [today])
-
-  const blocksByDate = useMemo(() => {
+  const blocksByDay = useMemo(() => {
+    // Older bookings left a "booking" block behind, copied from the shoot at that moment and never updated when the
+    // shoot moved. The shoot itself is drawn now, so a booking block that just repeats a shoot's name is skipped.
+    const shootNames = new Set(shoots.map((shoot) => shoot.client_name.trim().toLowerCase()))
     const map = new Map<string, CalendarBlock[]>()
     for (const block of blocks) {
-      let cursor = new Date(`${block.start_date}T00:00:00`)
-      const end = new Date(`${block.end_date}T00:00:00`)
-      while (cursor <= end) {
-        const key = toISODate(cursor)
-        const existing = map.get(key) ?? []
-        existing.push(block)
-        map.set(key, existing)
-        cursor = addDays(cursor, 1)
+      if (block.type === "booking" && shootNames.has(block.label.trim().toLowerCase())) continue
+      const start = dayKeyOf(block.start_date)
+      const end = dayKeyOf(block.end_date)
+      if (!start || !end) continue
+      for (const key of eachDayKey(start, end)) {
+        map.set(key, [...(map.get(key) ?? []), block])
       }
     }
     return map
-  }, [blocks])
+  }, [blocks, shoots])
 
   async function handleCreate(formData: FormData) {
     setIsSubmitting(true)
@@ -140,11 +150,11 @@ export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[];
           >
             <Field>
               <FieldLabel htmlFor="startDate">Start date</FieldLabel>
-              <Input id="startDate" name="startDate" type="date" required defaultValue={toISODate(today)} />
+              <Input id="startDate" name="startDate" type="date" required defaultValue={todayKey} />
             </Field>
             <Field>
               <FieldLabel htmlFor="endDate">End date</FieldLabel>
-              <Input id="endDate" name="endDate" type="date" defaultValue={toISODate(today)} />
+              <Input id="endDate" name="endDate" type="date" defaultValue={todayKey} />
             </Field>
             <Field>
               <FieldLabel htmlFor="type">Type</FieldLabel>
@@ -172,27 +182,48 @@ export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[];
 
         <div
           className="grid flex-1 grid-cols-7 gap-1.5 text-center"
-          style={{ gridTemplateRows: `auto repeat(${days.length / 7}, minmax(6rem, 1fr))` }}
+          style={{ gridTemplateRows: `auto repeat(${dayKeys.length / 7}, minmax(6rem, 1fr))` }}
         >
           {WEEKDAY_LABELS.map((label) => (
             <span key={label} className="pb-1 text-xs font-medium tracking-wide text-muted-foreground">
               {label}
             </span>
           ))}
-          {days.map((day) => {
-            const iso = toISODate(day)
-            const isInRange = day >= today && day < addDays(today, 30)
-            const dayBlocks = blocksByDate.get(iso) ?? []
+          {dayKeys.map((key) => {
+            const isInRange = isInStudioWindow(key, todayKey)
+            const dayShoots = shootsByDay.get(key) ?? []
+            const dayBlocks = blocksByDay.get(key) ?? []
             return (
               <div
-                key={iso}
+                key={key}
+                data-day={key}
                 className={
-                  "flex flex-col gap-1 rounded-md border p-1.5 text-left " +
+                  "flex min-w-0 flex-col gap-1 rounded-md border p-1.5 text-left " +
                   (isInRange ? "border-border bg-card" : "border-border/40 bg-muted/20 opacity-50")
                 }
               >
-                <span className="text-xs text-muted-foreground">{day.getDate()}</span>
+                <span className={cn("text-xs", key === todayKey ? "font-semibold text-primary" : "text-muted-foreground")}>
+                  {dayOfMonthOfKey(key)}
+                </span>
                 <div className="flex flex-1 flex-col gap-1">
+                  {dayShoots.map((shoot) => {
+                    const status = calendarStatusOf(shoot, todayKey)
+                    return (
+                      <button
+                        key={shoot.id}
+                        type="button"
+                        onClick={() => setSelectedShoot(shoot)}
+                        title={`${shoot.client_name} - ${CALENDAR_STATUS_META[status].label}. Open pipeline.`}
+                        className={cn(
+                          "flex min-h-5 w-full items-center rounded px-1.5 py-0.5 text-left text-[0.65rem] font-medium",
+                          CALENDAR_CHIP_INTERACTION,
+                          CALENDAR_STATUS_META[status].chipClass,
+                        )}
+                      >
+                        <span className="truncate">{shoot.client_name}</span>
+                      </button>
+                    )
+                  })}
                   {dayBlocks.map((block) => (
                     <div
                       key={block.id}
@@ -207,7 +238,7 @@ export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[];
                         onClick={() => handleDelete(block.id)}
                         disabled={pendingDeleteId === block.id}
                         aria-label={`Remove ${block.label}`}
-                        className="opacity-0 transition-opacity group-hover:opacity-100"
+                        className="opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                       >
                         <X className="size-3" />
                       </button>
@@ -219,15 +250,33 @@ export function StudioCalendar({ blocks, className }: { blocks: CalendarBlock[];
           })}
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-full bg-zinc-700/60" /> Busy / Unavailable
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="size-2.5 rounded-full bg-primary/80" /> Shoot / Booking
-          </span>
-        </div>
+        <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Legend">
+          {(Object.keys(CALENDAR_STATUS_META) as CalendarStatus[]).map((status) => (
+            <li key={status} className="flex items-center gap-1.5">
+              <span className={cn("size-2.5 rounded-full", CALENDAR_STATUS_META[status].dotClass)} aria-hidden="true" />
+              {CALENDAR_STATUS_META[status].label}
+            </li>
+          ))}
+          <li className="flex items-center gap-1.5">
+            <span className="size-2.5 rounded-full bg-zinc-700/60" aria-hidden="true" /> Busy / Unavailable
+          </li>
+        </ul>
       </CardContent>
+
+      <ShootPipelineDrawer
+        shoot={selectedShoot}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
+        onClose={() => setSelectedShoot(null)}
+        onUpdated={(updated) => {
+          setSelectedShoot(updated)
+          router.refresh()
+        }}
+        onFinalized={() => {
+          setSelectedShoot(null)
+          router.refresh()
+        }}
+      />
     </Card>
   )
 }
