@@ -15,6 +15,7 @@ import {
   PanelsTopLeft,
   ScanFace,
   UserRoundCheck,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react"
 
@@ -29,6 +30,7 @@ const navLinks: NavLink[] = [
   { href: "/admin/portfolio", label: "Portfolio CMS", icon: GalleryVerticalEnd },
   { href: "/admin/site-editor", label: "Site Editor", icon: PanelsTopLeft },
   { href: "/admin/crew", label: "Crew & Roster", icon: UserRoundCheck },
+  { href: "/admin/roster-vault", label: "Roster Vault", icon: UsersRound },
   { href: "/admin/packages", label: "Package Manager", icon: Package },
   { href: "/admin/operations", label: "Operations", icon: Briefcase },
   { href: "/admin/clients", label: "Client Directory", icon: BookUser },
