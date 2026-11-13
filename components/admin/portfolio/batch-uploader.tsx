@@ -15,6 +15,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PORTFOLIO_CATEGORY_OPTIONS, isPortfolioCategory } from "@/lib/portfolio-categories"
+import {
+  MIN_SHOOT_YEAR,
+  MONTH_NAMES,
+  PACKAGE_TYPE_OPTIONS,
+  daysInMonth,
+  isPackageType,
+  maxShootYear,
+  shootMetaError,
+} from "@/lib/portfolio-shoot-meta"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
 import { createClient } from "@/lib/supabase/client"
 import { runPool, uploadVaultPhoto } from "@/lib/vault-photo-upload"
@@ -23,6 +32,9 @@ import { cn } from "@/lib/utils"
 const MAX_QUEUE = 100
 const UPLOAD_CONCURRENCY = 3
 const TEAM_OPTION = "Team"
+const NO_PACKAGE = "none"
+const NATIVE_SELECT_CLASS =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50 dark:bg-input/30"
 
 type QueuedFile = {
   id: string
@@ -68,12 +80,31 @@ export function BatchUploader({
   const [editor, setEditor] = useState(TEAM_OPTION)
   const [title, setTitle] = useState("")
   const [categories, setCategories] = useState<string[]>([])
+  const [packageType, setPackageType] = useState(NO_PACKAGE)
+  const [shootMonth, setShootMonth] = useState("")
+  const [shootDay, setShootDay] = useState("")
+  const [shootYear, setShootYear] = useState("")
   const [progress, setProgress] = useState<Progress>({ phase: "idle", done: 0, total: 0 })
   const [dragActive, setDragActive] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const previewUrlsRef = useRef(new Set<string>())
 
   const uploading = progress.phase !== "idle"
+
+  const shootDate = {
+    month: shootMonth ? Number(shootMonth) : null,
+    day: shootDay ? Number(shootDay) : null,
+    year: shootYear.trim() ? Number(shootYear) : null,
+  }
+  // Client delivery doesn't publish to the portfolio, so these fields don't apply there.
+  const metaError = clientId ? null : shootMetaError(shootDate)
+  const dayCount = shootDate.month ? daysInMonth(shootDate.month, shootDate.year) : 31
+
+  function handleMonthChange(value: string) {
+    setShootMonth(value)
+    // Don't leave a day that the new month doesn't have (for example 31 after switching to February).
+    if (value && Number(shootDay) > daysInMonth(Number(value), shootDate.year)) setShootDay("")
+  }
 
   useEffect(() => {
     const urls = previewUrlsRef.current
@@ -243,6 +274,10 @@ export function BatchUploader({
         editedBy: editor,
         title,
         categories: selectedCategories,
+        packageType: isPackageType(packageType) ? packageType : null,
+        shootMonth: shootDate.month,
+        shootDay: shootDate.day,
+        shootYear: shootDate.year,
       })
 
       onUploaded(created)
@@ -260,6 +295,10 @@ export function BatchUploader({
       } else {
         setTitle("")
         setCategories([])
+        setPackageType(NO_PACKAGE)
+        setShootMonth("")
+        setShootDay("")
+        setShootYear("")
       }
     } catch (error) {
       if (uploaded.length > 0) {
@@ -274,7 +313,7 @@ export function BatchUploader({
 
   const percent = progress.total === 0 ? 0 : Math.round((progress.done / progress.total) * 100)
   const queuedCount = files.length + picked.length
-  const canUpload = queuedCount > 0 && (clientId !== "" || categories.length > 0) && !uploading
+  const canUpload = queuedCount > 0 && (clientId !== "" || categories.length > 0) && !metaError && !uploading
 
   return (
     <section aria-labelledby="batch-uploader-heading" className="rounded-lg border border-border bg-card p-5">
@@ -510,6 +549,86 @@ export function BatchUploader({
             />
             <p className="text-xs text-muted-foreground">The first one you pick is the primary category.</p>
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="batch-package-type" className="text-xs text-muted-foreground">
+              Package Type
+            </Label>
+            <select
+              id="batch-package-type"
+              value={packageType}
+              disabled={uploading || clientId !== ""}
+              onChange={(event) => setPackageType(event.target.value)}
+              className={NATIVE_SELECT_CLASS}
+            >
+              <option value={NO_PACKAGE}>Not specified</option>
+              {PACKAGE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-3">
+            <fieldset className="flex min-w-0 flex-col gap-1.5" disabled={uploading || clientId !== ""}>
+              <legend className="mb-1.5 p-0 text-xs text-muted-foreground">Month / Day</legend>
+              <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-2">
+                <select
+                  aria-label="Month"
+                  value={shootMonth}
+                  onChange={(event) => handleMonthChange(event.target.value)}
+                  className={NATIVE_SELECT_CLASS}
+                >
+                  <option value="">Month</option>
+                  {MONTH_NAMES.map((name, index) => (
+                    <option key={name} value={index + 1}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Day"
+                  value={shootDay}
+                  onChange={(event) => setShootDay(event.target.value)}
+                  className={NATIVE_SELECT_CLASS}
+                >
+                  <option value="">Day</option>
+                  {Array.from({ length: dayCount }, (_, index) => (
+                    <option key={index + 1} value={index + 1}>
+                      {index + 1}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </fieldset>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="batch-year" className="mb-0 text-xs text-muted-foreground">
+                Year
+              </Label>
+              <Input
+                id="batch-year"
+                type="number"
+                inputMode="numeric"
+                min={MIN_SHOOT_YEAR}
+                max={maxShootYear()}
+                value={shootYear}
+                disabled={uploading || clientId !== ""}
+                onChange={(event) => setShootYear(event.target.value)}
+                placeholder={String(new Date().getFullYear())}
+              />
+            </div>
+          </div>
+          {metaError ? (
+            <p className="-mt-2 text-xs text-destructive" role="alert">
+              {metaError}
+            </p>
+          ) : (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              Saved with every photo in this batch so you can find them by package and date later. All three are optional.
+            </p>
+          )}
 
           <div className="flex flex-col gap-2">
             <Button type="button" onClick={handleUpload} disabled={!canUpload} className="gap-2">
