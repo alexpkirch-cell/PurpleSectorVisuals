@@ -86,8 +86,6 @@ function buildActivityFeed(shoot: Shoot): ActivityEntry[] {
   return entries
 }
 
-const SLA_ITEMS = ["RAWs Backed Up", "Culled", "Color Graded", "Uploaded to Vault"] as const
-
 export function ClientDetailSheet({
   shoot,
   bookingTiers,
@@ -112,7 +110,6 @@ export function ClientDetailSheet({
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [isFinalizing, setIsFinalizing] = useState(false)
-  const [slaProgress, setSlaProgress] = useState<Record<string, boolean>>({})
   const [leadSource, setLeadSource] = useState<LeadSource>("psv_house")
 
   // The team is assigned once, below. The revenue preview reads it instead of asking again.
@@ -180,14 +177,6 @@ export function ClientDetailSheet({
 
   function toggleAddon(id: string) {
     setAddonIds((current) => (current.includes(id) ? current.filter((a) => a !== id) : [...current, id]))
-  }
-
-  function toggleSlaItem(item: string) {
-    setSlaProgress((current) => {
-      const next = { ...current, [item]: !current[item] }
-      console.log("[v0] post-production SLA updated", next)
-      return next
-    })
   }
 
   async function handleGenerateVaultAndSendLink() {
@@ -497,23 +486,7 @@ export function ClientDetailSheet({
                 />
               </div>
 
-              {/* Section 4: Post-production checklist */}
-              <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3">
-                <span className="text-xs font-medium text-zinc-300">Post-Production Checklist</span>
-                <div className="flex flex-col gap-2">
-                  {SLA_ITEMS.map((item) => (
-                    <label
-                      key={item}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-zinc-300"
-                    >
-                      <Checkbox checked={!!slaProgress[item]} onCheckedChange={() => toggleSlaItem(item)} />
-                      {item}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Section 5: Finalize */}
+              {/* Section 4: Finalize */}
               <Button
                 type="button"
                 onClick={handleGenerateVaultAndSendLink}

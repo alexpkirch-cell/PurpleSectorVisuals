@@ -212,18 +212,6 @@ export function PaperworkTab({
             </Label>
           </div>
 
-          <div className="flex items-start gap-2 rounded-md border border-border px-3 py-2.5">
-            <Checkbox
-              id="portfolioOptOut"
-              checked={portfolioOptOut}
-              onCheckedChange={(checked) => setPortfolioOptOut(checked === true)}
-              className="mt-0.5"
-            />
-            <Label htmlFor="portfolioOptOut" className="cursor-pointer text-sm leading-snug">
-              Opt out of portfolio &amp; marketing usage. Do not use my session images publicly.
-            </Label>
-          </div>
-
           <div className="flex flex-col gap-2">
             <Label htmlFor="signature" className="text-sm text-muted-foreground">
               Type your full legal name to sign
@@ -241,6 +229,20 @@ export function PaperworkTab({
           <div className="flex flex-col gap-2">
             <Label className="text-sm text-muted-foreground">Draw your signature</Label>
             <SignaturePad onChange={setSignatureImage} disabled={!hasReadAgreement} />
+          </div>
+
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              aria-pressed={portfolioOptOut}
+              onClick={() => setPortfolioOptOut((current) => !current)}
+              className="text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              {portfolioOptOut ? "Private non-portfolio gallery exemption requested · Undo" : "Request private non-portfolio gallery exemption"}
+            </button>
+            {portfolioOptOut ? (
+              <p className="text-xs text-muted-foreground">Your session images will not be used for portfolio or marketing.</p>
+            ) : null}
           </div>
 
           {isMinor && (

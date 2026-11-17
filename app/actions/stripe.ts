@@ -2,7 +2,7 @@
 
 import { Pool } from "pg"
 
-import { getStripeClient } from "@/lib/stripe"
+import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordDepositPayment } from "@/lib/vault-payments"
 
 function getPool() {
@@ -84,7 +84,7 @@ export async function startDepositCheckout(vaultId: string) {
 
     return { success: true as const, clientSecret: session.client_secret }
   } catch (error) {
-    console.error("[v0] startDepositCheckout failed:", error)
+    logStripeError("startDepositCheckout failed", error)
     return { success: false as const, error: "Could not start checkout. Please try again." }
   } finally {
     await pool.end()
@@ -109,7 +109,7 @@ export async function checkDepositStatus(vaultId: string) {
     }
     return { depositPaid: false }
   } catch (error) {
-    console.error("[v0] checkDepositStatus failed:", error)
+    logStripeError("checkDepositStatus failed", error)
     return { depositPaid: false }
   } finally {
     await pool.end()
@@ -170,7 +170,7 @@ export async function startBalanceCheckout(vaultId: string) {
 
     return { success: true as const, clientSecret: session.client_secret }
   } catch (error) {
-    console.error("[v0] startBalanceCheckout failed:", error)
+    logStripeError("startBalanceCheckout failed", error)
     return { success: false as const, error: "Could not start checkout. Please try again." }
   } finally {
     await pool.end()
@@ -197,7 +197,7 @@ export async function checkBalanceStatus(vaultId: string) {
     }
     return { balancePaid: false }
   } catch (error) {
-    console.error("[v0] checkBalanceStatus failed:", error)
+    logStripeError("checkBalanceStatus failed", error)
     return { balancePaid: false }
   } finally {
     await pool.end()
