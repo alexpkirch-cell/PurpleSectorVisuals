@@ -5,23 +5,11 @@ import { revalidatePath } from "next/cache"
 import { sql } from "@/lib/db"
 import { syncShootToGoogleCalendar } from "@/lib/google-calendar"
 
-/** Side effects of a shoot becoming a confirmed booking: the studio calendar block and the Google event. */
+/**
+ * Side effect of a shoot becoming a confirmed booking: the Google Calendar event. The studio calendars read the shoot
+ * itself, so no copy of it is written to calendar_blocks (a copy would keep the old date when the shoot is moved).
+ */
 export async function finalizeBookedShoot(shootId: string) {
-  const { rows } = await sql<{ client_name: string; shoot_date: string | Date | null }>`
-    SELECT client_name, shoot_date FROM shoots WHERE id = ${shootId}
-  `
-  const shoot = rows[0]
-  if (shoot?.shoot_date) {
-    const day = new Date(shoot.shoot_date).toISOString().slice(0, 10)
-    await sql`
-      INSERT INTO calendar_blocks (start_date, end_date, type, label)
-      SELECT ${day}, ${day}, 'booking', ${shoot.client_name}
-      WHERE NOT EXISTS (
-        SELECT 1 FROM calendar_blocks WHERE start_date = ${day} AND type = 'booking' AND label = ${shoot.client_name}
-      )
-    `
-  }
-
   await syncShootToGoogleCalendar(shootId)
 }
 

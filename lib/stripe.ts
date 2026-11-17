@@ -11,11 +11,11 @@ let cachedClient: Stripe | null = null
  * the request/action handler, not at module scope.
  */
 export function getStripeClient(): Stripe {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error("STRIPE_SECRET_KEY is not set")
+  if (!process.env.STRIPE_SECRET_KEY1) {
+    throw new Error("STRIPE_SECRET_KEY1 is not set")
   }
   if (!cachedClient) {
-    cachedClient = new Stripe(process.env.STRIPE_SECRET_KEY)
+    cachedClient = new Stripe(process.env.STRIPE_SECRET_KEY1)
   }
   return cachedClient
 }

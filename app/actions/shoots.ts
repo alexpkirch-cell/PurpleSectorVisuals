@@ -9,7 +9,7 @@ import { buildMapsUrl } from "@/lib/maps"
 import { advanceShootForVault, finalizeBookedShoot } from "@/lib/shoot-booking"
 import { splitTotal } from "@/lib/payment-terms"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
-import { contractTotalOf, editorsOf, leadShooterName, shootersOf } from "@/lib/shoot-team"
+import { contractTotalOf, leadShooterName } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
 import { createClient } from "@/lib/supabase/server"
 import { buildContractHtml, buildInvoiceData } from "@/lib/vault-documents"
@@ -232,7 +232,7 @@ export async function createManualBooking(input: {
   const { rows: inserted } = await sql<{ id: string }>`
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
-      preferred_shooter, assigned_shooter, assigned_editor, notes, vault_access_code,
+      preferred_shooter, notes, vault_access_code,
       selected_package, package_price, selected_addons, discount_type, discount_value,
       total_price, base_price, deposit_amount, balance_amount, is_comped, driver_reimbursement,
       assigned_shooters, assigned_editors
@@ -240,7 +240,7 @@ export async function createManualBooking(input: {
     VALUES (
       ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
       ${shootDate}, ${location}, ${locationMapsUrl},
-      ${leadShooterName(shooters)}, ${leadShooterName(shooters)}, ${editors.join(", ") || null},
+      ${leadShooterName(shooters)},
       ${input.notes?.trim() || null}, ${vaultAccessCode},
       ${input.selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
       ${Number(input.discountValue) || 0},
@@ -433,10 +433,9 @@ export async function updateShoot(
     clientName: string
     clientEmail: string
     clientPhone: string | null
+    /** Manual contract total. It replaces the package auto-calculation: 0 comps the shoot, anything above 0 un-comps it. */
     basePrice: number
     travelFee: number
-    assignedShooter: string | null
-    assignedEditor: string | null
     isPaid: boolean
     notes: string | null
     location: string | null
@@ -449,6 +448,11 @@ export async function updateShoot(
   const location = fields.location?.trim() || null
   const locationMapsUrl = location ? fields.locationMapsUrl?.trim() || buildMapsUrl(location) : null
 
+  const priceChanged = fields.basePrice !== undefined
+  const price = priceChanged ? Math.max(0, Number(fields.basePrice) || 0) : null
+  // The typed number is the single source of truth for comp status, so a comped shoot can take a real price.
+  const isComped = price === null ? null : price === 0
+
   await sql`
     UPDATE shoots SET
       client_name = COALESCE(NULLIF(BTRIM(${fields.clientName ?? null}), ''), client_name),
@@ -456,16 +460,16 @@ export async function updateShoot(
       client_phone = CASE WHEN ${fields.clientPhone !== undefined}::boolean THEN NULLIF(BTRIM(${fields.clientPhone ?? null}), '') ELSE client_phone END,
       location = CASE WHEN ${locationChanged}::boolean THEN ${location} ELSE location END,
       location_maps_url = CASE WHEN ${locationChanged}::boolean THEN ${locationMapsUrl} ELSE location_maps_url END,
-      base_price = COALESCE(${fields.basePrice ?? null}, base_price),
-      total_price = COALESCE(${fields.basePrice ?? null}, total_price),
+      base_price = COALESCE(${price}::numeric, base_price),
+      total_price = COALESCE(${price}::numeric, total_price),
+      is_comped = COALESCE(${isComped}::boolean, is_comped),
       travel_fee = COALESCE(${fields.travelFee ?? null}, travel_fee),
-      assigned_shooter = COALESCE(${fields.assignedShooter ?? null}, assigned_shooter),
-      assigned_editor = COALESCE(${fields.assignedEditor ?? null}, assigned_editor),
       is_paid = COALESCE(${fields.isPaid ?? null}, is_paid),
       notes = COALESCE(${fields.notes ?? null}, notes)
     WHERE id = ${id}
   `
 
+  if (price !== null) await syncShootPaymentAmounts(id)
   if (locationChanged) await syncShootToGoogleCalendar(id)
 
   revalidatePath("/admin")
@@ -544,10 +548,41 @@ async function saveVaultDocuments(shootId: string) {
     invoice,
   })
 
+  // Paperwork the client has already signed is a legal record, so it is never rewritten.
   await sql`
     UPDATE vaults SET invoice_data = ${JSON.stringify(invoice)}, contract_html = ${contractHtml}
-    WHERE shoot_id = ${shootId}
+    WHERE shoot_id = ${shootId} AND contract_signed = false
   `
+}
+
+/**
+ * Re-derives the retainer and balance after the contract total changes, on the shoot and on its vault, then refreshes
+ * the unsigned invoice and agreement. A paid retainer is money already received, so only the balance follows the new
+ * total; a fully paid vault is left alone.
+ */
+async function syncShootPaymentAmounts(shootId: string) {
+  const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${shootId}`
+  const shoot = rows[0]
+  if (!shoot) return
+
+  const isComped = Boolean(shoot.is_comped)
+  const total = contractTotalOf(shoot)
+  const { deposit, balance } = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
+
+  await sql`UPDATE shoots SET deposit_amount = ${deposit}, balance_amount = ${balance} WHERE id = ${shootId}`
+
+  await sql`
+    UPDATE vaults SET
+      deposit_amount = CASE WHEN deposit_paid THEN deposit_amount ELSE ${deposit}::numeric END,
+      balance_amount = CASE
+        WHEN deposit_paid THEN GREATEST(${total}::numeric - COALESCE(deposit_amount, 0), 0)
+        ELSE ${balance}::numeric
+      END,
+      final_quoted_fee = ${total}::numeric
+    WHERE shoot_id = ${shootId} AND NOT COALESCE(balance_paid, false)
+  `
+
+  await saveVaultDocuments(shootId)
 }
 
 /**
@@ -683,9 +718,7 @@ export async function finalizeSettlement(
       base_price = ${settledBasePrice},
       travel_fee = ${settledTravelFee},
       final_amount = ${finalAmount},
-      settlement_items = ${JSON.stringify(input.addons)},
-      assigned_shooter = COALESCE(${input.assignedShooter}, assigned_shooter),
-      assigned_editor = COALESCE(${input.assignedEditor}, assigned_editor)
+      settlement_items = ${JSON.stringify(input.addons)}
     WHERE id = ${id}
   `
 
@@ -722,12 +755,14 @@ export async function finalizeBooking(
     confirmedLocation: string | null
     totalPrice: number
     isComped?: boolean
-    assignedShooters: string[]
+    assignedShooters: AssignedShooter[]
     assignedEditors: string[]
   },
 ): Promise<Shoot> {
   await requireAdmin()
 
+  const assignedShooters = input.assignedShooters.filter((shooter) => shooter.name.trim())
+  const assignedEditors = input.assignedEditors.filter((name) => name.trim())
   const isComped = Boolean(input.isComped)
   const totalPrice = isComped ? 0 : input.totalPrice
 
@@ -755,8 +790,8 @@ export async function finalizeBooking(
       total_price = ${totalPrice},
       is_comped = ${isComped},
       travel_fee = 0,
-      assigned_shooter = ${input.assignedShooters.join(", ") || null},
-      assigned_editor = ${input.assignedEditors.join(", ") || null},
+      assigned_shooters = ${JSON.stringify(assignedShooters)},
+      assigned_editors = ${JSON.stringify(assignedEditors)},
       status = 'awaiting_signature'
     WHERE id = ${id}
   `
@@ -846,7 +881,11 @@ export async function listAssignableNames(): Promise<string[]> {
   return rows.map((row) => row.name)
 }
 
-/** Saves the structured shooter/editor assignment and driver reimbursement for settlement. */
+/**
+ * Saves the shooter/editor assignment and driver reimbursement. This is the one place the team is set: the structured
+ * columns are the source of truth, and the legacy assigned_shooter / assigned_editor text is derived from them by the
+ * shoots_sync_team database trigger.
+ */
 export async function updateShootTeam(
   id: string,
   input: { shooters: AssignedShooter[]; editors: string[]; driverReimbursement: number },
@@ -861,8 +900,6 @@ export async function updateShootTeam(
     UPDATE shoots SET
       assigned_shooters = ${JSON.stringify(shooters)},
       assigned_editors = ${JSON.stringify(editors)},
-      assigned_shooter = ${leadShooterName(shooters)},
-      assigned_editor = ${editors.join(", ") || null},
       driver_reimbursement = ${driverReimbursement}
     WHERE id = ${id}
   `

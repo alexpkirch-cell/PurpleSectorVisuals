@@ -1,4 +1,4 @@
-import { LIABILITY_RELEASE_TEXT } from "@/lib/contract-text"
+import { CONTRACT_VERSION_MARKER, LIABILITY_RELEASE_TEXT } from "@/lib/contract-text"
 import type { DiscountType } from "@/lib/pricing"
 
 export interface InvoiceLineItem {
@@ -122,18 +122,24 @@ export function buildContractHtml({ clientName, shootDate, location, packageName
     )
     .join("")
 
-  const clauses = LIABILITY_RELEASE_TEXT.split("\n\n")
-    .map((paragraph, index) =>
-      index === 0
-        ? `<h3>${escapeHtml(paragraph)}</h3>`
-        : `<p>${escapeHtml(paragraph)}</p>`,
-    )
-    .join("")
+  // The first paragraph is the standalone title; here the agreement already has its own heading and details table.
+  const [, ...clauseParagraphs] = LIABILITY_RELEASE_TEXT.split("\n\n")
+  const clauses = clauseParagraphs.map(formatClause).join("")
 
   return [
+    `<!--${CONTRACT_VERSION_MARKER}-->`,
     `<h3>SERVICE AGREEMENT &amp; MEDIA RELEASE</h3>`,
     `<dl>${detailRows}</dl>`,
     `<h4>Payment schedule</h4><p>${escapeHtml(paymentSchedule)}</p>`,
+    `<h4>Terms &amp; conditions</h4>`,
     clauses,
   ].join("")
+}
+
+/** Numbered clauses ("1. TITLE. Body...") get a bold heading; everything else stays a plain paragraph. */
+function formatClause(paragraph: string) {
+  const match = paragraph.match(/^(\d+\.\s[A-Z][A-Z &,'/-]*\.)\s([\s\S]*)$/)
+  return match
+    ? `<p><strong>${escapeHtml(match[1])}</strong> ${escapeHtml(match[2])}</p>`
+    : `<p>${escapeHtml(paragraph)}</p>`
 }

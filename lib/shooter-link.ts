@@ -19,3 +19,13 @@ export function shooterHref(name: string) {
   if (isFounderName(trimmed)) return `/${trimmed.split(/\s+/)[0].toLowerCase()}`
   return `/team/${slugify(trimmed) || encodeURIComponent(trimmed)}`
 }
+
+/** Credits that name the studio rather than a person, so there is no profile page to link to. */
+const GENERIC_CREDITS = ["team", "purple sector visuals", "psv"]
+
+/** Where a credited person's profile lives, or undefined for a blank or studio-wide credit. */
+export function profileHrefFor(name: string | null | undefined) {
+  const trimmed = name?.trim()
+  if (!trimmed || GENERIC_CREDITS.includes(trimmed.toLowerCase())) return undefined
+  return shooterHref(trimmed)
+}

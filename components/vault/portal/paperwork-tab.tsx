@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, FileSignature, Loader2, Wallet } from "lucide-react"
+import { CheckCircle2, FileSignature, Loader2, Lock, Wallet } from "lucide-react"
 
 import { submitContract } from "@/app/actions/contract"
 import { checkDepositStatus } from "@/app/actions/stripe"
@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DepositCheckout } from "@/components/vault/deposit-checkout"
-import { PaperContract } from "@/components/vault/portal/paper-contract"
+import { PaperContract, type SignatureRecord } from "@/components/vault/portal/paper-contract"
 import { PaperInvoice } from "@/components/vault/portal/paper-invoice"
 import { SignaturePad } from "@/components/vault/signature-pad"
 import type { InvoiceData } from "@/lib/vault-documents"
@@ -26,6 +26,9 @@ interface PaperworkTabProps {
   isComped: boolean
   clientSignatureImage: string | null
   clientSignedAt: string | null
+  signedName: string | null
+  signedIp: string | null
+  signatureHash: string | null
   countersignature: string | null
   countersignedAt: string | null
   onComplete: () => void
@@ -40,12 +43,19 @@ export function PaperworkTab({
   isComped,
   clientSignatureImage,
   clientSignedAt,
+  signedName: savedSignedName,
+  signedIp,
+  signatureHash,
   countersignature,
   countersignedAt,
   onComplete,
 }: PaperworkTabProps) {
   const router = useRouter()
   const [signed, setSigned] = useState(contractSigned)
+  // Signing unlocks only after the reader has scrolled through the whole agreement.
+  const [hasReadAgreement, setHasReadAgreement] = useState(contractSigned)
+  const handleReachedEnd = useCallback(() => setHasReadAgreement(true), [])
+  const [freshRecord, setFreshRecord] = useState<SignatureRecord | null>(null)
   const [paid, setPaid] = useState(depositPaid || isComped)
   const [signature, setSignature] = useState("")
   const [signedName, setSignedName] = useState<string | null>(null)
@@ -61,9 +71,17 @@ export function PaperworkTab({
   const [error, setError] = useState<string | null>(null)
 
   const canSign =
+    hasReadAgreement &&
     signature.trim().length >= 2 &&
     signatureImage !== null &&
     (!isMinor || (guardianName.trim().length >= 2 && guardianSignature.trim().length >= 2))
+
+  // Right after signing it comes from the server's response; on later visits from the saved record.
+  const record: SignatureRecord | null =
+    freshRecord ??
+    (contractSigned && clientSignedAt && signatureHash
+      ? { name: savedSignedName ?? "Signed electronically", signedAt: clientSignedAt, ip: signedIp, hash: signatureHash }
+      : null)
 
   async function finish() {
     await activateVaultIfReady(vaultId)
@@ -82,6 +100,7 @@ export function PaperworkTab({
       guardianRelationship,
       guardianSignature,
       portfolioOptOut,
+      agreementReviewed: hasReadAgreement,
     })
 
     if (!result.success) {
@@ -91,8 +110,14 @@ export function PaperworkTab({
     }
 
     setSigned(true)
-    setSignedName(signature.trim())
-    setSignedAtNow(new Date().toISOString())
+    setSignedName(result.footprint.signedName)
+    setSignedAtNow(result.footprint.signedAt)
+    setFreshRecord({
+      name: result.footprint.signedName,
+      signedAt: result.footprint.signedAt,
+      ip: result.footprint.ipAddress,
+      hash: result.footprint.signatureHash,
+    })
     // A $0 total has nothing to charge, so signing alone confirms the booking.
     if (isComped) {
       setPaid(true)
@@ -146,6 +171,8 @@ export function PaperworkTab({
         signedAt={clientSignedAt ?? signedAtNow}
         countersignature={countersignature}
         countersignedAt={countersignedAt}
+        record={record}
+        onReachedEnd={handleReachedEnd}
       />
 
       {!signed && (
@@ -155,6 +182,27 @@ export function PaperworkTab({
             <h2 id="sign-heading" className="font-heading text-base font-medium text-foreground">
               Sign this agreement
             </h2>
+          </div>
+
+          <div
+            role="status"
+            aria-live="polite"
+            className={`flex items-start gap-2 rounded-md border px-3 py-2.5 text-sm ${
+              hasReadAgreement
+                ? "border-primary/40 bg-primary/10 text-foreground"
+                : "border-dashed border-border text-muted-foreground"
+            }`}
+          >
+            {hasReadAgreement ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            ) : (
+              <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            )}
+            <span>
+              {hasReadAgreement
+                ? "You have reached the end of the agreement. Signing is unlocked."
+                : "Scroll to the end of the agreement above to unlock signing. You can also click into it and press End."}
+            </span>
           </div>
 
           <div className="flex items-center gap-2 rounded-md border border-border px-3 py-2.5">
@@ -185,13 +233,14 @@ export function PaperworkTab({
               value={signature}
               onChange={(e) => setSignature(e.target.value)}
               placeholder="Jane Doe"
+              disabled={!hasReadAgreement}
               className="font-serif text-lg"
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <Label className="text-sm text-muted-foreground">Draw your signature</Label>
-            <SignaturePad onChange={setSignatureImage} />
+            <SignaturePad onChange={setSignatureImage} disabled={!hasReadAgreement} />
           </div>
 
           {isMinor && (
@@ -208,6 +257,7 @@ export function PaperworkTab({
                   value={guardianName}
                   onChange={(e) => setGuardianName(e.target.value)}
                   placeholder="Alex Doe"
+                  disabled={!hasReadAgreement}
                 />
               </div>
               <div className="flex flex-col gap-2">
@@ -219,6 +269,7 @@ export function PaperworkTab({
                   value={guardianRelationship}
                   onChange={(e) => setGuardianRelationship(e.target.value)}
                   placeholder="Parent"
+                  disabled={!hasReadAgreement}
                 />
               </div>
               <div className="flex flex-col gap-2">
@@ -230,6 +281,7 @@ export function PaperworkTab({
                   value={guardianSignature}
                   onChange={(e) => setGuardianSignature(e.target.value)}
                   placeholder="Alex Doe"
+                  disabled={!hasReadAgreement}
                   className="font-serif text-lg"
                 />
               </div>

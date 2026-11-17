@@ -191,7 +191,6 @@ export function ShootDetailSheet({
   const Description = isPage ? PageDescription : SheetDescription
 
   const [totalPrice, setTotalPrice] = useState("0")
-  const [priceTouched, setPriceTouched] = useState(false)
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("0")
@@ -214,12 +213,26 @@ export function ShootDetailSheet({
     return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
   }, [shoot, bookingTiers])
 
+  // The saved contract total wins over the package auto-calculation, so a manual override survives a refresh. Typed input
+  // is only replaced when the saved total itself changes, never just because the parent passed a fresh copy of the shoot.
+  const savedTotal = shoot
+    ? shoot.is_comped
+      ? 0
+      : Number(shoot.total_price) > 0
+        ? Number(shoot.total_price)
+        : calculatedTotal
+    : 0
+  const priceKey = shoot ? `${shoot.id}|${savedTotal}` : ""
+  const [syncedPriceKey, setSyncedPriceKey] = useState("")
+  if (priceKey !== syncedPriceKey) {
+    setSyncedPriceKey(priceKey)
+    setTotalPrice(String(savedTotal))
+  }
+
   const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
   if (shoot !== syncedShoot) {
     setSyncedShoot(shoot)
     if (shoot) {
-      setTotalPrice(String(shoot.is_comped ? 0 : calculatedTotal))
-      setPriceTouched(false)
       setShooters(shootersOf(shoot))
       setEditors(editorsOf(shoot))
       setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
@@ -232,7 +245,10 @@ export function ShootDetailSheet({
     }
   }
 
-  const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
+  const typedPrice = Number(totalPrice) || 0
+  // A $0 total comps the shoot; any other number is a real price, so the comped lock never outlives what is typed.
+  const isComping = typedPrice === 0
+  const isPriceOverridden = !isComping && typedPrice !== calculatedTotal
 
   const ledgerRevision = shoot
     ? [
@@ -292,7 +308,7 @@ export function ShootDetailSheet({
         base_price: String(price),
         travel_fee: "0",
         total_price: String(price),
-        is_comped: price === 0 ? true : shoot.is_comped && price === 0,
+        is_comped: price === 0,
         assigned_shooters: cleanShooters,
         assigned_editors: cleanEditors,
         assigned_shooter: cleanShooters.find((s) => s.role === "lead")?.name ?? cleanShooters[0]?.name ?? null,
@@ -618,7 +634,7 @@ export function ShootDetailSheet({
                           Override active
                         </Badge>
                       )}
-                      {(shoot.is_comped || Number(totalPrice) === 0) && (
+                      {isComping && (
                         <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
                           Comped
                         </Badge>
@@ -628,23 +644,18 @@ export function ShootDetailSheet({
                       <Input
                         id="totalPrice"
                         type="number"
+                        inputMode="decimal"
                         min="0"
                         step="0.01"
                         value={totalPrice}
-                        onChange={(e) => {
-                          setPriceTouched(true)
-                          setTotalPrice(e.target.value)
-                        }}
+                        onChange={(e) => setTotalPrice(e.target.value)}
                       />
-                      {isPriceOverridden && (
+                      {calculatedTotal > 0 && typedPrice !== calculatedTotal && (
                         <Button
                           type="button"
                           variant="outline"
                           size="icon"
-                          onClick={() => {
-                            setPriceTouched(false)
-                            setTotalPrice(String(calculatedTotal))
-                          }}
+                          onClick={() => setTotalPrice(String(calculatedTotal))}
                           aria-label="Reset to default package price"
                           className="shrink-0"
                         >
@@ -653,7 +664,9 @@ export function ShootDetailSheet({
                       )}
                     </div>
                     <p className="text-[0.65rem] text-muted-foreground">
-                      Auto-calculated from the base package + add-ons. Edit directly to apply a custom discount or charge.
+                      {isComping
+                        ? "A $0 total comps this shoot: no retainer or balance is due. Type any amount to charge for it."
+                        : "Type any amount to override the package + add-ons price. It saves exactly as entered."}
                     </p>
                   </div>
 

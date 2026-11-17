@@ -7,12 +7,20 @@ type PhotoAttributionProps = {
   shotBy?: string | null
   editedBy?: string | null
   shotByHref?: string
+  editedByHref?: string
   onNavigate?: () => void
   className?: string
 }
 
 /** "Shot By | Edited By" credit line. Renders nothing when neither name is set. */
-export function PhotoAttribution({ shotBy, editedBy, shotByHref, onNavigate, className }: PhotoAttributionProps) {
+export function PhotoAttribution({
+  shotBy,
+  editedBy,
+  shotByHref,
+  editedByHref,
+  onNavigate,
+  className,
+}: PhotoAttributionProps) {
   if (!shotBy && !editedBy) return null
 
   return (
@@ -43,7 +51,17 @@ export function PhotoAttribution({ shotBy, editedBy, shotByHref, onNavigate, cla
         <span className="inline-flex items-center gap-1.5">
           <Laptop className="size-3.5 shrink-0" aria-hidden="true" />
           <span className="sr-only">Edited by</span>
-          <span>{editedBy}</span>
+          {editedByHref ? (
+            <Link
+              href={editedByHref}
+              onClick={onNavigate}
+              className="font-medium text-[#FF00FF] underline-offset-4 hover:underline"
+            >
+              {editedBy}
+            </Link>
+          ) : (
+            <span>{editedBy}</span>
+          )}
         </span>
       ) : null}
     </p>

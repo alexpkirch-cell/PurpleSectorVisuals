@@ -32,6 +32,9 @@ interface VaultPortalProps {
   prepSubmitted: boolean
   clientSignatureImage: string | null
   clientSignedAt: string | null
+  signedName: string | null
+  signedIp: string | null
+  signatureHash: string | null
   initialProgress: VaultProgress
 }
 
@@ -50,6 +53,9 @@ export function VaultPortal({
   prepSubmitted,
   clientSignatureImage,
   clientSignedAt,
+  signedName,
+  signedIp,
+  signatureHash,
   initialProgress,
 }: VaultPortalProps) {
   // Polling keeps the tracker and the locked delivery tab in step with the admin's Kanban board.
@@ -105,6 +111,9 @@ export function VaultPortal({
           isComped={isComped}
           clientSignatureImage={clientSignatureImage}
           clientSignedAt={clientSignedAt}
+          signedName={signedName}
+          signedIp={signedIp}
+          signatureHash={signatureHash}
           countersignature={live.countersignature}
           countersignedAt={live.countersignedAt}
           onComplete={() => setTab("prep")}

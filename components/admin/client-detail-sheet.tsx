@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { type Shoot } from "@/app/actions/shoots"
 import { generateVaultAndSendLink } from "@/app/actions/pipeline"
-import { STUDIO_EDITORS, STUDIO_SHOOTERS } from "@/lib/booking-config"
+import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
 import {
   calculateFourBucketSplit,
@@ -22,6 +22,24 @@ import {
   type Photographer,
   type ShootingScenario,
 } from "@/lib/revenue-split"
+import type { AssignedShooter } from "@/lib/settlement"
+import { editorsOf, leadShooterName, shootersOf } from "@/lib/shoot-team"
+
+const SHOOTING_SCENARIO_LABELS: Record<ShootingScenario, string> = {
+  solo: "Solo Shooter (40%)",
+  lead_second: "Lead + 2nd Shooter (25% / 15%)",
+  two_equal: "2 Equal Shooters (20% / 20%)",
+}
+
+const EDITING_SCENARIO_LABELS: Record<EditingScenario, string> = {
+  single: "Single Editor (20%)",
+  split: "Split Edit (10% / 10%)",
+}
+
+/** The revenue calculator only knows the two founders; anyone else previews as Alex until they are modeled. */
+function asPhotographer(name: string | null | undefined): Photographer {
+  return name === "Gabe" ? "Gabe" : "Alex"
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -91,16 +109,19 @@ export function ClientDetailSheet({
   const [confirmedLocation, setConfirmedLocation] = useState("")
   const [totalPrice, setTotalPrice] = useState("0")
   const [priceTouched, setPriceTouched] = useState(false)
-  const [shooters, setShooters] = useState<string[]>([])
+  const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [slaProgress, setSlaProgress] = useState<Record<string, boolean>>({})
   const [leadSource, setLeadSource] = useState<LeadSource>("psv_house")
-  const [shootingScenario, setShootingScenario] = useState<ShootingScenario>("solo")
-  const [soloShooter, setSoloShooter] = useState<Photographer>("Alex")
-  const [leadShooter, setLeadShooter] = useState<Photographer>("Alex")
-  const [editingScenario, setEditingScenario] = useState<EditingScenario>("single")
-  const [singleEditor, setSingleEditor] = useState<Photographer>("Alex")
+
+  // The team is assigned once, below. The revenue preview reads it instead of asking again.
+  const shootingScenario: ShootingScenario =
+    shooters.length < 2 ? "solo" : shooters.some((shooter) => shooter.role === "co_lead") ? "two_equal" : "lead_second"
+  const leadShooter = asPhotographer(leadShooterName(shooters))
+  const soloShooter = asPhotographer(shooters[0]?.name)
+  const editingScenario: EditingScenario = editors.length >= 2 ? "split" : "single"
+  const singleEditor = asPhotographer(editors[0])
 
   const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
   if (shoot !== syncedShoot) {
@@ -122,8 +143,8 @@ export function ClientDetailSheet({
       setConfirmedDate(shootDateIso ? shootDateIso.slice(0, 10) : "")
       setConfirmedTime(shootDateIso ? shootDateIso.slice(11, 16) : "")
       setConfirmedLocation(shoot.location ?? "")
-      setShooters(shoot.assigned_shooter ? shoot.assigned_shooter.split(",").map((s) => s.trim()) : [])
-      setEditors(shoot.assigned_editor ? shoot.assigned_editor.split(",").map((s) => s.trim()) : [])
+      setShooters(shootersOf(shoot))
+      setEditors(editorsOf(shoot))
       setPriceTouched(false)
     }
   }
@@ -159,10 +180,6 @@ export function ClientDetailSheet({
 
   function toggleAddon(id: string) {
     setAddonIds((current) => (current.includes(id) ? current.filter((a) => a !== id) : [...current, id]))
-  }
-
-  function toggleTeamMember(list: string[], setList: (v: string[]) => void, name: string) {
-    setList(list.includes(name) ? list.filter((n) => n !== name) : [...list, name])
   }
 
   function toggleSlaItem(item: string) {
@@ -432,69 +449,21 @@ export function ClientDetailSheet({
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-zinc-300">Crew scenario</Label>
-                    <select
-                      value={shootingScenario}
-                      onChange={(e) => setShootingScenario(e.target.value as ShootingScenario)}
-                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
-                    >
-                      <option value="solo">Solo Shooter (40%)</option>
-                      <option value="lead_second">Lead + 2nd Shooter (25% / 15%)</option>
-                      <option value="two_equal">2 Equal Shooters (20% / 20%)</option>
-                    </select>
+                    <p className="flex h-9 items-center rounded-md border border-white/10 bg-black/20 px-2 text-sm text-zinc-300">
+                      {SHOOTING_SCENARIO_LABELS[shootingScenario]}
+                    </p>
                   </div>
-
-                  {shootingScenario === "solo" && (
-                    <div className="col-span-2 flex flex-col gap-1.5">
-                      <Label className="text-zinc-300">Solo shooter</Label>
-                      <select
-                        value={soloShooter}
-                        onChange={(e) => setSoloShooter(e.target.value as Photographer)}
-                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
-                      >
-                        <option value="Alex">Alex</option>
-                        <option value="Gabe">Gabe</option>
-                      </select>
-                    </div>
-                  )}
-                  {shootingScenario === "lead_second" && (
-                    <div className="col-span-2 flex flex-col gap-1.5">
-                      <Label className="text-zinc-300">Lead shooter</Label>
-                      <select
-                        value={leadShooter}
-                        onChange={(e) => setLeadShooter(e.target.value as Photographer)}
-                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
-                      >
-                        <option value="Alex">Alex</option>
-                        <option value="Gabe">Gabe</option>
-                      </select>
-                    </div>
-                  )}
 
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-zinc-300">Post-production</Label>
-                    <select
-                      value={editingScenario}
-                      onChange={(e) => setEditingScenario(e.target.value as EditingScenario)}
-                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
-                    >
-                      <option value="single">Single Editor (20%)</option>
-                      <option value="split">Split Edit (10% / 10%)</option>
-                    </select>
+                    <p className="flex h-9 items-center rounded-md border border-white/10 bg-black/20 px-2 text-sm text-zinc-300">
+                      {EDITING_SCENARIO_LABELS[editingScenario]}
+                    </p>
                   </div>
-                  {editingScenario === "single" && (
-                    <div className="flex flex-col gap-1.5">
-                      <Label className="text-zinc-300">Editor</Label>
-                      <select
-                        value={singleEditor}
-                        onChange={(e) => setSingleEditor(e.target.value as Photographer)}
-                        className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
-                      >
-                        <option value="Alex">Alex</option>
-                        <option value="Gabe">Gabe</option>
-                      </select>
-                    </div>
-                  )}
                 </div>
+                <p className="text-[0.65rem] text-zinc-500">
+                  The crew scenario follows the shooters and editors assigned under Team assignment.
+                </p>
 
                 <div className="flex flex-col gap-1.5 rounded-md bg-white/5 p-2">
                   {[
@@ -520,32 +489,12 @@ export function ClientDetailSheet({
               {/* Section 3: Team assignment */}
               <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-black/40 p-3">
                 <span className="text-xs font-medium text-zinc-300">Team assignment</span>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[0.65rem] uppercase tracking-wide text-zinc-500">Shooters</span>
-                    {STUDIO_SHOOTERS.map((name) => (
-                      <label key={name} className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                        <Checkbox
-                          checked={shooters.includes(name)}
-                          onCheckedChange={() => toggleTeamMember(shooters, setShooters, name)}
-                        />
-                        {name}
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[0.65rem] uppercase tracking-wide text-zinc-500">Editors</span>
-                    {STUDIO_EDITORS.map((name) => (
-                      <label key={name} className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
-                        <Checkbox
-                          checked={editors.includes(name)}
-                          onCheckedChange={() => toggleTeamMember(editors, setEditors, name)}
-                        />
-                        {name}
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <TeamAssignment
+                  shooters={shooters}
+                  editors={editors}
+                  onShootersChange={setShooters}
+                  onEditorsChange={setEditors}
+                />
               </div>
 
               {/* Section 4: Post-production checklist */}

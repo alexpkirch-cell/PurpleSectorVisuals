@@ -5,6 +5,7 @@ import { listPendingPrintOrders } from "@/app/actions/print-orders"
 import { listShoots } from "@/app/actions/shoots"
 import { OperationsDashboard } from "@/components/admin/operations/operations-dashboard"
 import { PrintFulfillmentQueue } from "@/components/admin/print-fulfillment-queue"
+import { todayKeyUtc } from "@/lib/calendar-days"
 
 export const metadata: Metadata = {
   title: "Operations | Purple Sector Visuals",
@@ -20,8 +21,8 @@ export default async function AdminOperationsPage() {
   ])
 
   const now = new Date()
-  const todayKey = now.toISOString().slice(0, 10)
-  const monthKey = now.toISOString().slice(0, 7)
+  const todayKey = todayKeyUtc()
+  const monthKey = todayKey.slice(0, 7)
   const monthLabel = now.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" })
 
   return (

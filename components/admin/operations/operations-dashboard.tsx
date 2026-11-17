@@ -18,10 +18,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { declineShoot, deleteShoot, moveShootStage, type Shoot } from "@/app/actions/shoots"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
-import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 import { SettlementModal } from "@/components/admin/settlement-modal"
-import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
+import { ShootPipelineDrawer } from "@/components/admin/shoot-pipeline-drawer"
 import { CountersignAlert } from "@/components/admin/operations/countersign-alert"
 import { KpiRow } from "@/components/admin/operations/kpi-row"
 import { ManualBookingDialog } from "@/components/admin/operations/manual-booking-dialog"
@@ -177,22 +176,15 @@ export function OperationsDashboard({
         onCreated={(shoot) => setShoots((current) => [shoot, ...current])}
       />
 
-      <ClientDetailSheet
-        shoot={selectedShoot?.status === "new_inquiry" ? selectedShoot : null}
+      <ShootPipelineDrawer
+        shoot={selectedShoot}
         bookingTiers={bookingTiers}
         bookingAddons={bookingAddons}
-        onOpenChange={(open) => !open && setSelectedShoot(null)}
+        onClose={() => setSelectedShoot(null)}
         onFinalized={(updated) => {
           replaceShoot(updated)
           setSelectedShoot(null)
         }}
-      />
-
-      <ShootDetailSheet
-        shoot={selectedShoot?.status === "new_inquiry" ? null : selectedShoot}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
-        onOpenChange={(open) => !open && setSelectedShoot(null)}
         onUpdated={(updated) => {
           replaceShoot(updated)
           setSelectedShoot(updated)

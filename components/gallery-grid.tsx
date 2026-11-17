@@ -69,7 +69,8 @@ export function GalleryGrid({ items }: { items: PortfolioItem[] }) {
         category: CATEGORY_TO_DISCIPLINE[
           itemCategories(item).find((category) => CATEGORY_TO_DISCIPLINE[category] === active) ?? itemCategories(item)[0]
         ],
-        shooter: item.shooter,
+        shooter: item.shooter ?? item.shot_by,
+        editedBy: item.edited_by,
         camera: item.camera,
         lens: item.lens,
         settings: item.settings,

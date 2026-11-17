@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
 
 import { listAssignableVaults } from "@/app/actions/media-library"
-import { listPortfolioItemsAdmin } from "@/app/actions/portfolio"
+import { listPortfolioGalleryOptionsAdmin, listPortfolioItemsAdmin, listPortfolioTeamMembersAdmin } from "@/app/actions/portfolio"
 import { PortfolioCms } from "@/components/admin/portfolio-cms"
-import { getActiveDirectoryMembers } from "@/lib/team-directory-data"
 
 export const metadata: Metadata = {
   title: "Portfolio | Purple Sector Visuals",
@@ -11,12 +10,13 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminPortfolioPage() {
-  const [items, crew, vaults] = await Promise.all([
+  const [items, teamMembers, galleries, vaults] = await Promise.all([
     listPortfolioItemsAdmin(),
-    getActiveDirectoryMembers(),
+    listPortfolioTeamMembersAdmin(),
+    listPortfolioGalleryOptionsAdmin(),
     listAssignableVaults(),
   ])
-  const photographers = crew.map((member) => member.name)
+  const photographers = teamMembers.map((member) => member.name)
 
   return (
     <div className="flex flex-col gap-8">
@@ -27,7 +27,7 @@ export default async function AdminPortfolioPage() {
         </p>
       </div>
 
-      <PortfolioCms initialItems={items} photographers={photographers} vaults={vaults} />
+      <PortfolioCms initialItems={items} photographers={photographers} teamMembers={teamMembers} galleries={galleries} vaults={vaults} />
     </div>
   )
 }

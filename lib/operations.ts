@@ -1,4 +1,5 @@
 import type { Shoot, ShootStatus } from "@/app/actions/shoots"
+import { dayKeyOf } from "@/lib/calendar-days"
 
 export type StageId =
   | "new_inquiry"
@@ -105,9 +106,8 @@ function toDate(value: string | Date | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function dayKey(value: string | Date | null) {
-  return toDate(value)?.toISOString().slice(0, 10) ?? null
-}
+// The one rule for which calendar day a shoot belongs to, shared with every calendar view.
+const dayKey = dayKeyOf
 
 export function monthKeyOf(value: string | Date | null) {
   return toDate(value)?.toISOString().slice(0, 7) ?? null
@@ -157,6 +157,13 @@ export const CALENDAR_STATUS_META: Record<CalendarStatus, { label: string; chipC
     dotClass: "bg-calendar-completed ring-1 ring-border",
   },
 }
+
+/** What makes a shoot pill read as clickable. Every calendar uses it, so they feel the same. */
+export const CALENDAR_CHIP_INTERACTION = [
+  "relative cursor-pointer transition-all duration-150",
+  "hover:z-10 hover:scale-105 hover:shadow-md hover:shadow-black/30 hover:brightness-125 active:scale-100",
+  "focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring",
+].join(" ")
 
 /**
  * Past shoots are completed. Upcoming shoots are confirmed only once the client has signed

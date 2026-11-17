@@ -3,6 +3,7 @@
 import { cookies } from "next/headers"
 import { Pool } from "pg"
 
+import { isStaleContract, refreshStaleContract } from "@/lib/vault-contract"
 import type { InvoiceData } from "@/lib/vault-documents"
 import { vaultCookieName } from "@/lib/vault"
 
@@ -45,6 +46,10 @@ export type VaultRecord = {
   prepSubmittedAt: string | null
   clientSignatureImage: string | null
   clientSignedAt: string | null
+  /** The typed legal name, IP address and integrity hash recorded when the client signed. */
+  signedName: string | null
+  clientSignedIp: string | null
+  signatureHash: string | null
   countersignature: string | null
   countersignedAt: string | null
 }
@@ -123,7 +128,9 @@ export async function lookupVaultByPin(
         COALESCE(s.status, CASE WHEN v.status = 'Active' THEN 'delivered_settled' END) AS shoot_status,
         s.location AS shoot_location,
         v.must_have_shots, v.mood_board_links, v.prep_submitted_at,
-        v.client_signature, v.client_signed_at, v.countersignature, v.countersigned_at,
+        v.client_signature, v.client_signed_at, v.client_signed_ip, v.countersignature, v.countersigned_at,
+        (SELECT c.client_signature FROM contracts c WHERE c.vault_id = v.id ORDER BY c.signed_at DESC LIMIT 1) AS signed_name,
+        (SELECT c.signature_hash FROM contracts c WHERE c.vault_id = v.id ORDER BY c.signed_at DESC LIMIT 1) AS signature_hash,
         (SELECT COUNT(*)::int FROM vault_photos vp WHERE vp.vault_id = v.id) AS photo_count,
         (SELECT MIN(gp.created_at) FROM gallery_photos gp WHERE gp.gallery_id = v.gallery_id) as delivered_at
        FROM vaults v
@@ -150,6 +157,12 @@ export async function lookupVaultByPin(
       await pool.query(`UPDATE vaults SET status = 'Expired' WHERE id = $1`, [row.id])
     }
 
+    // An agreement nobody has signed yet always shows the current terms.
+    let contractHtml: string | null = row.contract_html ?? null
+    if (!row.contract_signed && isStaleContract(contractHtml)) {
+      contractHtml = (await refreshStaleContract(row.id).catch(() => null)) ?? contractHtml
+    }
+
     return {
       found: true,
       secret: false,
@@ -173,7 +186,7 @@ export async function lookupVaultByPin(
         finalQuotedFee: row.final_quoted_fee ? Number(row.final_quoted_fee) : null,
         deliveredAt: deliveredAt ? deliveredAt.toISOString() : null,
         expiresAt: computedExpiresAt ? computedExpiresAt.toISOString() : null,
-        contractHtml: row.contract_html ?? null,
+        contractHtml,
         invoiceData: row.invoice_data && Object.keys(row.invoice_data).length > 0 ? row.invoice_data : null,
         isComped: Boolean(row.is_comped),
         shootStatus: row.shoot_status ?? null,
@@ -187,6 +200,9 @@ export async function lookupVaultByPin(
             ? row.client_signature
             : null,
         clientSignedAt: row.client_signed_at ? new Date(row.client_signed_at).toISOString() : null,
+        signedName: row.signed_name ?? null,
+        clientSignedIp: row.client_signed_ip ?? null,
+        signatureHash: row.signature_hash ?? null,
         countersignature: row.countersignature ?? null,
         countersignedAt: row.countersigned_at ? new Date(row.countersigned_at).toISOString() : null,
       },

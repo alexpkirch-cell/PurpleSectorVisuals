@@ -1,10 +1,14 @@
 "use server"
 
+import { createHash } from "node:crypto"
+
 import { headers } from "next/headers"
 import { Pool } from "pg"
 
 import { buildContractBody } from "@/lib/contract-text"
+import { getClientIp } from "@/lib/request-ip"
 import { advanceShootForVault } from "@/lib/shoot-booking"
+import { hasVaultSession } from "@/lib/vault-session"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -24,15 +28,36 @@ export interface ContractSubmission {
   guardianEmail?: string
   guardianSignature?: string
   portfolioOptOut: boolean
+  /** The client scrolled through the whole agreement before the signing fields unlocked. */
+  agreementReviewed: boolean
 }
 
-export type SubmitContractResult = { success: true } | { success: false; error: string }
+/** What was recorded alongside the signature, so the client can see the same record the studio keeps. */
+export interface SignatureFootprint {
+  signedName: string
+  signedAt: string
+  ipAddress: string | null
+  signatureHash: string
+}
+
+export type SubmitContractResult = { success: true; footprint: SignatureFootprint } | { success: false; error: string }
+
+const sha256 = (value: string) => createHash("sha256").update(value).digest("hex")
 
 export async function submitContract(vaultId: string, input: ContractSubmission): Promise<SubmitContractResult> {
   const signature = input.signature.trim()
 
   if (!vaultId || signature.length < 2) {
     return { success: false, error: "A valid signature is required." }
+  }
+
+  // Only a browser that signed in with this vault's email + access code may sign for it.
+  if (!(await hasVaultSession(vaultId))) {
+    return { success: false, error: "Your session has expired. Reload this page and sign in to your vault again." }
+  }
+
+  if (input.agreementReviewed !== true) {
+    return { success: false, error: "Scroll to the end of the agreement before signing." }
   }
 
   if (input.isMinor) {
@@ -56,14 +81,14 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
   }
 
   const requestHeaders = await headers()
-  const signerIp =
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() || requestHeaders.get("x-real-ip") || null
-  const signerUserAgent = requestHeaders.get("user-agent")
+  const signerIp = getClientIp(requestHeaders)
+  const signerUserAgent = requestHeaders.get("user-agent")?.slice(0, 500) ?? null
   // The server clock is the record of truth; a client-supplied time could be backdated.
   const signedAt = new Date().toISOString()
 
   const pool = getPool()
   const client = await pool.connect()
+  let footprint: SignatureFootprint
   try {
     await client.query("BEGIN")
 
@@ -86,14 +111,37 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
 
     const isComped = Boolean(vault.rows[0].is_comped)
     // Prefer the pre-populated agreement stored on the vault; legacy vaults fall back to the generic template.
-    const contractBody =
+    const agreementBody =
       (vault.rows[0].contract_html as string | null) ??
       buildContractBody({ isMinor: input.isMinor, portfolioOptOut: input.portfolioOptOut })
 
+    // The hash binds the exact agreement text, the typed name, the drawn signature, the time and the IP together, so any
+    // later change to the stored record can be detected by recomputing it.
+    const signatureHash = sha256(
+      JSON.stringify({
+        agreement: agreementBody,
+        signedName: signature,
+        drawnSignature: sha256(signatureImage),
+        signedAt,
+        ipAddress: signerIp,
+      })
+    )
+
+    const record = [
+      "ELECTRONIC SIGNATURE RECORD",
+      `Signed by: ${signature}`,
+      `Signed at (UTC): ${signedAt}`,
+      `IP address: ${signerIp ?? "not available"}`,
+      `Device: ${signerUserAgent ?? "not available"}`,
+      "Method: typed legal name and drawn signature",
+      "Agreement scrolled to the end before signing: yes",
+      `Record hash (SHA-256): ${signatureHash}`,
+    ].join("\n")
+
     await client.query(
-      `INSERT INTO contracts (vault_id, contract_body, client_signature, signed_at, signed_ip, signed_user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [vaultId, contractBody, signature, signedAt, signerIp, signerUserAgent]
+      `INSERT INTO contracts (vault_id, contract_body, client_signature, signed_at, signed_ip, signed_user_agent, signature_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [vaultId, `${agreementBody}\n\n${record}`, signature, signedAt, signerIp, signerUserAgent, signatureHash]
     )
 
     await client.query(
@@ -131,6 +179,7 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     )
 
     await client.query("COMMIT")
+    footprint = { signedName: signature, signedAt, ipAddress: signerIp, signatureHash }
   } catch (error) {
     await client.query("ROLLBACK")
     console.error("[v0] submitContract failed:", error)
@@ -148,5 +197,5 @@ export async function submitContract(vaultId: string, input: ContractSubmission)
     console.error("[v0] advanceShootForVault failed after signing:", error)
   }
 
-  return { success: true }
+  return { success: true, footprint }
 }

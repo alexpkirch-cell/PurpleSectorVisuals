@@ -13,7 +13,7 @@ import { authenticateVaultWithEmailPin, type VaultAuthState } from "@/app/(publi
 const DEMO_EMAIL = "demo@purplesectorvisuals.com"
 const DEMO_PIN = "123456"
 
-export function VaultLoginForm() {
+export function VaultLoginForm({ defaultPin = "" }: { defaultPin?: string }) {
   const router = useRouter()
 
   async function submitAction(prevState: VaultAuthState, formData: FormData): Promise<VaultAuthState> {
@@ -33,7 +33,7 @@ export function VaultLoginForm() {
   return (
     <form action={action} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">Email address</Label>
         <Input
           id="email"
           name="email"
@@ -41,17 +41,20 @@ export function VaultLoginForm() {
           placeholder="you@example.com"
           required
           autoComplete="email"
+          autoFocus
         />
+        <p className="text-xs text-zinc-500">The email you used when you booked.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pin">6-digit PIN</Label>
+        <Label htmlFor="pin">6-digit access code</Label>
         <Input
           id="pin"
           name="pin"
           inputMode="numeric"
           pattern="[0-9]{6}"
           maxLength={6}
+          defaultValue={/^\d{6}$/.test(defaultPin) ? defaultPin : ""}
           placeholder="123456"
           autoComplete="one-time-code"
           className="font-mono tracking-[0.35em]"

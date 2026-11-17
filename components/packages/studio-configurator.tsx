@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check } from "lucide-react"
+import { Check, Images } from "lucide-react"
 
+import { PackagePhotosDialog } from "@/components/packages/package-photos-dialog"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
@@ -47,6 +48,8 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
   const [activeCategory, setActiveCategory] = useState<PackageCategory | null>(initialSelection.category)
   const [activePackageId, setActivePackageId] = useState<string | null>(initialSelection.packageId)
   const [selectedAddOnIds, setSelectedAddOnIds] = useState<Set<string>>(new Set())
+  // Which package's photos are open. The photos are matched to its category, which is its Package Type in the portfolio.
+  const [gallery, setGallery] = useState<{ category: PackageCategory; packageTitle: string } | null>(null)
 
   const categoryPackages = useMemo(
     () =>
@@ -188,16 +191,20 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                 const perfectFor = perfectForLine?.replace(PERFECT_FOR, "").trim()
                 const features = pkg.deliverables.filter((item) => item !== perfectForLine)
                 return (
-                  <button
+                  <div
                     key={pkg.id}
-                    type="button"
-                    onClick={() => selectPackage(pkg.id)}
                     className={cn(
-                      "flex flex-col gap-4 rounded-3xl border p-6 text-left transition-all duration-200 ease-out",
+                      "flex flex-col rounded-3xl border transition-all duration-200 ease-out",
                       active
                         ? "border-[#e829f1] bg-[#121214] shadow-[0_0_40px_-12px_rgba(232,41,241,0.5)]"
                         : "border-zinc-800/80 bg-[#121214]/60 hover:border-zinc-700",
                     )}
+                  >
+                  <button
+                    type="button"
+                    onClick={() => selectPackage(pkg.id)}
+                    aria-pressed={active}
+                    className="flex flex-col gap-4 rounded-t-3xl p-6 pb-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-[#e829f1]/60"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
@@ -238,6 +245,19 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                       </ul>
                     ) : null}
                   </button>
+
+                  <div className="px-6 pb-6">
+                    <button
+                      type="button"
+                      onClick={() => setGallery({ category: pkg.category, packageTitle: pkg.title })}
+                      className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:border-[#e829f1] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e829f1]"
+                    >
+                      <Images className="size-4" aria-hidden="true" />
+                      View Photos
+                      <span className="sr-only"> for {pkg.title}</span>
+                    </button>
+                  </div>
+                  </div>
                 )
               })}
             </div>
@@ -319,6 +339,12 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
           </div>
         </div>
       ) : null}
+
+      <PackagePhotosDialog
+        category={gallery?.category ?? null}
+        packageTitle={gallery?.packageTitle ?? ""}
+        onClose={() => setGallery(null)}
+      />
     </div>
   )
 }

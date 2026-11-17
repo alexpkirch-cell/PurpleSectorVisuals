@@ -1,29 +1,38 @@
 "use server"
 
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { sql } from "@/lib/db"
+import { getClientIp } from "@/lib/request-ip"
+import { isVaultLoginBlocked, recordVaultLoginAttempt, VAULT_LOCKOUT_MESSAGE } from "@/lib/vault-throttle"
 import { grantVaultSession } from "@/lib/vault-session"
 
 export type VaultAuthState = { error?: string }
 
 /**
- * Client vault login: the booking email and the 6-digit PIN must both match the
+ * Client vault login: the booking email and the 6-digit access code must both match the
  * same vault. On success a signed session cookie is set and the client lands in
- * their vault.
+ * their vault. Repeated misses lock the email (and the IP) out for a few minutes.
  */
 export async function authenticateVaultWithEmailPin(
   _prevState: VaultAuthState,
   formData: FormData,
 ): Promise<VaultAuthState> {
-  const email = String(formData.get("email") ?? "").trim()
+  const email = String(formData.get("email") ?? "").trim().slice(0, 254)
   const pin = String(formData.get("pin") ?? "").replace(/\s/g, "")
 
   if (!email || !email.includes("@")) {
     return { error: "Enter the email address on your booking." }
   }
   if (!/^\d{6}$/.test(pin)) {
-    return { error: "Your PIN is 6 digits." }
+    return { error: "Your access code is 6 digits." }
+  }
+
+  const ip = getClientIp(await headers())
+
+  if (await isVaultLoginBlocked(email, ip)) {
+    return { error: VAULT_LOCKOUT_MESSAGE }
   }
 
   const { rows } = await sql<{ id: string }>`
@@ -37,8 +46,10 @@ export async function authenticateVaultWithEmailPin(
   `
 
   const vault = rows[0]
+  await recordVaultLoginAttempt(email, ip, Boolean(vault))
+
   if (!vault) {
-    return { error: "That email and PIN don't match a vault. Double-check and try again." }
+    return { error: "That email and access code don't match a vault. Double-check and try again." }
   }
 
   await grantVaultSession(vault.id)

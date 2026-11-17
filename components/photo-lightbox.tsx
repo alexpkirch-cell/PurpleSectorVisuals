@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react"
 
 import { PhotoAttribution } from "@/components/photo-attribution"
 import { useEditMode } from "@/components/puck/edit-mode"
-import { shooterHref } from "@/lib/shooter-link"
+import { profileHrefFor } from "@/lib/shooter-link"
 import { cn } from "@/lib/utils"
 
 export type LightboxImage = {
@@ -124,7 +124,8 @@ export function PhotoLightbox({ images, index, onClose, onIndexChange }: PhotoLi
           <PhotoAttribution
             shotBy={image.shooter}
             editedBy={image.editedBy}
-            shotByHref={image.shooter ? shooterHref(image.shooter) : undefined}
+            shotByHref={profileHrefFor(image.shooter)}
+            editedByHref={profileHrefFor(image.editedBy)}
             onNavigate={onClose}
             className="justify-center text-sm"
           />

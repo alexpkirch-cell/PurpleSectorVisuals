@@ -7,11 +7,13 @@ import { toast } from "sonner"
 import type { AssignableVault } from "@/app/actions/media-library"
 import { MultiSelect } from "@/components/admin/multi-select"
 import { BatchUploader } from "@/components/admin/portfolio/batch-uploader"
+import { BulkUploadStager } from "@/components/admin/portfolio/bulk-upload-stager"
 import { PhotoEditDialog } from "@/components/admin/portfolio/photo-edit-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   deletePortfolioItem,
+  listPortfolioItemsAdmin,
   reorderPortfolioItems,
   updatePortfolioItem,
   type PortfolioItem,
@@ -53,10 +55,14 @@ function CategoryEditor({ item, onCommit }: { item: PortfolioItem; onCommit: (se
 export function PortfolioCms({
   initialItems,
   photographers,
+  teamMembers,
+  galleries,
   vaults,
 }: {
   initialItems: PortfolioItem[]
   photographers: string[]
+  teamMembers: { id: string; name: string }[]
+  galleries: { id: string; label: string }[]
   vaults: AssignableVault[]
 }) {
   const [items, setItems] = useState(initialItems)
@@ -67,6 +73,14 @@ export function PortfolioCms({
   const [editingPhotoId, setEditingPhotoId] = useState<string | null>(null)
 
   const editingPhoto = items.find((item) => item.id === editingPhotoId) ?? null
+
+  async function refreshPortfolioItems() {
+    try {
+      setItems(await listPortfolioItemsAdmin())
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Upload finished, but the portfolio list could not refresh.")
+    }
+  }
 
   async function handleToggleFeatured(item: PortfolioItem) {
     setPendingId(item.id)
@@ -152,11 +166,18 @@ export function PortfolioCms({
 
   return (
     <div className="flex flex-col gap-6">
-      <BatchUploader
-        photographers={photographers}
-        vaults={vaults}
-        onUploaded={(created) => setItems((prev) => [...prev, ...created])}
-      />
+      <BulkUploadStager teamMembers={teamMembers} galleries={galleries} onUploaded={refreshPortfolioItems} />
+
+      <details className="rounded-xl border border-border bg-card px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium text-foreground">Existing client vault delivery tools</summary>
+        <div className="pt-4">
+          <BatchUploader
+            photographers={photographers}
+            vaults={vaults}
+            onUploaded={(created) => setItems((prev) => [...prev, ...created])}
+          />
+        </div>
+      </details>
 
       {items.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">

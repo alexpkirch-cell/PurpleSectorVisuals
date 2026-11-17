@@ -5,6 +5,7 @@ import { Clock } from "lucide-react"
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
 import { BlooperReel } from "@/components/vault/blooper-reel"
 import { VaultPortal } from "@/components/vault/portal/vault-portal"
+import { VaultGate } from "@/components/vault/vault-gate"
 import { formatShootDate } from "@/lib/operations"
 import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
@@ -42,9 +43,9 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
 
   const result = await lookupVaultByPin(token)
 
-  // Unknown PINs and unauthenticated visitors get the same redirect so PINs can't be probed via the URL.
+  // Unknown codes and signed-out visitors see the exact same sign-in, so codes can't be probed via the URL.
   if (!result.found) {
-    redirect("/vault")
+    return <VaultGate code={token} />
   }
 
   if (result.secret) {
@@ -57,10 +58,10 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
 
   const { vault } = result
 
-  // The PIN alone is never enough: the client must have signed in with their email + PIN.
+  // The code alone is never enough: the client must have signed in with their email + access code.
   const hasAccess = (await hasVaultSession(vault.id)) || (await isAdminViewer())
   if (!hasAccess) {
-    redirect("/vault")
+    return <VaultGate code={token} />
   }
 
   if (vault.status === "Expired") {
@@ -92,6 +93,9 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
         prepSubmitted={vault.prepSubmittedAt !== null}
         clientSignatureImage={vault.clientSignatureImage}
         clientSignedAt={vault.clientSignedAt}
+        signedName={vault.signedName}
+        signedIp={vault.clientSignedIp}
+        signatureHash={vault.signatureHash}
         initialProgress={{
           shootStatus: vault.shootStatus,
           photoCount: vault.photoCount,
