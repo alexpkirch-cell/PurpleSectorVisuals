@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { NextResponse } from "next/server"
 
 import { isPortfolioCategory } from "@/lib/portfolio-categories"
+import { isPackageType } from "@/lib/portfolio-shoot-meta"
 import { PORTFOLIO_IMAGES_BUCKET } from "@/lib/storage-buckets"
 import { VAULT_PHOTOS_BUCKET } from "@/lib/vault-photo-storage"
 import { requireAdmin } from "@/lib/require-admin"
@@ -19,18 +20,42 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
 }
 
-/**
- * EXIF parsing is deliberately isolated here so `exifr` can be added later without changing the upload contract.
- * Until then, uploads are accepted with nullable EXIF columns. Keep parsing on the server; never trust browser metadata.
- */
-async function extractExifData(bytes: Buffer): Promise<{
+type ExifMetadata = {
   cameraBody: string | null
   lens: string | null
   aperture: number | null
   shutterSpeed: string | null
   iso: number | null
   focalLength: number | null
-}> {
+}
+
+function textValue(value: unknown, maxLength: number) {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) || null : null
+}
+
+function numericValue(value: unknown, min: number, max: number) {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) && parsed >= min && parsed <= max ? parsed : null
+}
+
+function sanitizeExifData(value: unknown): ExifMetadata {
+  if (!value || typeof value !== "object") {
+    return { cameraBody: null, lens: null, aperture: null, shutterSpeed: null, iso: null, focalLength: null }
+  }
+  const raw = value as Record<string, unknown>
+  return {
+    cameraBody: textValue(raw.cameraBody, 200),
+    lens: textValue(raw.lens, 200),
+    aperture: numericValue(raw.aperture, 0, 128),
+    shutterSpeed: textValue(raw.shutterSpeed, 64),
+    iso: numericValue(raw.iso, 1, 1_000_000),
+    focalLength: numericValue(raw.focalLength, 0, 10000),
+  }
+}
+
+/** EXIF parsing is a client-supplied placeholder until the dependency is added; values are normalized server-side. */
+async function extractExifData(bytes: Buffer): Promise<ExifMetadata> {
   // TODO: install exifr and map Make/Model, LensModel, FNumber, ExposureTime, ISO and FocalLength here.
   void bytes
   return {
@@ -88,6 +113,18 @@ export async function POST(request: Request) {
     }
   }
 
+  let clientExifData: ExifMetadata[] = []
+  const rawExifData = formData.get("exif_data")
+  if (typeof rawExifData === "string" && rawExifData.trim()) {
+    try {
+      const parsed: unknown = JSON.parse(rawExifData)
+      if (!Array.isArray(parsed) || parsed.length !== images.length) throw new Error("invalid exif list")
+      clientExifData = parsed.map(sanitizeExifData)
+    } catch {
+      return NextResponse.json({ error: "exif_data must contain one valid metadata object per image." }, { status: 400 })
+    }
+  }
+
   const rawPublicFlag = formData.get("is_public_portfolio")
   if (rawPublicFlag !== "true" && rawPublicFlag !== "false") {
     return NextResponse.json({ error: "is_public_portfolio must be true or false." }, { status: 400 })
@@ -102,11 +139,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "gallery_id must be a valid gallery ID." }, { status: 400 })
   }
 
-  const categoryValue = formData.get("category")
-  const category = typeof categoryValue === "string" ? categoryValue.trim().toLowerCase() : ""
-  if (isPublicPortfolio && !isPortfolioCategory(category)) {
-    return NextResponse.json({ error: "Choose a valid public portfolio category." }, { status: 400 })
+  const packageTypeValue = formData.get("package_type")
+  const packageType = typeof packageTypeValue === "string" ? packageTypeValue.trim().toLowerCase() : ""
+  if (isPublicPortfolio && (!isPackageType(packageType) || !isPortfolioCategory(packageType))) {
+    return NextResponse.json({ error: "Choose a valid Package Type before publishing to the portfolio." }, { status: 400 })
   }
+  const category = isPublicPortfolio ? packageType : ""
 
   let shooterIds: string[]
   let editorIds: string[]
@@ -144,12 +182,12 @@ export async function POST(request: Request) {
   const storage = createAdminClient().storage
   const results: { fileName: string; galleryPhotoId?: string; portfolioItemId?: string; error?: string }[] = []
 
-  for (const image of images) {
+  for (const [imageIndex, image] of images.entries()) {
     const id = randomUUID()
     const extension = EXTENSION_BY_MIME[image.type]
     const fileName = cleanFileName(image.name)
     const bytes = Buffer.from(await image.arrayBuffer())
-    const exif = await extractExifData(bytes)
+    const exif = clientExifData[imageIndex] ?? await extractExifData(bytes)
     const uploaded: { bucket: string; path: string }[] = []
     let galleryPhotoId: string | undefined
     let portfolioItemId: string | undefined
@@ -193,12 +231,12 @@ export async function POST(request: Request) {
         ].filter(Boolean).join(" · ") || null
         const { rows } = await sql<{ id: string }>`
           INSERT INTO public.portfolio_items (
-            title, category, categories, shooter, shot_by, edited_by,
+            title, category, categories, package_type, shooter, shot_by, edited_by,
             camera, camera_body, lens, aperture, shutter_speed, iso, focal_length, settings,
             image_url, featured, sort_order
           )
           VALUES (
-            ${title || fileName}, ${category}, ARRAY[${category}]::text[],
+            ${title || fileName}, ${category}, ARRAY[${category}]::text[], ${packageType},
             ${shooterNames.join(", ") || null}, ${shooterNames.join(", ") || null}, ${editorNames.join(", ") || null},
             ${exif.cameraBody}, ${exif.cameraBody}, ${exif.lens}, ${exif.aperture}, ${exif.shutterSpeed}, ${exif.iso}, ${exif.focalLength}, ${settings},
             ${imageUrl}, false, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM public.portfolio_items)
@@ -253,6 +291,6 @@ export async function POST(request: Request) {
     results,
     uploaded: results.length - failed,
     failed,
-    exifExtraction: "placeholder_until_exifr_is_installed",
+    exifExtraction: clientExifData.length === images.length ? "client" : "missing",
   }, { status: failed === 0 ? 201 : 207 })
 }

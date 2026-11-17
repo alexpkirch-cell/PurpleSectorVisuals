@@ -331,10 +331,25 @@ export async function updatePortfolioItem(
   revalidatePath("/")
 }
 
-/** Active crew names for the Shot By and Edited By dropdowns. */
-export async function listCrewNamesAdmin(): Promise<string[]> {
+/** Active team members for credit pickers. IDs are used by the structured credit table; names remain for legacy consumers. */
+export async function listPortfolioTeamMembersAdmin(): Promise<{ id: string; name: string }[]> {
   await requireAdmin()
   const crew = await getActiveDirectoryMembers()
+  return crew.map(({ id, name }) => ({ id, name }))
+}
+
+/** Client galleries available to the admin bulk-upload destination picker. */
+export async function listPortfolioGalleryOptionsAdmin(): Promise<{ id: string; label: string }[]> {
+  await requireAdmin()
+  const { rows } = await sql<{ id: string; title: string; client_name: string | null }>`
+    SELECT id, title, client_name FROM public.galleries ORDER BY created_at DESC
+  `
+  return rows.map((gallery) => ({ id: gallery.id, label: gallery.client_name ? `${gallery.client_name} · ${gallery.title}` : gallery.title }))
+}
+
+/** Backwards-compatible names-only helper. */
+export async function listCrewNamesAdmin(): Promise<string[]> {
+  const crew = await listPortfolioTeamMembersAdmin()
   return crew.map((member) => member.name)
 }
 
