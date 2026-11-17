@@ -31,6 +31,11 @@ export interface PortfolioItem {
   camera?: string | null
   lens?: string | null
   settings?: string | null
+  camera_body?: string | null
+  aperture?: number | null
+  shutter_speed?: string | null
+  iso?: number | null
+  focal_length?: number | null
   package_type?: PortfolioCategory | null
   shoot_month?: number | null
   shoot_day?: number | null
@@ -54,6 +59,45 @@ async function requireAdmin() {
   if (profile?.role !== "admin") {
     throw new Error("Not authorized")
   }
+}
+
+const MAX_TEAM_CREDITS_PER_ROLE = 12
+const NON_PERSON_CREDITS = new Set(["team", "purple sector visuals", "psv"])
+
+async function resolveTeamCreditIds(names: (string | null | undefined)[]) {
+  const requested = [...new Set(names
+    .flatMap((raw) => (raw ?? "").split(","))
+    .map((name) => name.trim())
+    .filter((name) => name && !NON_PERSON_CREDITS.has(name.toLowerCase())))]
+  if (requested.length > MAX_TEAM_CREDITS_PER_ROLE) throw new Error(`Choose at most ${MAX_TEAM_CREDITS_PER_ROLE} credits per role.`)
+  if (requested.length === 0) return [] as { id: string; name: string }[]
+
+  const { rows } = await sql<{ id: string; name: string }>`
+    SELECT id, name FROM public.team_members
+    WHERE is_active = true AND lower(btrim(name)) = ANY(${requested.map((name) => name.toLowerCase())}::text[])
+  `
+  const membersByName = new Map(rows.map((member) => [member.name.trim().toLowerCase(), member]))
+  const missing = requested.filter((name) => !membersByName.has(name.toLowerCase()))
+  if (missing.length > 0) throw new Error(`Choose active team members for these credits: ${missing.join(", ")}.`)
+  return requested.map((name) => membersByName.get(name.toLowerCase())!)
+}
+
+async function replaceTeamCredits(
+  itemId: string,
+  role: "shooter" | "editor",
+  members: { id: string; name: string }[],
+) {
+  await sql`
+    DELETE FROM public.portfolio_item_team_members
+    WHERE portfolio_item_id = ${itemId} AND credit_type = ${role}
+  `
+  if (members.length === 0) return
+  await sql`
+    INSERT INTO public.portfolio_item_team_members (portfolio_item_id, team_member_id, credit_type, sort_order)
+    SELECT ${itemId}, member_id, ${role}, ord::int - 1
+    FROM unnest(${members.map((member) => member.id)}::uuid[]) WITH ORDINALITY AS credits(member_id, ord)
+    ON CONFLICT DO NOTHING
+  `
 }
 
 /** Every portfolio item in manual order (the order set by drag and drop in the Portfolio CMS). */
@@ -162,6 +206,8 @@ export async function createPortfolioBatch(input: {
   const title = (input.title ?? "").trim().slice(0, MAX_TITLE_LENGTH)
   const photographer = input.photographer?.trim().slice(0, MAX_PHOTOGRAPHER_LENGTH) || null
   const editor = input.editedBy?.trim().slice(0, MAX_PHOTOGRAPHER_LENGTH) || null
+  const shooterMembers = await resolveTeamCreditIds([photographer])
+  const editorMembers = await resolveTeamCreditIds([editor])
 
   const { rows: orderRows } = await sql<{ max_order: number | null }>`
     SELECT MAX(sort_order) AS max_order FROM portfolio_items
@@ -180,6 +226,13 @@ export async function createPortfolioBatch(input: {
     FROM unnest(${input.imageUrls}::text[]) WITH ORDINALITY AS u(url, ord)
     RETURNING *
   `
+
+  await Promise.all(rows.map(async (item) => {
+    await Promise.all([
+      replaceTeamCredits(item.id, "shooter", shooterMembers),
+      replaceTeamCredits(item.id, "editor", editorMembers),
+    ])
+  }))
 
   // Every published photo also lives in the global media library; re-publishing an existing one only fills blanks.
   await sql`
@@ -213,6 +266,11 @@ export async function updatePortfolioItem(
     camera?: string | null
     lens?: string | null
     settings?: string | null
+    camera_body?: string | null
+    aperture?: number | null
+    shutter_speed?: string | null
+    iso?: number | null
+    focal_length?: number | null
   },
 ): Promise<void> {
   await requireAdmin()
@@ -227,6 +285,13 @@ export async function updatePortfolioItem(
     if (categories.length === 0) throw new Error("An item needs at least one category")
   }
 
+  const shooterCreditsChanged = patch.shooter !== undefined || patch.shot_by !== undefined
+  const editorCreditsChanged = patch.edited_by !== undefined
+  const shooterCredits = shooterCreditsChanged
+    ? await resolveTeamCreditIds([patch.shot_by !== undefined ? patch.shot_by : patch.shooter])
+    : []
+  const editorCredits = editorCreditsChanged ? await resolveTeamCreditIds([patch.edited_by]) : []
+
   await sql`
     UPDATE portfolio_items
     SET title = ${patch.title ?? current.title},
@@ -238,9 +303,17 @@ export async function updatePortfolioItem(
         edited_by = ${patch.edited_by !== undefined ? patch.edited_by || null : (current.edited_by ?? null)},
         camera = ${patch.camera !== undefined ? patch.camera || null : (current.camera ?? null)},
         lens = ${patch.lens !== undefined ? patch.lens || null : (current.lens ?? null)},
-        settings = ${patch.settings !== undefined ? patch.settings || null : (current.settings ?? null)}
+        settings = ${patch.settings !== undefined ? patch.settings || null : (current.settings ?? null)},
+        camera_body = ${patch.camera_body !== undefined ? patch.camera_body || null : (current.camera_body ?? null)},
+        aperture = ${patch.aperture !== undefined ? patch.aperture : (current.aperture ?? null)},
+        shutter_speed = ${patch.shutter_speed !== undefined ? patch.shutter_speed || null : (current.shutter_speed ?? null)},
+        iso = ${patch.iso !== undefined ? patch.iso : (current.iso ?? null)},
+        focal_length = ${patch.focal_length !== undefined ? patch.focal_length : (current.focal_length ?? null)}
     WHERE id = ${id}
   `
+
+  if (shooterCreditsChanged) await replaceTeamCredits(id, "shooter", shooterCredits)
+  if (editorCreditsChanged) await replaceTeamCredits(id, "editor", editorCredits)
 
   // Keep the library's filter metadata in step with edits made in the Portfolio CMS.
   await sql`
