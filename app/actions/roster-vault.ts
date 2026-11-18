@@ -49,6 +49,16 @@ export type RosterVaultTier = {
   is_active: boolean
 }
 
+export type RosterVaultPrintProduct = {
+  id: string
+  team_id: string
+  name: string
+  whcc_product_id: string
+  whcc_selections: Record<string, unknown>
+  price_cents: number
+  is_active: boolean
+}
+
 export type RosterVaultPhoto = {
   id: string
   player_id: string
@@ -149,6 +159,77 @@ export async function listRosterVaultPlayers(teamId: string): Promise<RosterVaul
     ORDER BY p.sort_order ASC, p.display_name ASC
   `
   return rows
+}
+
+function validateWhccSelections(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("WHCC selections must be a JSON object.")
+  }
+  const serialized = JSON.stringify(value)
+  if (serialized.length > 8000) throw new Error("WHCC selections are too large.")
+  return value as Record<string, unknown>
+}
+
+export async function listRosterVaultPrintProducts(teamId: string): Promise<RosterVaultPrintProduct[]> {
+  await requireAdmin()
+  const { rows } = await sql<RosterVaultPrintProduct>`
+    SELECT id, team_id, name, whcc_product_id, whcc_selections, price_cents, is_active
+    FROM public.roster_vault_print_products
+    WHERE team_id = ${teamId}
+    ORDER BY name ASC
+  `
+  return rows
+}
+
+export async function createRosterVaultPrintProduct(input: {
+  teamId: string
+  name: string
+  whccProductId: string
+  whccSelections: unknown
+  priceCents: number
+}) {
+  await requireAdmin()
+  const name = cleanName(input.name, 100)
+  const whccProductId = cleanName(input.whccProductId, 160)
+  const selections = validateWhccSelections(input.whccSelections)
+  const priceCents = Math.round(Number(input.priceCents))
+  if (!name || !whccProductId) throw new Error("Enter a print name and WHCC product ID.")
+  if (!Number.isInteger(priceCents) || priceCents < 100 || priceCents > 10_000_000) {
+    throw new Error("Enter a retail price between $1.00 and $100,000.00.")
+  }
+  const { rows } = await sql<RosterVaultPrintProduct>`
+    INSERT INTO public.roster_vault_print_products (team_id, name, whcc_product_id, whcc_selections, price_cents)
+    VALUES (${input.teamId}, ${name}, ${whccProductId}, ${JSON.stringify(selections)}::jsonb, ${priceCents})
+    RETURNING id, team_id, name, whcc_product_id, whcc_selections, price_cents, is_active
+  `
+  revalidatePath("/admin/roster-vault")
+  return rows[0]
+}
+
+export async function updateRosterVaultPrintProduct(input: {
+  id: string
+  name: string
+  whccProductId: string
+  whccSelections: unknown
+  priceCents: number
+  isActive: boolean
+}) {
+  await requireAdmin()
+  const name = cleanName(input.name, 100)
+  const whccProductId = cleanName(input.whccProductId, 160)
+  const selections = validateWhccSelections(input.whccSelections)
+  const priceCents = Math.round(Number(input.priceCents))
+  if (!name || !whccProductId) throw new Error("Enter a print name and WHCC product ID.")
+  if (!Number.isInteger(priceCents) || priceCents < 100 || priceCents > 10_000_000) {
+    throw new Error("Enter a retail price between $1.00 and $100,000.00.")
+  }
+  await sql`
+    UPDATE public.roster_vault_print_products SET
+      name = ${name}, whcc_product_id = ${whccProductId}, whcc_selections = ${JSON.stringify(selections)}::jsonb,
+      price_cents = ${priceCents}, is_active = ${input.isActive}, updated_at = now()
+    WHERE id = ${input.id}
+  `
+  revalidatePath("/admin/roster-vault")
 }
 
 export async function listRosterVaultTiers(teamId: string): Promise<RosterVaultTier[]> {
@@ -546,6 +627,7 @@ export type UnlockedRosterGallery = {
   teamName: string
   tierName: string
   photos: { id: string; altText: string; imageUrl: string; fileName: string }[]
+  printProducts: Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">[]
 }
 
 /** Returns watermark-free originals only after this exact parent session has a paid order for this player. */
@@ -587,6 +669,11 @@ export async function getUnlockedRosterGallery(playerId: string): Promise<Unlock
       fileName: `${purchase.player_name.replace(/[^a-z0-9-]+/gi, "-")}-${String(index + 1).padStart(2, "0")}.${extension}`,
     }
   }))
+  const { rows: printProducts } = await sql<Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">>`
+    SELECT id, name, price_cents FROM public.roster_vault_print_products
+    WHERE team_id = ${session.team_id} AND is_active = true
+    ORDER BY name ASC
+  `
 
   return {
     playerId,
@@ -595,6 +682,7 @@ export async function getUnlockedRosterGallery(playerId: string): Promise<Unlock
     teamName: purchase.team_name,
     tierName: purchase.tier_name,
     photos: signedPhotos,
+    printProducts,
   }
 }
 

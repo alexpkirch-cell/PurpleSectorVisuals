@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { listRosterVaultPlayers, listRosterVaultTeams, listRosterVaultTiers } from "@/app/actions/roster-vault"
+import { listRosterVaultPlayers, listRosterVaultPrintProducts, listRosterVaultTeams, listRosterVaultTiers } from "@/app/actions/roster-vault"
 import { RosterVaultManager } from "@/components/admin/roster-vault-manager"
 
 export const metadata: Metadata = {
@@ -10,9 +10,13 @@ export const metadata: Metadata = {
 
 export default async function RosterVaultAdminPage() {
   const teams = await listRosterVaultTeams()
-  const [initialPlayers, initialTiers] = teams[0]
-    ? await Promise.all([listRosterVaultPlayers(teams[0].id), listRosterVaultTiers(teams[0].id)])
-    : [[], []]
+  const [initialPlayers, initialTiers, initialPrintProducts] = teams[0]
+    ? await Promise.all([
+        listRosterVaultPlayers(teams[0].id),
+        listRosterVaultTiers(teams[0].id),
+        listRosterVaultPrintProducts(teams[0].id),
+      ])
+    : [[], [], []]
 
   return (
     <div className="flex flex-col gap-6">
@@ -23,7 +27,12 @@ export default async function RosterVaultAdminPage() {
           Create secure team access, manage player cards and prepare each roster for gallery unlocks.
         </p>
       </header>
-      <RosterVaultManager initialTeams={teams} initialPlayers={initialPlayers} initialTiers={initialTiers} />
+      <RosterVaultManager
+        initialTeams={teams}
+        initialPlayers={initialPlayers}
+        initialTiers={initialTiers}
+        initialPrintProducts={initialPrintProducts}
+      />
     </div>
   )
 }

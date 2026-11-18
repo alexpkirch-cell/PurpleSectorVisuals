@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import JSZip from "jszip"
-import { ArrowLeft, Download, ImageOff, LockKeyhole, Printer, ShieldCheck } from "lucide-react"
+import { ArrowLeft, Download, ImageOff, LockKeyhole, ShieldCheck } from "lucide-react"
 import Link from "next/link"
 
 import type { UnlockedRosterGallery } from "@/app/actions/roster-vault"
 import { Button } from "@/components/ui/button"
+import { RosterPrintOrderDialog } from "@/components/vault/roster-print-order-dialog"
 
-export function RosterGallery({ gallery }: { gallery: UnlockedRosterGallery }) {
+export function RosterGallery({ gallery, printOrderNotice }: { gallery: UnlockedRosterGallery; printOrderNotice?: string | null }) {
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
 
@@ -60,14 +61,11 @@ export function RosterGallery({ gallery }: { gallery: UnlockedRosterGallery }) {
               <Download className="size-4" aria-hidden="true" />
               {downloading ? "Preparing high-res files…" : "Download All (High-Res)"}
             </Button>
-            <Button type="button" disabled className="h-11 cursor-not-allowed border border-zinc-700 bg-zinc-900 text-zinc-300 opacity-100" aria-label="Order professional prints, coming soon">
-              <Printer className="size-4" aria-hidden="true" />
-              Order Professional Prints
-            </Button>
-            <span className="text-center text-[0.65rem] uppercase tracking-[0.16em] text-zinc-600">Print ordering coming soon</span>
+            <RosterPrintOrderDialog gallery={gallery} />
           </div>
         </header>
 
+        {printOrderNotice ? <p role="status" className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">{printOrderNotice}</p> : null}
         {downloadError ? <p role="alert" className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{downloadError}</p> : null}
 
         {gallery.photos.length === 0 ? (

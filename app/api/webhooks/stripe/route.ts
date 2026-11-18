@@ -4,6 +4,7 @@ import type Stripe from "stripe"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
 import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
+import { markRosterPrintCheckoutExpired, recordAndSubmitRosterPrintOrder } from "@/lib/roster-vault-print-orders"
 
 interface ShippingDetails {
   name?: string | null
@@ -66,12 +67,18 @@ export async function POST(request: Request) {
 
     if (session.metadata?.kind === "roster_gallery") {
       await recordRosterVaultGalleryPayment(session)
+    } else if (session.metadata?.kind === "roster_print") {
+      await recordAndSubmitRosterPrintOrder(session)
     } else if (session.metadata?.vaultId) {
       await confirmVaultPayment(session)
     } else {
       const shippingDetails = session.shipping_details ?? session.customer_details ?? null
       await submitToPrintful(shippingDetails)
     }
+  }
+
+  if (event.type === "checkout.session.expired") {
+    await markRosterPrintCheckoutExpired(event.data.object as Stripe.Checkout.Session)
   }
 
   if (event.type === "payment_intent.succeeded") {
