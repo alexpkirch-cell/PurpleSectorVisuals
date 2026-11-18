@@ -11,12 +11,14 @@ import {
   deleteRosterVaultPlayer,
   listRosterVaultPlayers,
   listRosterVaultPhotosAdmin,
+  listRosterVaultPrintProducts,
   listRosterVaultTiers,
   updateRosterVaultGalleryTier,
   updateRosterVaultPlayer,
   updateRosterVaultTeam,
   type RosterVaultPhoto,
   type RosterVaultPlayer,
+  type RosterVaultPrintProduct,
   type RosterVaultTeam,
   type RosterVaultTier,
 } from "@/app/actions/roster-vault"
@@ -24,6 +26,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RosterVaultPhotoManager } from "@/components/admin/roster-vault-photo-manager"
+import { RosterVaultPrintProductManager } from "@/components/admin/roster-vault-print-product-manager"
 import {
   Dialog,
   DialogContent,
@@ -38,16 +41,19 @@ export function RosterVaultManager({
   initialTeams,
   initialPlayers,
   initialTiers,
+  initialPrintProducts,
 }: {
   initialTeams: RosterVaultTeam[]
   initialPlayers: RosterVaultPlayer[]
   initialTiers: RosterVaultTier[]
+  initialPrintProducts: RosterVaultPrintProduct[]
 }) {
   const [teams, setTeams] = useState(initialTeams)
   const [selectedId, setSelectedId] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [players, setPlayers] = useState<RosterVaultPlayer[]>(initialPlayers)
   const [playersLoadedFor, setPlayersLoadedFor] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [tiers, setTiers] = useState<RosterVaultTier[]>(initialTiers)
+  const [printProducts, setPrintProducts] = useState<RosterVaultPrintProduct[]>(initialPrintProducts)
   const [photos, setPhotos] = useState<RosterVaultPhoto[]>([])
   const [photosFor, setPhotosFor] = useState<string | null>(null)
   const [newTeamOpen, setNewTeamOpen] = useState(false)
@@ -60,9 +66,14 @@ export function RosterVaultManager({
     setSelectedId(id)
     setEditingPlayer(null)
     try {
-      const [rows, teamTiers] = await Promise.all([listRosterVaultPlayers(id), listRosterVaultTiers(id)])
+      const [rows, teamTiers, teamPrintProducts] = await Promise.all([
+        listRosterVaultPlayers(id),
+        listRosterVaultTiers(id),
+        listRosterVaultPrintProducts(id),
+      ])
       setPlayers(rows)
       setTiers(teamTiers)
+      setPrintProducts(teamPrintProducts)
       setPlayersLoadedFor(id)
       setPhotosFor(null)
       setPhotos([])
@@ -83,6 +94,7 @@ export function RosterVaultManager({
         setPlayers([])
         setPlayersLoadedFor(team.id)
         setTiers([])
+        setPrintProducts([])
         setSelectedId(team.id)
         setNewTeamOpen(false)
         toast.success("Team created. Access credentials are stored securely.")
@@ -337,6 +349,8 @@ export function RosterVaultManager({
               </ul>
             )}
           </section>
+
+          <RosterVaultPrintProductManager teamId={selectedTeam.id} products={printProducts} onProductsChange={setPrintProducts} />
 
           <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5" aria-labelledby="roster-players-heading">
             <div className="flex items-center justify-between gap-3">

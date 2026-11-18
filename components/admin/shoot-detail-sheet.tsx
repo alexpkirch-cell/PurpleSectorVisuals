@@ -26,6 +26,7 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -55,6 +56,9 @@ import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
 import { countersignShoot, moveShootStage, updateShoot, updateShootTeam, type Shoot } from "@/app/actions/shoots"
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
+
+const POST_PRODUCTION_CHECKLIST_ITEMS = ["RAWs Backed Up", "Culled", "Color Graded", "Uploaded to Vault"] as const
+const CHECKLIST_VISIBLE_STATUSES = new Set(["booked_paid", "culling", "color_grading"])
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
@@ -204,6 +208,7 @@ export function ShootDetailSheet({
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
   const [isCountersigning, setIsCountersigning] = useState(false)
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
+  const [postProductionProgress, setPostProductionProgress] = useState<Record<string, boolean>>({})
 
   const calculatedTotal = useMemo(() => {
     if (!shoot) return 0
@@ -233,6 +238,7 @@ export function ShootDetailSheet({
   if (shoot !== syncedShoot) {
     setSyncedShoot(shoot)
     if (shoot) {
+      setPostProductionProgress({})
       setShooters(shootersOf(shoot))
       setEditors(editorsOf(shoot))
       setDriverReimbursement(String(Number(shoot.driver_reimbursement) || 0))
@@ -249,6 +255,10 @@ export function ShootDetailSheet({
   // A $0 total comps the shoot; any other number is a real price, so the comped lock never outlives what is typed.
   const isComping = typedPrice === 0
   const isPriceOverridden = !isComping && typedPrice !== calculatedTotal
+
+  function togglePostProductionItem(item: string) {
+    setPostProductionProgress((current) => ({ ...current, [item]: !current[item] }))
+  }
 
   const ledgerRevision = shoot
     ? [
@@ -608,6 +618,23 @@ export function ShootDetailSheet({
                       </p>
                     )}
                   </div>
+
+                  {CHECKLIST_VISIBLE_STATUSES.has(shoot.status) ? (
+                    <section aria-labelledby="post-production-checklist-heading" className="flex flex-col gap-3 rounded-md border border-border p-3">
+                      <div>
+                        <h3 id="post-production-checklist-heading" className="text-xs font-medium text-foreground">Post-Production Checklist</h3>
+                        <p className="mt-1 text-[0.65rem] text-muted-foreground">Available once the shoot is booked and in production.</p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        {POST_PRODUCTION_CHECKLIST_ITEMS.map((item) => (
+                          <label key={item} className="flex cursor-pointer items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground">
+                            <Checkbox checked={!!postProductionProgress[item]} onCheckedChange={() => togglePostProductionItem(item)} />
+                            {item}
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="notes">Internal notes</Label>

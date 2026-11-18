@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server"
 import type Stripe from "stripe"
 
-import { getStripeClient } from "@/lib/stripe"
+import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
 import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
+import { markRosterPrintCheckoutExpired, recordAndSubmitRosterPrintOrder } from "@/lib/roster-vault-print-orders"
 
 interface ShippingDetails {
   name?: string | null
@@ -37,7 +38,7 @@ async function confirmVaultPayment(session: Stripe.Checkout.Session) {
       await recordDepositPayment(vaultId, session)
     }
   } catch (error) {
-    console.error("[v0] confirmVaultPayment failed:", error)
+    logStripeError("confirm vault payment failed", error)
   }
 }
 
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   try {
     event = getStripeClient().webhooks.constructEvent(body, signature, webhookSecret)
   } catch (error) {
-    console.error("[v0] Stripe webhook signature verification failed:", error)
+    logStripeError("webhook signature verification failed", error)
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
   }
 
@@ -66,12 +67,18 @@ export async function POST(request: Request) {
 
     if (session.metadata?.kind === "roster_gallery") {
       await recordRosterVaultGalleryPayment(session)
+    } else if (session.metadata?.kind === "roster_print") {
+      await recordAndSubmitRosterPrintOrder(session)
     } else if (session.metadata?.vaultId) {
       await confirmVaultPayment(session)
     } else {
       const shippingDetails = session.shipping_details ?? session.customer_details ?? null
       await submitToPrintful(shippingDetails)
     }
+  }
+
+  if (event.type === "checkout.session.expired") {
+    await markRosterPrintCheckoutExpired(event.data.object as Stripe.Checkout.Session)
   }
 
   if (event.type === "payment_intent.succeeded") {
@@ -81,7 +88,7 @@ export async function POST(request: Request) {
       try {
         await recordBalancePayment(vaultId, intent.id)
       } catch (error) {
-        console.error("[v0] off-session balance confirmation failed:", error)
+        logStripeError("off-session balance confirmation failed", error)
       }
     }
   }

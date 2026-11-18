@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 
 import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import { sql } from "@/lib/db"
-import { getStripeClient } from "@/lib/stripe"
+import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
 
 function appOrigin() {
@@ -156,7 +156,7 @@ export async function startRosterGalleryCheckout(playerId: string): Promise<Rost
     if (!checkout.url) return { success: false, error: "Stripe did not return a checkout link." }
     return { success: true, paid: false, url: checkout.url }
   } catch (error) {
-    console.error("[roster-vault] gallery checkout failed:", error)
+    logStripeError("roster gallery checkout failed", error)
     return { success: false, error: "Could not start checkout. Please try again." }
   }
 }
@@ -178,7 +178,7 @@ export async function confirmRosterGalleryCheckout(playerId: string, checkoutSes
 
     return recordRosterVaultGalleryPayment(checkout)
   } catch (error) {
-    console.error("[roster-vault] could not confirm checkout:", error)
+    logStripeError("roster gallery checkout confirmation failed", error)
     return false
   }
 }
