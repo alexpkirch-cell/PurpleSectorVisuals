@@ -7,7 +7,6 @@ import { startRosterPrintCheckout, type RosterPrintSelection } from "@/app/actio
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { UnlockedRosterGallery } from "@/app/actions/roster-vault"
 
 type PhotoChoice = { productId: string; quantity: number }
@@ -92,20 +91,19 @@ export function RosterPrintOrderDialog({ gallery }: { gallery: UnlockedRosterGal
                     <div className="flex min-w-0 flex-col gap-2">
                       <p className="line-clamp-2 text-sm font-medium text-foreground">{photo.altText || "Gallery photo"}</p>
                       <label className="sr-only" htmlFor={`print-product-${photo.id}`}>Print option for {photo.altText}</label>
-                      <Select value={choice.productId || null} onValueChange={(productId) => productId && updateChoice(photo.id, { productId })}>
-                        <SelectTrigger id={`print-product-${photo.id}`} className="w-full">
-                          <SelectValue placeholder="Choose size / finish" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            {gallery.printProducts.map((product) => (
-                              <SelectItem key={product.id} value={product.id}>
-                                {product.name} · ${(product.price_cents / 100).toFixed(2)}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                      <select
+                        id={`print-product-${photo.id}`}
+                        value={choice.productId}
+                        onChange={(event) => updateChoice(photo.id, { productId: event.target.value })}
+                        className="h-8 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        <option value="">Choose size / finish</option>
+                        {gallery.printProducts.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name} · ${(product.price_cents / 100).toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
                       <div className="flex items-center justify-between gap-2">
                         <label htmlFor={`print-quantity-${photo.id}`} className="text-xs text-muted-foreground">Quantity</label>
                         <Input
@@ -127,7 +125,7 @@ export function RosterPrintOrderDialog({ gallery }: { gallery: UnlockedRosterGal
 
           {selections.length > 30 ? <p role="alert" className="mx-5 mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive sm:mx-6">An order can include up to 30 print options.</p> : null}
           {error ? <p role="alert" className="mx-5 mb-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive sm:mx-6">{error}</p> : null}
-          <DialogFooter className="flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <DialogFooter className="mx-0 mb-0 flex-col items-stretch gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <p className="text-sm text-muted-foreground">Estimated total <span className="ml-2 font-semibold text-foreground">${(total / 100).toFixed(2)}</span></p>
             <Button type="button" onClick={beginCheckout} disabled={pending || selections.length === 0 || selections.length > 30 || total < 100}>
               {pending ? <LoaderCircle data-icon="inline-start" className="animate-spin" /> : <ArrowRight data-icon="inline-start" />}
