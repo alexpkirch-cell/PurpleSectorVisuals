@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useRef, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Image from "next/image"
-import { motion, useReducedMotion } from "framer-motion"
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion"
 import useSWR from "swr"
 
 import { LightboxTrigger, type LightboxImage } from "@/components/photo-lightbox"
@@ -37,74 +37,53 @@ export type HeroPhoto = {
   settings?: string
 }
 
-type Tile = {
-  key: string
-  label: string
-  src: string
-  photo?: HeroPhoto
-  /** Index into the lightbox gallery. */
-  galleryIndex: number
+type EntryPath = {
+  x: string
+  y: string
+  angle: number
 }
 
-const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh)]"
-
-const MAX_TILES = 8
-const MIN_TILES = 6
-const GOLDEN_ANGLE = 137.508
-const SPAWN_BOX_VW = 15
-const SPAWN_BOX_VH = 15
-const MIN_DURATION = 35
-const DURATION_SPREAD = 20
-const SPAWN_STAGGER = 4
-const SCALE_START = 0.2
-const SCALE_END = 2.5
-const MAX_TILT = 6
-
-type Trajectory = {
-  startX: string
-  startY: string
-  midX: string
-  midY: string
-  endX: string
-  endY: string
-  tilt: number
-  delay: number
-  duration: number
-}
-
-const between = (min: number, max: number) => min + Math.random() * (max - min)
-const vw = (value: number) => `${value.toFixed(1)}vw`
-const vh = (value: number) => `${value.toFixed(1)}vh`
-
-/**
- * Each tile spawns at a random point inside a central box and flies outward from that point along its own angle
- * (angles walk the circle by the golden angle so tiles fan out to different edges). Speed and tilt are random
- * per tile; this uses Math.random, so it must only run on the client after hydration.
- */
-function randomTrajectory(index: number): Trajectory {
-  const startX = between(-SPAWN_BOX_VW, SPAWN_BOX_VW)
-  const startY = between(-SPAWN_BOX_VH, SPAWN_BOX_VH)
-  const angle = ((index * GOLDEN_ANGLE + between(-14, 14)) * Math.PI) / 180
-  const reach = between(0.85, 1.2)
-  const travelX = Math.cos(angle) * 58 * reach
-  const travelY = Math.sin(angle) * 44 * reach
-  const duration = MIN_DURATION + Math.random() * DURATION_SPREAD
-  return {
-    startX: vw(startX),
-    startY: vh(startY),
-    midX: vw(startX + travelX * 0.32),
-    midY: vh(startY + travelY * 0.32),
-    endX: vw(startX + travelX),
-    endY: vh(startY + travelY),
-    tilt: between(-MAX_TILT, MAX_TILT),
-    delay: index * SPAWN_STAGGER,
-    duration,
-  }
-}
+const PHOTO_DWELL_MS = 7_000
+const TRANSITION_SECONDS = 1.5
+const MOTION_EASE = [0.22, 1, 0.36, 1] as const
+const TILE_WIDTH = "w-[min(82vw,58vh)] sm:w-[min(64vw,66vh)] lg:w-[min(42vw,70vh)]"
+const ENTRY_ORIGINS = [
+  { x: -62, y: -45 },
+  { x: 62, y: -45 },
+  { x: -62, y: 45 },
+  { x: 62, y: 45 },
+  { x: -76, y: 0 },
+  { x: 76, y: 0 },
+] as const
 
 const subscribeNoop = () => () => {}
-
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
+
+function shuffleForCycle<T>(items: T[], seed: number): T[] {
+  const shuffled = [...items]
+  let state = seed >>> 0
+  const random = () => {
+    state = (state + 0x6d2b79f5) | 0
+    let value = state
+    value = Math.imul(value ^ (value >>> 15), value | 1)
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
+    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
+  }
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+  return shuffled
+}
+
+function randomEntryPath(): EntryPath {
+  const origin = ENTRY_ORIGINS[Math.floor(Math.random() * ENTRY_ORIGINS.length)]
+  return {
+    x: `${origin.x}vw`,
+    y: `${origin.y}vh`,
+    angle: Math.random() * 6 - 3,
+  }
+}
 
 function isOptimizable(src: string) {
   try {
@@ -114,77 +93,65 @@ function isOptimizable(src: string) {
   }
 }
 
-/** Spreads the editor-chosen photos evenly through the portfolio ones so no single column hoards them. */
-function interleave<T>(featured: T[], rest: T[]): T[] {
-  if (featured.length === 0) return rest
-  const total = featured.length + rest.length
-  const featuredAt = new Set(featured.map((_, i) => Math.min(total - 1, Math.floor(((i + 0.5) * total) / featured.length))))
-  const result: T[] = []
-  let f = 0
-  let r = 0
-  for (let i = 0; i < total; i++) {
-    if (featuredAt.has(i) && f < featured.length) result.push(featured[f++])
-    else if (r < rest.length) result.push(rest[r++])
-    else result.push(featured[f++])
-  }
-  return result
-}
-
 export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: HeroText }) {
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
   const sectionRef = useRef<HTMLDivElement>(null)
   const reduceMotion = useReducedMotion()
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [cycleSeed, setCycleSeed] = useState(0)
+  const [entry, setEntry] = useState<EntryPath>(randomEntryPath)
 
-  // The server shuffles the portfolio on every request; the editor loads it too, so the canvas shows what visitors see.
   const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>("/api/portfolio/random", fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
     shouldRetryOnError: false,
   })
 
-  const { tiles, gallery } = useMemo(() => {
-    const featured = HERO_SLOT_LABELS.flatMap((label, i) => {
-      const photo = photos?.[i]
-      const src = photo?.src?.trim() || ""
-      return src ? [{ label, src, photo }] : []
+  const catalogPhotos = useMemo(() => {
+    const source = data?.photos?.length ? data.photos : photos ?? []
+    const seen = new Set<string>()
+    return source.filter((photo) => {
+      const src = photo.src?.trim()
+      if (!src || seen.has(src)) return false
+      seen.add(src)
+      return true
     })
-    const taken = new Set(featured.map((item) => item.src))
-    const portfolio = (data?.photos ?? []).flatMap((photo, i) =>
-      photo.src && !taken.has(photo.src) ? [{ label: `Portfolio ${i + 1}`, src: photo.src, photo }] : [],
-    )
-
-    const unique = interleave(featured, portfolio)
-    const galleryImages: LightboxImage[] = unique.map(({ label, src, photo }) => ({
-      src,
-      title: photo?.title || label.split("// ")[1] || "Purple Sector Visuals",
-      category: photo?.category || undefined,
-      shooter: photo?.shooter || null,
-      editedBy: photo?.editedBy || null,
-      camera: photo?.camera || null,
-      lens: photo?.lens || null,
-      settings: photo?.settings || null,
-    }))
-
-    // With a tiny library, repeat photos so the waves of flying photos never run dry.
-    const result: Tile[] = []
-    const count = unique.length === 0 ? 0 : Math.max(Math.min(unique.length, MAX_TILES), MIN_TILES)
-    for (let i = 0; i < count; i++) {
-      const item = unique[i % unique.length]
-      result.push({ key: `${item.src}-${i}`, label: item.label, src: item.src, photo: item.photo, galleryIndex: i % unique.length })
-    }
-    return { tiles: result, gallery: galleryImages }
   }, [data, photos])
-
-  const showSkeleton = tiles.length === 0 && isLoading
-
-  // False during SSR and hydration, true afterwards, so the random paths never cause a hydration mismatch.
-  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
-  const flyingCount = Math.min(tiles.length, MAX_TILES)
-  const paths = useMemo(
-    () => (mounted ? Array.from({ length: flyingCount }, (_, i) => randomTrajectory(i)) : []),
-    [mounted, flyingCount],
+  const queue = useMemo(
+    () => cycleSeed === 0 ? catalogPhotos : shuffleForCycle(catalogPhotos, cycleSeed),
+    [catalogPhotos, cycleSeed],
   )
+  const safeIndex = queue.length ? Math.min(activeIndex, queue.length - 1) : 0
+
+  useEffect(() => {
+    if (queue.length < 2) return
+    const timeout = window.setTimeout(() => {
+      setEntry(randomEntryPath())
+      if (safeIndex + 1 < queue.length) {
+        setActiveIndex(safeIndex + 1)
+      } else {
+        setCycleSeed(Math.floor(Math.random() * 2_147_483_646) + 1)
+        setActiveIndex(0)
+      }
+    }, PHOTO_DWELL_MS)
+    return () => window.clearTimeout(timeout)
+  }, [queue.length, safeIndex, cycleSeed])
+
+  const gallery = useMemo<LightboxImage[]>(() => queue.map((photo, index) => ({
+    src: photo.src ?? "",
+    title: photo.title || `Purple Sector Visuals · ${index + 1}`,
+    category: photo.category || undefined,
+    shooter: photo.shooter || null,
+    editedBy: photo.editedBy || null,
+    camera: photo.camera || null,
+    lens: photo.lens || null,
+    settings: photo.settings || null,
+  })), [queue])
+
+  const currentPhoto = queue[safeIndex]
+  const showSkeleton = queue.length === 0 && isLoading
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false)
 
   return (
     <div
@@ -194,63 +161,37 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
     >
       {showSkeleton ? (
         <div className={`absolute inset-0 m-auto aspect-[3/2] h-fit animate-pulse bg-zinc-800 ${TILE_WIDTH}`} role="status" aria-label="Loading photo" />
+      ) : currentPhoto?.src ? (
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={`${cycleSeed}-${safeIndex}-${currentPhoto.src}`}
+            className={`absolute inset-0 m-auto flex h-fit items-center justify-center ${TILE_WIDTH}`}
+            initial={mounted && !reduceMotion ? { x: entry.x, y: entry.y, rotate: entry.angle, scale: 0.96, opacity: 0 } : false}
+            animate={{ x: 0, y: 0, rotate: 0, scale: 1, opacity: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { x: entry.x, y: entry.y, rotate: -entry.angle, scale: 0.97, opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : TRANSITION_SECONDS, ease: MOTION_EASE }}
+          >
+            <LightboxTrigger images={gallery} startIndex={safeIndex} className="block w-full cursor-pointer">
+              <Image
+                src={currentPhoto.src}
+                alt={currentPhoto.title || currentPhoto.category || "Purple Sector Visuals portfolio photo"}
+                width={0}
+                height={0}
+                sizes="(min-width: 1024px) 42vw, (min-width: 640px) 64vw, 82vw"
+                unoptimized={!isOptimizable(currentPhoto.src)}
+                style={{ width: "100%", height: "auto", maxHeight: "68vh" }}
+                className="block h-auto w-full object-contain shadow-2xl shadow-black/60"
+              />
+            </LightboxTrigger>
+          </motion.div>
+        </AnimatePresence>
       ) : (
-        tiles.slice(0, MAX_TILES).map((tile, index) => {
-          const path = paths[index]
-          if (!path) return null
-          return (
-            <motion.div
-              key={tile.key}
-              className={`pointer-events-auto absolute inset-0 m-auto h-fit cursor-pointer will-change-transform ${TILE_WIDTH}`}
-              style={{ zIndex: index + 1 }}
-              initial={{ x: path.startX, y: path.startY, scale: SCALE_START, opacity: 0, rotate: path.tilt }}
-              animate={
-                reduceMotion
-                  ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
-                  : {
-                      x: [path.startX, path.endX],
-                      y: [path.startY, path.endY],
-                      scale: [SCALE_START, SCALE_END],
-                      opacity: [0, 1, 1, 0],
-                      rotate: path.tilt,
-                    }
-              }
-              transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : {
-                      duration: path.duration,
-                      delay: path.delay,
-                      ease: "linear",
-                      repeat: Infinity,
-                      opacity: { duration: path.duration, delay: path.delay, ease: "linear", repeat: Infinity, times: [0, 0.06, 0.85, 1] },
-                    }
-              }
-              whileHover={{ zIndex: 100, transition: { duration: 0 } }}
-            >
-              {/* Scale lives on an inner layer so the hover grow never fights the flight keyframes on the outer one. */}
-              <motion.div whileHover={{ scale: 1.05 }} transition={{ type: "spring", stiffness: 300, damping: 24 }}>
-                <LightboxTrigger images={gallery} startIndex={Math.max(tile.galleryIndex, 0)} className="block w-full cursor-pointer">
-                  <Image
-                    src={tile.src}
-                    alt={tile.photo?.title || tile.label}
-                    width={0}
-                    height={0}
-                    sizes="(min-width: 1024px) 18vw, (min-width: 768px) 26vw, 42vw"
-                    unoptimized={!isOptimizable(tile.src)}
-                    style={{ width: "100%", height: "auto" }}
-                    className="block h-auto w-full object-contain shadow-2xl shadow-black/60"
-                  />
-                </LightboxTrigger>
-              </motion.div>
-            </motion.div>
-          )
-        })
+        <p className="px-6 text-center text-sm text-zinc-500">Portfolio photos will appear here soon.</p>
       )}
 
       <div className="pointer-events-none absolute inset-0 z-40 bg-gradient-to-b from-black/30 via-transparent to-black/80" />
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8">
+      <div className="pointer-events-none absolute inset-x-0 bottom-6 z-50 flex flex-col items-center gap-2 px-4 text-center sm:bottom-8">
         <button
           type="button"
           onClick={(event) => {
@@ -276,7 +217,6 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
-            className="animate-bounce"
             aria-hidden="true"
           >
             <path d="M12 4v16m0 0l-6-6m6 6l6-6" strokeLinecap="round" strokeLinejoin="round" />
