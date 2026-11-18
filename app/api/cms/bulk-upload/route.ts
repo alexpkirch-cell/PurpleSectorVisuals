@@ -97,7 +97,7 @@ export async function POST(request: Request) {
   try {
     formData = await request.formData()
   } catch {
-    return NextResponse.json({ error: "Expected a multipart form with an images[] array." }, { status: 400 })
+    return NextResponse.json({ error: "Could not parse the multipart upload. Keep the full request under Vercel's 4.5 MB limit and use repeated images fields." }, { status: 400 })
   }
 
   const images = formData.getAll("images").filter((value): value is File => value instanceof File && value.size > 0)

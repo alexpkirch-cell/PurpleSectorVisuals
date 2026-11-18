@@ -49,7 +49,10 @@ type UploadResult = {
 }
 
 const MAX_FILES = 100
-const MAX_FILE_SIZE = 50 * 1024 * 1024
+const MAX_FILES_PER_REQUEST = 4
+// Reserve headroom below Vercel's 4.5 MB body ceiling for multipart boundaries and metadata.
+const MAX_REQUEST_BYTES = 4 * 1024 * 1024
+const MAX_FILE_SIZE = MAX_REQUEST_BYTES
 const EMPTY_EXIF: ExifData = {
   cameraBody: null,
   lens: null,
@@ -183,7 +186,7 @@ export function BulkUploadStager({
     if (!accepted.length) return
 
     const oversized = accepted.filter((file) => file.size > MAX_FILE_SIZE)
-    if (oversized.length) toast.error(`${oversized.length} image${oversized.length === 1 ? " is" : "s are"} over 50 MB and were skipped.`)
+    if (oversized.length) toast.error(`${oversized.length} image${oversized.length === 1 ? " is" : "s are"} over 4 MB and were skipped to stay under the upload request limit.`)
     const withinLimit = accepted.filter((file) => file.size <= MAX_FILE_SIZE)
     if (!withinLimit.length) return
 
@@ -299,6 +302,22 @@ export function BulkUploadStager({
       groups.set(key, [...(groups.get(key) ?? []), item])
     }
 
+    const chunks: StagedImage[][] = []
+    for (const group of groups.values()) {
+      let chunk: StagedImage[] = []
+      let chunkBytes = 0
+      for (const item of group) {
+        if (chunk.length >= MAX_FILES_PER_REQUEST || chunkBytes + item.file.size > MAX_REQUEST_BYTES) {
+          chunks.push(chunk)
+          chunk = []
+          chunkBytes = 0
+        }
+        chunk.push(item)
+        chunkBytes += item.file.size
+      }
+      if (chunk.length) chunks.push(chunk)
+    }
+
     setIsUploading(true)
     setUploadProgress({ done: 0, total: selectedWithExif.length })
     const uploadedIds = new Set<string>()
@@ -306,19 +325,16 @@ export function BulkUploadStager({
     let failedUploads = 0
     let completed = 0
 
-    for (const group of groups.values()) {
-      const metadata = group[0].metadata
+    for (const chunk of chunks) {
+      const metadata = chunk[0].metadata
       const formData = new FormData()
       formData.append("is_public_portfolio", String(metadata.isPublicPortfolio))
       if (metadata.galleryId) formData.append("gallery_id", metadata.galleryId)
-      if (metadata.packageType) {
-        formData.append("package_type", metadata.packageType)
-        formData.append("category", metadata.packageType)
-      }
+      if (metadata.packageType) formData.append("package_type", metadata.packageType)
       formData.append("shooter_ids", JSON.stringify(metadata.shooterIds))
       formData.append("editor_ids", JSON.stringify(metadata.editorIds))
-      formData.append("exif_data", JSON.stringify(group.map((item) => item.exif ?? EMPTY_EXIF)))
-      for (const item of group) formData.append("images", item.file, item.file.name)
+      formData.append("exif_data", JSON.stringify(chunk.map((item) => item.exif ?? EMPTY_EXIF)))
+      for (const item of chunk) formData.append("images", item.file, item.file.name)
 
       try {
         const response = await fetch("/api/cms/bulk-upload", { method: "POST", body: formData })
@@ -326,7 +342,7 @@ export function BulkUploadStager({
         if (!response.ok || !result.results) throw new Error(result.error || "Batch upload failed.")
 
         result.results.forEach((entry, index) => {
-          const source = group[index]
+          const source = chunk[index]
           if (!source) return
           if (entry.error) {
             failedUploads += 1
@@ -337,10 +353,10 @@ export function BulkUploadStager({
           }
         })
       } catch (error) {
-        failedUploads += group.length
+        failedUploads += chunk.length
         toast.error(error instanceof Error ? error.message : "Batch upload failed.")
       } finally {
-        completed += group.length
+        completed += chunk.length
         setUploadProgress({ done: completed, total: selected.length })
       }
     }
@@ -400,7 +416,7 @@ export function BulkUploadStager({
         >
           <ImagePlus className="size-7 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm font-medium text-foreground">Drag and drop images here</p>
-          <p className="text-xs text-muted-foreground">JPEG, PNG or WebP · up to 50 MB each · {MAX_FILES} images per batch</p>
+          <p className="text-xs text-muted-foreground">JPEG, PNG or WebP · up to 4 MB each · {MAX_FILES} images per staging batch</p>
           <input
             ref={inputRef}
             type="file"
