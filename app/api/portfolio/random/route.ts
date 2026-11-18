@@ -5,11 +5,12 @@ import { resolvePortfolioImageUrl } from "@/lib/portfolio-image-url"
 import { createClient } from "@/lib/supabase/server"
 import { PORTFOLIO_CATEGORIES, isPortfolioCategory, type PortfolioCategory } from "@/lib/portfolio-categories"
 
-const PHOTOS_PER_CATEGORY = 4
+const PHOTOS_PER_CATEGORY = 8
 const RECENCY_HALF_LIFE_DAYS = 365
 const MIN_RECENCY_WEIGHT = 0.12
 
 type RandomPhotoRow = {
+  id: string
   image_url: string
   title: string | null
   category: string
@@ -23,11 +24,11 @@ type RandomPhotoRow = {
   settings: string | null
 }
 
-const COLUMNS = "image_url, title, category, categories, created_at, shooter, shot_by, edited_by, camera, lens, settings"
+const COLUMNS = "id, image_url, title, category, categories, created_at, shooter, shot_by, edited_by, camera, lens, settings"
 
 async function queryPublicPortfolioRows(): Promise<RandomPhotoRow[]> {
   const { rows } = await sql<RandomPhotoRow>`
-    SELECT image_url, title, category, categories, created_at, shooter, shot_by, edited_by, camera, lens, settings
+    SELECT id, image_url, title, category, categories, created_at, shooter, shot_by, edited_by, camera, lens, settings
     FROM public.portfolio_items
     WHERE image_url IS NOT NULL AND image_url <> ''
     ORDER BY created_at DESC
@@ -103,6 +104,7 @@ export async function GET() {
       .map((row) => ({ row, src: resolvePortfolioImageUrl(row.image_url) }))
       .filter(({ src }) => src)
       .map(({ row, src }) => ({
+        id: row.id,
         src,
         title: row.title ?? undefined,
         category: row.categories?.[0],

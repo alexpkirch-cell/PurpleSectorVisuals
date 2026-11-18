@@ -27,6 +27,7 @@ export type HeroText = Partial<typeof HERO_TEXT_DEFAULTS>
 
 /** One hero photo plus the details shown in the lightbox when it is clicked. */
 export type HeroPhoto = {
+  id?: string
   src?: string
   title?: string
   category?: string
@@ -49,16 +50,21 @@ type Tile = {
 const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh)]"
 
 const MAX_TILES = 8
-const MIN_TILES = 6
 const GOLDEN_ANGLE = 137.508
-const SPAWN_BOX_VW = 15
-const SPAWN_BOX_VH = 15
 const MIN_DURATION = 35
 const DURATION_SPREAD = 20
 const SPAWN_STAGGER = 4
-const SCALE_START = 0.2
 const SCALE_END = 2.5
 const MAX_TILT = 6
+const SLOT_ZONES = [
+  { x: -28, y: -11, scaleStart: 0.5 },
+  { x: -10, y: -15, scaleStart: 0.62 },
+  { x: 10, y: -15, scaleStart: 0.62 },
+  { x: 28, y: -11, scaleStart: 0.5 },
+  { x: 0, y: 0, scaleStart: 0.78 },
+  { x: -25, y: 13, scaleStart: 0.58 },
+  { x: 25, y: 13, scaleStart: 0.58 },
+]
 
 type Trajectory = {
   startX: string
@@ -68,6 +74,7 @@ type Trajectory = {
   endX: string
   endY: string
   tilt: number
+  scaleStart: number
   delay: number
   duration: number
 }
@@ -77,13 +84,14 @@ const vw = (value: number) => `${value.toFixed(1)}vw`
 const vh = (value: number) => `${value.toFixed(1)}vh`
 
 /**
- * Each tile spawns at a random point inside a central box and flies outward from that point along its own angle
- * (angles walk the circle by the golden angle so tiles fan out to different edges). Speed and tilt are random
- * per tile; this uses Math.random, so it must only run on the client after hydration.
+ * Each tile starts in a viewport zone and drifts outward from that zone. Position jitter, angle, speed and tilt are
+ * randomized per tile; this uses Math.random, so it must only run on the client after hydration.
  */
 function randomTrajectory(index: number): Trajectory {
-  const startX = between(-SPAWN_BOX_VW, SPAWN_BOX_VW)
-  const startY = between(-SPAWN_BOX_VH, SPAWN_BOX_VH)
+  const fallbackX = Math.random() < 0.5 ? -30 : 30
+  const zone = SLOT_ZONES[index] ?? { x: fallbackX, y: 0, scaleStart: 0.58 }
+  const startX = zone.x + between(-2, 2)
+  const startY = zone.y + between(-1.5, 1.5)
   const angle = ((index * GOLDEN_ANGLE + between(-14, 14)) * Math.PI) / 180
   const reach = between(0.85, 1.2)
   const travelX = Math.cos(angle) * 58 * reach
@@ -97,6 +105,7 @@ function randomTrajectory(index: number): Trajectory {
     endX: vw(startX + travelX),
     endY: vh(startY + travelY),
     tilt: between(-MAX_TILT, MAX_TILT),
+    scaleStart: zone.scaleStart,
     delay: index * SPAWN_STAGGER,
     duration,
   }
@@ -128,11 +137,13 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
 
   const { tiles, gallery } = useMemo(() => {
     const source = data?.photos?.length ? data.photos : photos ?? []
-    const seen = new Set<string>()
+    const seenIds = new Set<string>()
+    const seenSources = new Set<string>()
     const unique = source.filter((photo) => {
       const src = photo.src?.trim()
-      if (!src || seen.has(src)) return false
-      seen.add(src)
+      if (!src || seenSources.has(src) || (photo.id && seenIds.has(photo.id))) return false
+      seenSources.add(src)
+      if (photo.id) seenIds.add(photo.id)
       return true
     })
     const galleryImages: LightboxImage[] = unique.map((photo, index) => ({
@@ -146,13 +157,12 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
       settings: photo.settings || null,
     }))
 
-    // With a tiny library, repeat photos so the waves of flying photos never run dry.
     const result: Tile[] = []
-    const count = unique.length === 0 ? 0 : Math.max(Math.min(unique.length, MAX_TILES), MIN_TILES)
+    const count = Math.min(unique.length, MAX_TILES)
     for (let i = 0; i < count; i++) {
-      const photo = unique[i % unique.length]
+      const photo = unique[i]
       const label = photo.title || photo.category || HERO_SLOT_LABELS[i % HERO_SLOT_LABELS.length]
-      result.push({ key: `${photo.src}-${i}`, label, src: photo.src ?? "", photo, galleryIndex: i % unique.length })
+      result.push({ key: `${photo.id ?? photo.src}-${i}`, label, src: photo.src ?? "", photo, galleryIndex: i })
     }
     return { tiles: result, gallery: galleryImages }
   }, [data, photos])
@@ -182,16 +192,17 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
           return (
             <motion.div
               key={tile.key}
+              data-portfolio-item-id={tile.photo?.id}
               className={`pointer-events-auto absolute inset-0 m-auto h-fit cursor-pointer will-change-transform ${TILE_WIDTH}`}
               style={{ zIndex: index + 1 }}
-              initial={{ x: path.startX, y: path.startY, scale: SCALE_START, opacity: 0, rotate: path.tilt }}
+              initial={{ x: path.startX, y: path.startY, scale: path.scaleStart, opacity: 0, rotate: path.tilt }}
               animate={
                 reduceMotion
                   ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
                   : {
                       x: [path.startX, path.endX],
                       y: [path.startY, path.endY],
-                      scale: [SCALE_START, SCALE_END],
+                      scale: [path.scaleStart, SCALE_END],
                       opacity: [0, 1, 1, 0],
                       rotate: path.tilt,
                     }
