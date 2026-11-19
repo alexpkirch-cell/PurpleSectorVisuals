@@ -27,6 +27,7 @@ export type HeroText = Partial<typeof HERO_TEXT_DEFAULTS>
 
 /** One hero photo plus the details shown in the lightbox when it is clicked. */
 export type HeroPhoto = {
+  id?: string
   src?: string
   title?: string
   category?: string
@@ -49,16 +50,21 @@ type Tile = {
 const TILE_WIDTH = "w-[min(42vw,30vh)] md:w-[min(26vw,30vh)] lg:w-[min(18vw,34vh)]"
 
 const MAX_TILES = 8
-const MIN_TILES = 6
 const GOLDEN_ANGLE = 137.508
-const SPAWN_BOX_VW = 15
-const SPAWN_BOX_VH = 15
 const MIN_DURATION = 35
 const DURATION_SPREAD = 20
 const SPAWN_STAGGER = 4
-const SCALE_START = 0.2
 const SCALE_END = 2.5
 const MAX_TILT = 6
+const SLOT_ZONES = [
+  { x: -28, y: -11, scaleStart: 0.5 },
+  { x: -10, y: -15, scaleStart: 0.62 },
+  { x: 10, y: -15, scaleStart: 0.62 },
+  { x: 28, y: -11, scaleStart: 0.5 },
+  { x: 0, y: 0, scaleStart: 0.78 },
+  { x: -25, y: 13, scaleStart: 0.58 },
+  { x: 25, y: 13, scaleStart: 0.58 },
+]
 
 type Trajectory = {
   startX: string
@@ -68,6 +74,7 @@ type Trajectory = {
   endX: string
   endY: string
   tilt: number
+  scaleStart: number
   delay: number
   duration: number
 }
@@ -77,13 +84,14 @@ const vw = (value: number) => `${value.toFixed(1)}vw`
 const vh = (value: number) => `${value.toFixed(1)}vh`
 
 /**
- * Each tile spawns at a random point inside a central box and flies outward from that point along its own angle
- * (angles walk the circle by the golden angle so tiles fan out to different edges). Speed and tilt are random
- * per tile; this uses Math.random, so it must only run on the client after hydration.
+ * Each tile starts in a viewport zone and drifts outward from that zone. Position jitter, angle, speed and tilt are
+ * randomized per tile; this uses Math.random, so it must only run on the client after hydration.
  */
 function randomTrajectory(index: number): Trajectory {
-  const startX = between(-SPAWN_BOX_VW, SPAWN_BOX_VW)
-  const startY = between(-SPAWN_BOX_VH, SPAWN_BOX_VH)
+  const fallbackX = Math.random() < 0.5 ? -30 : 30
+  const zone = SLOT_ZONES[index] ?? { x: fallbackX, y: 0, scaleStart: 0.58 }
+  const startX = zone.x + between(-2, 2)
+  const startY = zone.y + between(-1.5, 1.5)
   const angle = ((index * GOLDEN_ANGLE + between(-14, 14)) * Math.PI) / 180
   const reach = between(0.85, 1.2)
   const travelX = Math.cos(angle) * 58 * reach
@@ -97,13 +105,13 @@ function randomTrajectory(index: number): Trajectory {
     endX: vw(startX + travelX),
     endY: vh(startY + travelY),
     tilt: between(-MAX_TILT, MAX_TILT),
+    scaleStart: zone.scaleStart,
     delay: index * SPAWN_STAGGER,
     duration,
   }
 }
 
 const subscribeNoop = () => () => {}
-
 const fetcher = (url: string) => fetch(url).then((response) => response.json())
 
 function isOptimizable(src: string) {
@@ -114,29 +122,13 @@ function isOptimizable(src: string) {
   }
 }
 
-/** Spreads the editor-chosen photos evenly through the portfolio ones so no single column hoards them. */
-function interleave<T>(featured: T[], rest: T[]): T[] {
-  if (featured.length === 0) return rest
-  const total = featured.length + rest.length
-  const featuredAt = new Set(featured.map((_, i) => Math.min(total - 1, Math.floor(((i + 0.5) * total) / featured.length))))
-  const result: T[] = []
-  let f = 0
-  let r = 0
-  for (let i = 0; i < total; i++) {
-    if (featuredAt.has(i) && f < featured.length) result.push(featured[f++])
-    else if (r < rest.length) result.push(rest[r++])
-    else result.push(featured[f++])
-  }
-  return result
-}
-
 export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: HeroText }) {
   const copy = { ...HERO_TEXT_DEFAULTS, ...text }
   const isEditing = useEditMode()
   const sectionRef = useRef<HTMLDivElement>(null)
   const reduceMotion = useReducedMotion()
 
-  // The server shuffles the portfolio on every request; the editor loads it too, so the canvas shows what visitors see.
+  // The API shuffles the weighted public catalog per request; Puck photos only fill an empty catalog.
   const { data, isLoading } = useSWR<{ photos: HeroPhoto[] }>("/api/portfolio/random", fetcher, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
@@ -144,34 +136,33 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
   })
 
   const { tiles, gallery } = useMemo(() => {
-    const featured = HERO_SLOT_LABELS.flatMap((label, i) => {
-      const photo = photos?.[i]
-      const src = photo?.src?.trim() || ""
-      return src ? [{ label, src, photo }] : []
+    const source = data?.photos?.length ? data.photos : photos ?? []
+    const seenIds = new Set<string>()
+    const seenSources = new Set<string>()
+    const unique = source.filter((photo) => {
+      const src = photo.src?.trim()
+      if (!src || seenSources.has(src) || (photo.id && seenIds.has(photo.id))) return false
+      seenSources.add(src)
+      if (photo.id) seenIds.add(photo.id)
+      return true
     })
-    const taken = new Set(featured.map((item) => item.src))
-    const portfolio = (data?.photos ?? []).flatMap((photo, i) =>
-      photo.src && !taken.has(photo.src) ? [{ label: `Portfolio ${i + 1}`, src: photo.src, photo }] : [],
-    )
-
-    const unique = interleave(featured, portfolio)
-    const galleryImages: LightboxImage[] = unique.map(({ label, src, photo }) => ({
-      src,
-      title: photo?.title || label.split("// ")[1] || "Purple Sector Visuals",
-      category: photo?.category || undefined,
-      shooter: photo?.shooter || null,
-      editedBy: photo?.editedBy || null,
-      camera: photo?.camera || null,
-      lens: photo?.lens || null,
-      settings: photo?.settings || null,
+    const galleryImages: LightboxImage[] = unique.map((photo, index) => ({
+      src: photo.src ?? "",
+      title: photo.title || `Portfolio ${index + 1}`,
+      category: photo.category || undefined,
+      shooter: photo.shooter || null,
+      editedBy: photo.editedBy || null,
+      camera: photo.camera || null,
+      lens: photo.lens || null,
+      settings: photo.settings || null,
     }))
 
-    // With a tiny library, repeat photos so the waves of flying photos never run dry.
     const result: Tile[] = []
-    const count = unique.length === 0 ? 0 : Math.max(Math.min(unique.length, MAX_TILES), MIN_TILES)
+    const count = Math.min(unique.length, MAX_TILES)
     for (let i = 0; i < count; i++) {
-      const item = unique[i % unique.length]
-      result.push({ key: `${item.src}-${i}`, label: item.label, src: item.src, photo: item.photo, galleryIndex: i % unique.length })
+      const photo = unique[i]
+      const label = photo.title || photo.category || HERO_SLOT_LABELS[i % HERO_SLOT_LABELS.length]
+      result.push({ key: `${photo.id ?? photo.src}-${i}`, label, src: photo.src ?? "", photo, galleryIndex: i })
     }
     return { tiles: result, gallery: galleryImages }
   }, [data, photos])
@@ -201,16 +192,17 @@ export function HeroCarousel3D({ photos, text }: { photos?: HeroPhoto[]; text?: 
           return (
             <motion.div
               key={tile.key}
+              data-portfolio-item-id={tile.photo?.id}
               className={`pointer-events-auto absolute inset-0 m-auto h-fit cursor-pointer will-change-transform ${TILE_WIDTH}`}
               style={{ zIndex: index + 1 }}
-              initial={{ x: path.startX, y: path.startY, scale: SCALE_START, opacity: 0, rotate: path.tilt }}
+              initial={{ x: path.startX, y: path.startY, scale: path.scaleStart, opacity: 0, rotate: path.tilt }}
               animate={
                 reduceMotion
                   ? { x: path.midX, y: path.midY, scale: 1, opacity: 1, rotate: path.tilt }
                   : {
                       x: [path.startX, path.endX],
                       y: [path.startY, path.endY],
-                      scale: [SCALE_START, SCALE_END],
+                      scale: [path.scaleStart, SCALE_END],
                       opacity: [0, 1, 1, 0],
                       rotate: path.tilt,
                     }

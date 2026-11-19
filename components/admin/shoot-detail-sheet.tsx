@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import {
   Baby,
   CalendarPlus,
@@ -48,6 +48,7 @@ import { LinkifiedText } from "@/components/admin/linkified-text"
 import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
+import { clientVaultUrl, PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
@@ -273,11 +274,8 @@ export function ShootDetailSheet({
       ].join("|")
     : ""
 
-  const legacyVaultLink =
-    typeof window !== "undefined" ? `${window.location.origin}/shoot-vault` : "/shoot-vault"
-  const vaultLink =
-    shoot &&
-    (typeof window !== "undefined" ? `${window.location.origin}/vault/${shoot.vault_pin}` : `/vault/${shoot.vault_pin}`)
+  const legacyVaultLink = `${PUBLIC_SITE_ORIGIN}/shoot-vault`
+  const vaultLink = shoot?.vault_pin ? clientVaultUrl(shoot.vault_pin) : null
 
   async function handleSave() {
     if (!shoot) return

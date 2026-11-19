@@ -4,19 +4,9 @@ import { randomUUID } from "node:crypto"
 
 import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import { sql } from "@/lib/db"
+import { PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
-
-function appOrigin() {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (configured) {
-    const url = new URL(configured)
-    if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error("Invalid site URL")
-    return url.origin
-  }
-  const deployment = process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL
-  return deployment ? `https://${deployment}` : "http://localhost:3000"
-}
 
 export type RosterCheckoutResult =
   | { success: true; paid: true; url?: never }
@@ -118,7 +108,7 @@ export async function startRosterGalleryCheckout(playerId: string): Promise<Rost
     }
 
     if (!order) return { success: false, error: "Could not prepare this gallery checkout." }
-    const origin = appOrigin()
+    const origin = PUBLIC_SITE_ORIGIN
     const checkout = await stripe.checkout.sessions.create({
       ui_mode: "hosted_page",
       mode: "payment",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -15,7 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { calculateSplits } from "@/lib/splits"
+import { computeSettlement, SHOOTERS_POOL_PERCENT, EDITORS_POOL_PERCENT, ADMIN_POOL_PERCENT, HOUSE_POOL_PERCENT, type SettlementRole } from "@/lib/settlement"
+import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import { finalizeSettlement, type SettlementItem, type Shoot } from "@/app/actions/shoots"
 
 function formatCurrency(value: number) {
@@ -50,7 +51,24 @@ export function SettlementModal({
   const settledBasePrice = (Number(basePrice) || 0) + addonsTotal
   const settledTravelFee = Number(travelFee) || 0
   const finalAmount = settledBasePrice + settledTravelFee
-  const splits = calculateSplits({ basePrice: settledBasePrice, travelFee: settledTravelFee })
+  const splitPreview = useMemo(() => {
+    const lines = computeSettlement({
+      totalCollected: finalAmount,
+      driverReimbursement: settledTravelFee,
+      shooters: shoot ? shootersOf(shoot) : [],
+      editors: shoot ? editorsOf(shoot) : [],
+    })
+    const sum = (roles: SettlementRole[]) => lines
+      .filter((line) => roles.includes(line.role))
+      .reduce((total, line) => total + line.amount, 0)
+    return {
+      driver: sum(["Driver Reimbursement"]),
+      shooters: sum(["Lead Shooter", "Co-Lead Shooter", "Second Shooter"]),
+      editors: sum(["Editor"]),
+      admin: sum(["Admin"]),
+      house: sum(["House"]),
+    }
+  }, [shoot, finalAmount, settledTravelFee])
 
   function updateAddon(index: number, field: "label" | "amount", value: string) {
     setAddons((current) =>
@@ -183,19 +201,20 @@ export function SettlementModal({
               </div>
 
               <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Split preview
-                </span>
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Split preview</span>
                 <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                  <dt className="text-muted-foreground">Driver reimbursement</dt>
-                  <dd className="text-right text-foreground">{formatCurrency(splits.driverReimbursement)}</dd>
-                  <dt className="text-muted-foreground">Labor pool (60%)</dt>
-                  <dd className="text-right text-foreground">{formatCurrency(splits.laborPool)}</dd>
-                  <dt className="text-muted-foreground">House fund (30%)</dt>
-                  <dd className="text-right text-foreground">{formatCurrency(splits.houseFund)}</dd>
-                  <dt className="text-muted-foreground">Team pool (10%)</dt>
-                  <dd className="text-right text-foreground">{formatCurrency(splits.teamPool)}</dd>
+                  <dt className="text-muted-foreground">Driver reimbursement (off the top)</dt>
+                  <dd className="text-right text-foreground">{formatCurrency(splitPreview.driver)}</dd>
+                  <dt className="text-muted-foreground">Shooter pool ({SHOOTERS_POOL_PERCENT}%)</dt>
+                  <dd className="text-right text-foreground">{formatCurrency(splitPreview.shooters)}</dd>
+                  <dt className="text-muted-foreground">Editor pool ({EDITORS_POOL_PERCENT}%)</dt>
+                  <dd className="text-right text-foreground">{formatCurrency(splitPreview.editors)}</dd>
+                  <dt className="text-muted-foreground">Admin ({ADMIN_POOL_PERCENT}%)</dt>
+                  <dd className="text-right text-foreground">{formatCurrency(splitPreview.admin)}</dd>
+                  <dt className="text-muted-foreground">House reserve ({HOUSE_POOL_PERCENT}%)</dt>
+                  <dd className="text-right text-foreground">{formatCurrency(splitPreview.house)}</dd>
                 </dl>
+                <p className="text-[0.65rem] text-muted-foreground">Travel reimbursement is paid first; the percentage pools apply to the remaining net.</p>
               </div>
             </div>
 
