@@ -107,6 +107,9 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
       </div>
 
       {printNotice ? <p role="status" className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">{printNotice}</p> : null}
+      {!isLoading && photos && photos.length > 0 && printProducts.length === 0 ? (
+        <p role="status" className="text-xs text-muted-foreground">Print options are being prepared. Check back soon or contact the studio.</p>
+      ) : null}
 
       {isLoading ? (
         <div className="columns-2 gap-3 sm:columns-3 lg:columns-4" role="status" aria-label="Loading your photos">
@@ -142,16 +145,18 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
               className="h-auto max-h-[75vh] w-auto max-w-full object-contain"
             />
           )}
-          {openPhoto?.downloadUrl && (
+          {openPhoto && (
             <div className="flex flex-wrap justify-center gap-2">
-              <a
-                href={openPhoto.downloadUrl}
-                download={openPhoto.fileName}
-                className={buttonVariants({ variant: "outline" })}
-              >
-                <Download className="size-4" aria-hidden="true" />
-                Download original
-              </a>
+              {openPhoto.downloadUrl ? (
+                <a
+                  href={openPhoto.downloadUrl}
+                  download={openPhoto.fileName}
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  <Download className="size-4" aria-hidden="true" />
+                  Download original
+                </a>
+              ) : null}
               <Button
                 type="button"
                 variant="default"

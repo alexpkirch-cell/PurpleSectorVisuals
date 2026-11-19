@@ -3,11 +3,11 @@
 import { randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
-import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import type { StandardVaultPrintProduct } from "@/app/actions/vault-photos"
 import { requireAdmin } from "@/lib/require-admin"
 import { sql } from "@/lib/db"
 import { hasVaultSession } from "@/lib/vault-session"
+import { canViewDelivery } from "@/lib/vault-delivery"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
 import { createWhccConfiguredProducts, getWhccConfiguredProductStatuses } from "@/lib/whcc"
@@ -122,7 +122,9 @@ export async function startStandardVaultPrintCheckout(input: {
   if (!isUuid(input.vaultId) || !isUuid(input.checkoutKey) || !Array.isArray(input.items) || input.items.length < 1 || input.items.length > MAX_LINES) {
     return { success: false, error: "Select at least one print option and try again." }
   }
-  if (!(await hasVaultSession(input.vaultId))) return { success: false, error: "Your client vault session expired. Sign in again to order prints." }
+  if (!(await hasVaultSession(input.vaultId)) || !(await canViewDelivery(input.vaultId))) {
+    return { success: false, error: "Your client vault session expired or Final Delivery is not available yet." }
+  }
 
   const normalized = new Map<string, VaultPrintSelection>()
   for (const item of input.items) {
@@ -161,7 +163,7 @@ export async function startStandardVaultPrintCheckout(input: {
     const productIds = [...new Set(selections.map((item) => item.productId))]
     const photoIds = [...new Set(selections.map((item) => item.photoId))]
     const [{ rows: products }, { rows: photos }] = await Promise.all([
-      sql<StandardVaultPrintProduct>`
+      sql<StandardVaultPrintProductAdmin>`
         SELECT id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order
         FROM public.whcc_print_products
         WHERE is_active = true AND id = ANY(${productIds}::uuid[])
