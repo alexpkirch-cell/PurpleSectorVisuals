@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, ExternalLink } from "lucide-react"
 
 import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
 import { ClientCard } from "@/components/admin/client-card"
-import { ShootWorkspace } from "@/components/admin/shoot-workspace"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
+import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { STATUS_LABELS } from "@/lib/operations"
 
 function formatDate(value: string | null) {
@@ -21,6 +21,10 @@ function formatDate(value: string | null) {
 function amountOf(shoot: Shoot) {
   if (shoot.is_comped) return 0
   return Number(shoot.total_price ?? shoot.final_amount ?? shoot.base_price ?? 0) || 0
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
 }
 
 /** Unified CRM view: the Client Card on top and every shoot as an expandable, fully working workspace. */
@@ -41,8 +45,7 @@ export function ClientDashboard({
 }) {
   const router = useRouter()
   const [shoots, setShoots] = useState(initialShoots)
-  const [contactVersion, setContactVersion] = useState(0)
-  const [openIds, setOpenIds] = useState<string[]>(initialShoots[0] ? [initialShoots[0].id] : [])
+  const [workspaceShootId, setWorkspaceShootId] = useState<string | null>(null)
 
   const lifetimeSpend = useMemo(() => shoots.reduce((sum, shoot) => sum + amountOf(shoot), 0), [shoots])
 
@@ -54,8 +57,6 @@ export function ClientDashboard({
     setShoots((current) =>
       current.map((shoot) => ({ ...shoot, client_name: saved.name, client_email: saved.email, client_phone: saved.phone }))
     )
-    // Reopen the workspaces with the new contact details so none of them holds a stale copy.
-    setContactVersion((version) => version + 1)
     // The directory key follows the email, so a changed email means a new address for this page.
     if (saved.key !== clientKey) router.replace(`/admin/clients/${encodeURIComponent(saved.key)}`)
   }
@@ -83,52 +84,54 @@ export function ClientDashboard({
           <h2 id="client-shoots" className="font-heading text-lg font-medium text-foreground">
             Shoots &amp; Workspaces
           </h2>
-          <p className="text-xs text-muted-foreground">Expand a shoot to manage everything for it right here.</p>
+          <p className="text-xs text-muted-foreground">Open a shoot to view its workspace tabs.</p>
         </div>
 
-        <Accordion multiple value={openIds} onValueChange={(value) => setOpenIds(value as string[])} className="gap-3">
-          {shoots.map((shoot) => (
-            <AccordionItem
-              key={shoot.id}
-              value={shoot.id}
-              className="overflow-hidden rounded-xl border border-border bg-card/40"
-            >
-              <AccordionTrigger className="items-center rounded-none border-0 px-4 py-3 hover:bg-accent/30 hover:no-underline">
-                <span className="grid flex-1 grid-cols-2 items-center gap-x-4 gap-y-2 pr-3 sm:grid-cols-4">
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">Shoot</span>
-                    <span className="text-sm font-medium text-foreground">{shoot.shoot_type}</span>
-                  </span>
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">Date</span>
-                    <span className="text-sm text-foreground">{formatDate(shoot.shoot_date)}</span>
-                  </span>
-                  <span className="flex flex-col items-start gap-0.5">
-                    <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">Stage</span>
-                    <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                      {STATUS_LABELS[shoot.status] ?? shoot.status}
-                    </Badge>
-                  </span>
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">Vault PIN</span>
-                    <span className="font-mono text-sm tracking-widest text-foreground">{shoot.vault_pin ?? "Not created"}</span>
-                  </span>
-                </span>
-              </AccordionTrigger>
-              <AccordionContent className="border-t border-border px-4 py-5">
-                <ShootWorkspace
-                  key={`${shoot.id}-${contactVersion}`}
-                  embedded
-                  initialShoot={shoot}
-                  bookingTiers={bookingTiers}
-                  bookingAddons={bookingAddons}
-                  onChange={handleShootChange}
-                />
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
+        {shoots.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {shoots.map((shoot) => (
+              <li key={shoot.id} className="grid items-center gap-3 rounded-xl border border-border bg-card/40 p-4 sm:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1.2fr_1fr_0.8fr_auto]">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Shoot Type</span>
+                  <span className="truncate text-sm font-medium text-foreground">{shoot.shoot_type}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Date</span>
+                  <span className="text-sm text-foreground">{formatDate(shoot.shoot_date)}</span>
+                </div>
+                <div className="flex flex-col items-start gap-0.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Stage</span>
+                  <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
+                    {STATUS_LABELS[shoot.status] ?? shoot.status}
+                  </Badge>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Contract Total</span>
+                  <span className="text-sm tabular-nums text-foreground">{formatCurrency(amountOf(shoot))}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">Vault PIN</span>
+                  <span className="font-mono text-sm tracking-widest text-foreground">{shoot.vault_pin ?? "Not created"}</span>
+                </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setWorkspaceShootId(shoot.id)}>
+                  Open Shoot Workspace
+                  <ExternalLink data-icon="inline-end" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">No shoots are linked to this client yet.</p>
+        )}
       </section>
+
+      <ShootDetailSheet
+        shoot={shoots.find((item) => item.id === workspaceShootId) ?? null}
+        bookingTiers={bookingTiers}
+        bookingAddons={bookingAddons}
+        onOpenChange={(open) => !open && setWorkspaceShootId(null)}
+        onUpdated={handleShootChange}
+      />
     </div>
   )
 }

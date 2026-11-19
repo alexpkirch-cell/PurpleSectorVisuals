@@ -1,13 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { Download, DownloadCloud, Images } from "lucide-react"
+import { Download, DownloadCloud, Images, Printer } from "lucide-react"
 import useSWR from "swr"
 
-import { getDeliveryPhotos, type VaultPhotoView } from "@/app/actions/vault-photos"
-import { buttonVariants } from "@/components/ui/button"
+import { getDeliveryPhotos, type VaultDeliveryData, type VaultPhotoView } from "@/app/actions/vault-photos"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { StandardPrintOrderDialog } from "@/components/vault/portal/standard-print-order-dialog"
 
 // Signed URLs last an hour; refreshing well inside that keeps tiles and downloads working on a long visit.
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000
@@ -44,15 +45,18 @@ function PhotoTile({ photo, onOpen }: { photo: VaultPhotoView; onOpen: () => voi
   )
 }
 
-export function DeliveryTab({ vaultId }: { vaultId: string }) {
+export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNotice?: string | null }) {
   const [openId, setOpenId] = useState<string | null>(null)
+  const [printDialogOpen, setPrintDialogOpen] = useState(false)
+  const [presetPhotoId, setPresetPhotoId] = useState<string | null>(null)
 
-  const { data: photos, isLoading } = useSWR<VaultPhotoView[] | null>(
+  const { data: delivery, isLoading } = useSWR<VaultDeliveryData | null>(
     ["delivery-photos", vaultId],
     () => getDeliveryPhotos(vaultId),
     { refreshInterval: REFRESH_INTERVAL_MS, revalidateOnFocus: false }
   )
-
+  const photos = delivery?.photos ?? null
+  const printProducts = delivery?.printProducts ?? []
   const openPhoto = photos?.find((photo) => photo.id === openId) ?? null
 
   return (
@@ -75,16 +79,34 @@ export function DeliveryTab({ vaultId }: { vaultId: string }) {
         </div>
 
         {photos && photos.length > 0 && (
-          <a
-            href={`/api/vault-delivery/${vaultId}/zip`}
-            download
-            className={cn(buttonVariants({ size: "lg" }), "shrink-0")}
-          >
-            <DownloadCloud className="size-4" aria-hidden="true" />
-            Download All High-Res
-          </a>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              disabled={printProducts.length === 0}
+              onClick={() => {
+                setPresetPhotoId(null)
+                setPrintDialogOpen(true)
+              }}
+              className="shrink-0"
+            >
+              <Printer data-icon="inline-start" />
+              Order Prints
+            </Button>
+            <a
+              href={`/api/vault-delivery/${vaultId}/zip`}
+              download
+              className={cn(buttonVariants({ size: "lg" }), "shrink-0")}
+            >
+              <DownloadCloud className="size-4" aria-hidden="true" />
+              Download All High-Res
+            </a>
+          </div>
         )}
       </div>
+
+      {printNotice ? <p role="status" className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">{printNotice}</p> : null}
 
       {isLoading ? (
         <div className="columns-2 gap-3 sm:columns-3 lg:columns-4" role="status" aria-label="Loading your photos">
@@ -121,17 +143,48 @@ export function DeliveryTab({ vaultId }: { vaultId: string }) {
             />
           )}
           {openPhoto?.downloadUrl && (
-            <a
-              href={openPhoto.downloadUrl}
-              download={openPhoto.fileName}
-              className={buttonVariants({ variant: "outline" })}
-            >
-              <Download className="size-4" aria-hidden="true" />
-              Download original
-            </a>
+            <div className="flex flex-wrap justify-center gap-2">
+              <a
+                href={openPhoto.downloadUrl}
+                download={openPhoto.fileName}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <Download className="size-4" aria-hidden="true" />
+                Download original
+              </a>
+              <Button
+                type="button"
+                variant="default"
+                disabled={printProducts.length === 0}
+                onClick={() => {
+                  const photoId = openPhoto.id
+                  setOpenId(null)
+                  setPresetPhotoId(photoId)
+                  setPrintDialogOpen(true)
+                }}
+              >
+                <Printer data-icon="inline-start" />
+                Order Prints
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {printDialogOpen && photos ? (
+        <StandardPrintOrderDialog
+          key={presetPhotoId ?? "all-photos"}
+          vaultId={vaultId}
+          photos={photos}
+          products={printProducts}
+          open={printDialogOpen}
+          initialPhotoId={presetPhotoId}
+          onOpenChange={(open) => {
+            setPrintDialogOpen(open)
+            if (!open) setPresetPhotoId(null)
+          }}
+        />
+      ) : null}
     </section>
   )
 }

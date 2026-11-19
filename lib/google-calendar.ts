@@ -5,6 +5,7 @@ import { auth, calendar as createCalendarClient, type calendar_v3 } from "@googl
 import type { Shoot } from "@/app/actions/shoots"
 import { sql } from "@/lib/db"
 import { calendarEventDescription, calendarEventTitle, calendarEventWindow } from "@/lib/calendar-event"
+import { clientVaultUrl } from "@/lib/site-url"
 
 export type CalendarSyncResult =
   | { status: "created" | "updated"; eventId: string }
@@ -32,13 +33,6 @@ function calendarClient(config: NonNullable<ReturnType<typeof credentials>>) {
     subject: config.impersonate,
   })
   return createCalendarClient({ version: "v3", auth: jwt })
-}
-
-function siteUrl() {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return null
 }
 
 function errorStatus(error: unknown) {
@@ -74,8 +68,7 @@ export async function syncShootToGoogleCalendar(shootId: string): Promise<Calend
     const window = calendarEventWindow(shoot)
     if (!window) return { status: "skipped", reason: "no_date" }
 
-    const base = siteUrl()
-    const vaultUrl = shoot.vault_pin_code && base ? `${base}/vault/${shoot.vault_pin_code}` : null
+    const vaultUrl = shoot.vault_pin_code ? clientVaultUrl(shoot.vault_pin_code) : null
 
     const event: calendar_v3.Schema$Event = {
       summary: calendarEventTitle(shoot),

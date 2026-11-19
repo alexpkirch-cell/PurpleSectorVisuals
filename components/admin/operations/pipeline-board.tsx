@@ -24,9 +24,10 @@ import {
   type PipelineStage,
 } from "@/lib/operations"
 import { cn } from "@/lib/utils"
+import { CLIENT_VAULT_LOGIN_URL } from "@/lib/site-url"
 
 function vaultLoginUrl() {
-  return `${window.location.origin}/vault`
+  return CLIENT_VAULT_LOGIN_URL
 }
 
 async function copyToClipboard(text: string, successMessage: string) {

@@ -37,6 +37,7 @@ interface OperationsDashboardProps {
   monthLabel: string
   todayKey: string
   printQueue: ReactNode
+  printCatalog: ReactNode
 }
 
 export function OperationsDashboard({
@@ -47,6 +48,7 @@ export function OperationsDashboard({
   monthLabel,
   todayKey,
   printQueue,
+  printCatalog,
 }: OperationsDashboardProps) {
   const [shoots, setShoots] = useState<Shoot[]>(initialShoots)
   const [syncedFrom, setSyncedFrom] = useState(initialShoots)
@@ -162,6 +164,10 @@ export function OperationsDashboard({
       />
 
       <RollingCalendar shoots={activeShoots} todayKey={todayKey} onOpen={setSelectedShoot} />
+
+      {printCatalog}
+
+      {printCatalog}
 
       <section aria-labelledby="print-queue-heading" className="flex flex-col gap-3">
         <h2 id="print-queue-heading" className="font-heading text-base font-medium text-foreground">
