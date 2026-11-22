@@ -700,8 +700,8 @@ export async function finalizeSettlement(
     basePrice: number
     travelFee: number
     addons: SettlementItem[]
-    assignedShooter: string | null
-    assignedEditor: string | null
+    assignedShooters: AssignedShooter[]
+    assignedEditors: string[]
   },
 ): Promise<Shoot> {
   await requireAdmin()
@@ -725,8 +725,8 @@ export async function finalizeSettlement(
   await generateLedgerForShoot(id, {
     basePrice: settledBasePrice,
     travelFee: settledTravelFee,
-    assignedShooter: input.assignedShooter,
-    assignedEditor: input.assignedEditor,
+    assignedShooters: input.assignedShooters,
+    assignedEditors: input.assignedEditors,
   })
 
   revalidatePath("/admin")

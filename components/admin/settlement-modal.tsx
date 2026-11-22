@@ -94,8 +94,8 @@ export function SettlementModal({
         basePrice: Number(basePrice) || 0,
         travelFee: settledTravelFee,
         addons: addons.filter((item) => item.label.trim().length > 0),
-        assignedShooter: shoot.assigned_shooter,
-        assignedEditor: shoot.assigned_editor,
+        assignedShooters: shootersOf(shoot),
+        assignedEditors: editorsOf(shoot),
       })
       toast.success("Settlement finalized — shoot moved to Sent/Finished")
       onFinalized(updated)
