@@ -113,7 +113,7 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
 
   return (
     <div className="min-h-svh bg-[#09090b] text-zinc-100">
-      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-20 pt-8 sm:px-8 sm:pt-12">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-20 pt-28 sm:px-8 sm:pt-32">
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800 pb-6">
           <div className="flex flex-col gap-3">
             <Link href="/vault/roster" className="inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fuchsia-400">
