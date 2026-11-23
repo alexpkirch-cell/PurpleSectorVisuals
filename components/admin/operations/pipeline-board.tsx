@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -148,12 +149,14 @@ export function PipelineBoard({ shoots, onMove, onOpen, onDecline, onDelete, onG
                           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                             {stage.id === "awaiting_signature" && shoot.vault_pin && (
                               <>
-                                <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
-                                  <span className="text-xs text-muted-foreground">Client vault PIN</span>
-                                  <span className="font-mono text-lg font-semibold tracking-[0.3em] text-foreground">
-                                    {shoot.vault_pin}
-                                  </span>
-                                </DropdownMenuLabel>
+                                <DropdownMenuGroup>
+                                  <DropdownMenuLabel className="flex flex-col gap-0.5 font-normal">
+                                    <span className="text-xs text-muted-foreground">Client vault PIN</span>
+                                    <span className="font-mono text-lg font-semibold tracking-[0.3em] text-foreground">
+                                      {shoot.vault_pin}
+                                    </span>
+                                  </DropdownMenuLabel>
+                                </DropdownMenuGroup>
                                 <DropdownMenuItem onClick={() => copyToClipboard(shoot.vault_pin ?? "", "PIN copied")}>
                                   <KeyRound className="size-3.5" />
                                   Copy PIN
