@@ -36,6 +36,7 @@ interface VaultPortalProps {
   signedIp: string | null
   signatureHash: string | null
   initialProgress: VaultProgress
+  printNotice?: string | null
 }
 
 type PortalTab = "paperwork" | "prep" | "tracker" | "delivery"
@@ -57,6 +58,7 @@ export function VaultPortal({
   signedIp,
   signatureHash,
   initialProgress,
+  printNotice,
 }: VaultPortalProps) {
   // Polling keeps the tracker and the locked delivery tab in step with the admin's Kanban board.
   const { data: progress = initialProgress } = useSWR<VaultProgress | null>(
@@ -138,7 +140,7 @@ export function VaultPortal({
 
       {delivered && (
         <TabsContent value="delivery">
-          <DeliveryTab vaultId={vaultId} />
+          <DeliveryTab vaultId={vaultId} printNotice={printNotice} />
         </TabsContent>
       )}
     </Tabs>

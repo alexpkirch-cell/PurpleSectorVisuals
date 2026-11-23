@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { STATUS_LABELS } from "@/lib/operations"
+import { clientVaultUrl } from "@/lib/site-url"
 
 /**
  * Single-view dashboard for one client's shoot: editable overview and finances, the client's prep
@@ -70,7 +71,7 @@ export function ShootWorkspace({
           )}
           {shoot.vault_pin ? (
             <Link
-              href={`/vault/${shoot.vault_pin}`}
+              href={clientVaultUrl(shoot.vault_pin)}
               target="_blank"
               rel="noopener noreferrer"
               className={buttonVariants({ variant: "outline", size: "sm" })}

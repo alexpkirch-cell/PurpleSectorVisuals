@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { markLedgerEntryPaid, type LedgerSummaryRow } from "@/app/actions/ledger"
+import { markShootCreatorPayoutsPaid, type LedgerSummaryRow } from "@/app/actions/ledger"
 import { cn } from "@/lib/utils"
 
 function formatCurrency(value: number) {
@@ -25,16 +25,19 @@ const SHOOT_TYPE_LABELS: Record<string, string> = {
   event: "Commercial Event",
 }
 
-type SortKey = "date" | "clientName" | "packageLabel" | "totalInvoice" | "laborCut" | "houseCut" | "founderCut"
+type SortKey = "date" | "clientName" | "packageLabel" | "totalInvoice" | "shooterCut" | "editorCut" | "adminCut" | "houseCut" | "legacyLaborCut" | "legacyTeamPool"
 
 const COLUMNS: { key: SortKey; label: string; align?: "right" }[] = [
   { key: "date", label: "Date" },
   { key: "clientName", label: "Client" },
   { key: "packageLabel", label: "Package" },
   { key: "totalInvoice", label: "Total Invoice", align: "right" },
-  { key: "laborCut", label: "Labor Cut", align: "right" },
-  { key: "houseCut", label: "House Cut", align: "right" },
-  { key: "founderCut", label: "Founder Cut", align: "right" },
+  { key: "shooterCut", label: "Shooter 50%", align: "right" },
+  { key: "editorCut", label: "Editor 15%", align: "right" },
+  { key: "adminCut", label: "Admin 10%", align: "right" },
+  { key: "houseCut", label: "House 25%", align: "right" },
+  { key: "legacyLaborCut", label: "Legacy Labor", align: "right" },
+  { key: "legacyTeamPool", label: "Legacy Team Pool", align: "right" },
 ]
 
 export function LedgerTable({ initialEntries }: { initialEntries: LedgerSummaryRow[] }) {
@@ -64,13 +67,13 @@ export function LedgerTable({ initialEntries }: { initialEntries: LedgerSummaryR
   }
 
   async function handleTogglePaid(row: LedgerSummaryRow, paid: boolean) {
-    if (!row.laborEntryId) return
+    if (!row.hasCreatorPayouts) return
     const previous = entries
     setEntries((current) =>
       current.map((e) => (e.shootId === row.shootId ? { ...e, status: paid ? "PAID" : "PENDING" } : e)),
     )
     try {
-      await markLedgerEntryPaid(row.laborEntryId, paid)
+      await markShootCreatorPayoutsPaid(row.shootId, paid)
     } catch (error) {
       setEntries(previous)
       toast.error(error instanceof Error ? error.message : "Failed to update ledger entry")
@@ -88,7 +91,7 @@ export function LedgerTable({ initialEntries }: { initialEntries: LedgerSummaryR
 
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[820px] text-sm">
+      <table className="w-full min-w-[1320px] text-sm">
         <thead>
           <tr className="border-b border-border bg-accent/30">
             {COLUMNS.map((col) => (
@@ -136,17 +139,20 @@ export function LedgerTable({ initialEntries }: { initialEntries: LedgerSummaryR
               <td className="px-4 py-3 text-right font-semibold text-foreground">
                 {formatCurrency(row.totalInvoice)}
               </td>
-              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.laborCut)}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.shooterCut)}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.editorCut)}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.adminCut)}</td>
               <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.houseCut)}</td>
-              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.founderCut)}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.legacyLaborCut)}</td>
+              <td className="px-4 py-3 text-right text-muted-foreground">{formatCurrency(row.legacyTeamPool)}</td>
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1.5">
-                  <span className="text-xs text-muted-foreground">Paid</span>
+                  <span className="text-xs text-muted-foreground">Creator payouts paid</span>
                   <Switch
                     checked={row.status === "PAID"}
-                    disabled={!row.laborEntryId}
+                    disabled={!row.hasCreatorPayouts}
                     onCheckedChange={(checked) => handleTogglePaid(row, checked)}
-                    aria-label={`Mark ${row.clientName}'s labor cut as paid`}
+                    aria-label={`Mark ${row.clientName}'s shooter and editor payouts as paid`}
                   />
                 </div>
               </td>

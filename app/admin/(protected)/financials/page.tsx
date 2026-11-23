@@ -25,9 +25,10 @@ export default async function FinancialsPage() {
 
   const cards = [
     { label: "Gross Revenue", value: summary.grossRevenue },
+    { label: "Creator Payouts Paid", value: summary.totalCreatorPayoutsPaid },
+    { label: "Admin Allocation", value: summary.adminPool },
     { label: "House Fund Health", value: summary.houseFundHealth },
-    { label: "Total Labor Paid", value: summary.totalLaborPaid },
-    { label: "Founder Pool", value: summary.founderPool },
+    { label: "Legacy Team Pool", value: summary.legacyTeamPool },
   ]
 
   return (
@@ -35,11 +36,11 @@ export default async function FinancialsPage() {
       <div>
         <h1 className="font-heading text-2xl font-medium text-foreground">Financials & Ledger</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Studio-wide revenue and the automatic split across labor, house, and founder pool.
+          Studio-wide revenue and the 50% shooter / 15% editor / 10% admin / 25% house allocation.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => (
           <div key={card.label} className="rounded-lg border border-border bg-card px-4 py-3">
             <p className="text-xs text-muted-foreground">{card.label}</p>
@@ -63,7 +64,7 @@ export default async function FinancialsPage() {
       <div>
         <h2 className="mb-3 font-heading text-sm font-medium text-foreground">Business Expenses</h2>
         <p className="mb-3 text-sm text-muted-foreground">
-          Log spend against the 60/30/10 split&apos;s three funds and see what&apos;s still available in each.
+          Log creator, admin, house, or legacy team-pool expenses and see what remains in each allocation.
         </p>
         <FinancialLedger buckets={buckets} initialExpenses={expenses} />
       </div>

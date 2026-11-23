@@ -26,7 +26,7 @@ function Stat({ icon: Icon, label, value }: { icon: typeof Wallet; label: string
         <Icon className="size-3.5" aria-hidden="true" />
         {label}
       </dt>
-      <dd className="font-heading text-2xl font-medium text-foreground tabular-nums">{value}</dd>
+      <dd className="font-heading text-xl font-medium text-foreground tabular-nums">{value}</dd>
     </div>
   )
 }
@@ -77,7 +77,7 @@ export function ClientCard({
   }
 
   return (
-    <section aria-labelledby="client-card" className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 sm:p-6">
+    <section aria-labelledby="client-card" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-col gap-1">
         <p className="text-xs tracking-wider text-muted-foreground uppercase">Client Master Profile</p>
         <h1 id="client-card" className="font-heading text-2xl font-medium text-foreground">
@@ -120,7 +120,7 @@ export function ClientCard({
         <Label htmlFor="card-notes">Relationship notes</Label>
         <Textarea
           id="card-notes"
-          rows={4}
+          rows={2}
           value={values.relationshipNotes}
           onChange={(e) => update("relationshipNotes", e.target.value)}
           placeholder="Preferences, family details, how they found you, past conversations, things to remember..."

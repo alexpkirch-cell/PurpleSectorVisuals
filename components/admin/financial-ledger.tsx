@@ -24,8 +24,9 @@ import {
 
 const CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   payout: "Creator Payout",
-  marketing: "Marketing",
-  opex: "OpEx & Business",
+  admin: "Admin",
+  marketing: "Legacy Team Pool",
+  opex: "House / OpEx",
 }
 
 function formatCurrency(value: number) {
@@ -57,7 +58,7 @@ export function FinancialLedger({
   buckets,
   initialExpenses,
 }: {
-  buckets: { creatorPayouts: FundBucket; opex: FundBucket; marketing: FundBucket }
+  buckets: { creatorPayouts: FundBucket; admin: FundBucket; opex: FundBucket; marketing: FundBucket }
   initialExpenses: Expense[]
 }) {
   const [expenses, setExpenses] = useState(initialExpenses)
@@ -117,8 +118,9 @@ export function FinancialLedger({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <FundCard bucket={buckets.creatorPayouts} />
+        <FundCard bucket={buckets.admin} />
         <FundCard bucket={buckets.opex} />
         <FundCard bucket={buckets.marketing} />
       </div>

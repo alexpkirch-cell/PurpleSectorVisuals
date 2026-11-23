@@ -24,6 +24,17 @@ export interface VaultPhotoView {
   downloadUrl: string | null
 }
 
+export interface StandardVaultPrintProduct {
+  id: string
+  name: string
+  price_cents: number
+}
+
+export interface VaultDeliveryData {
+  photos: VaultPhotoView[]
+  printProducts: StandardVaultPrintProduct[]
+}
+
 interface VaultPhotoRow {
   id: string
   bucket: string
@@ -192,7 +203,16 @@ export async function deleteVaultPhoto(photoId: string): Promise<void> {
  * The client's final photos. Only available to the vault's signed-in client once the shoot is
  * Delivered & Settled (admins can preview at any stage).
  */
-export async function getDeliveryPhotos(vaultId: string): Promise<VaultPhotoView[] | null> {
+export async function getDeliveryPhotos(vaultId: string): Promise<VaultDeliveryData | null> {
   if (!(await canViewDelivery(vaultId))) return null
-  return toPhotoViews(await selectVaultPhotos(vaultId))
+  const [photoRows, printProducts] = await Promise.all([
+    selectVaultPhotos(vaultId),
+    sql<StandardVaultPrintProduct>`
+      SELECT id, name, price_cents
+      FROM public.whcc_print_products
+      WHERE is_active = true
+      ORDER BY sort_order ASC, name ASC
+    `.then((result) => result.rows),
+  ])
+  return { photos: await toPhotoViews(photoRows), printProducts }
 }

@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { createClient } from "@/lib/supabase/server"
-import { calculateSplits } from "@/lib/splits"
+import { computeSettlement, type AssignedShooter, type SettlementRole } from "@/lib/settlement"
 
-export type LedgerRole = "driver" | "labor" | "house" | "team_pool"
+export type LedgerRole = "driver" | "shooter" | "editor" | "admin" | "house" | "team_pool" | "labor"
 export type LedgerStatus = "PENDING" | "PAID"
 
 export interface LedgerEntry {
@@ -65,43 +65,47 @@ export async function listAllLedgerEntries(): Promise<LedgerEntryWithShoot[]> {
   return rows
 }
 
-/**
- * Generates the per-recipient settlement ledger for a shoot from calculateSplits().
- * Re-generating (e.g. after a price edit) replaces PENDING rows but leaves
- * anything already marked PAID untouched, so a completed payout is never overwritten.
- */
+/** Replaces pending settlement rows with the same 50/15/10/25 allocations shown in the final-settlement preview. */
 export async function generateLedgerForShoot(
   shootId: string,
   input: {
     basePrice: number
     travelFee: number
-    assignedShooter: string | null
-    assignedEditor: string | null
+    assignedShooters?: AssignedShooter[]
+    assignedEditors?: string[]
+    assignedShooter?: string | null
+    assignedEditor?: string | null
   },
 ): Promise<LedgerEntry[]> {
   await requireAdmin()
 
-  const splits = calculateSplits({ basePrice: input.basePrice, travelFee: input.travelFee })
+  const shooters = input.assignedShooters ?? (input.assignedShooter ? [{ name: input.assignedShooter, role: "lead" as const }] : [])
+  const editors = input.assignedEditors ?? (input.assignedEditor ? [input.assignedEditor] : [])
+  const lines = computeSettlement({
+    totalCollected: (Number(input.basePrice) || 0) + (Number(input.travelFee) || 0),
+    driverReimbursement: Number(input.travelFee) || 0,
+    shooters,
+    editors,
+  })
+
+  const ledgerRole = (role: SettlementRole): LedgerRole => {
+    switch (role) {
+      case "Driver Reimbursement": return "driver"
+      case "Lead Shooter":
+      case "Co-Lead Shooter":
+      case "Second Shooter": return "shooter"
+      case "Editor": return "editor"
+      case "Admin": return "admin"
+      case "House": return "house"
+    }
+  }
 
   await sql`DELETE FROM ledger_entries WHERE shoot_id = ${shootId} AND status = 'PENDING'`
 
-  const laborRecipient =
-    [input.assignedShooter, input.assignedEditor].filter(Boolean).join(" & ") || "Unassigned crew"
-
-  const rowsToInsert: { recipient: string; role: LedgerRole; amount: number }[] = [
-    { recipient: laborRecipient, role: "labor", amount: splits.laborPool },
-    { recipient: "House fund", role: "house", amount: splits.houseFund },
-    { recipient: "Team pool", role: "team_pool", amount: splits.teamPool },
-  ]
-
-  if (splits.driverReimbursement > 0) {
-    rowsToInsert.push({ recipient: "Driver reimbursement", role: "driver", amount: splits.driverReimbursement })
-  }
-
-  for (const row of rowsToInsert) {
+  for (const line of lines) {
     await sql`
       INSERT INTO ledger_entries (shoot_id, recipient, role, amount)
-      VALUES (${shootId}, ${row.recipient}, ${row.role}, ${row.amount})
+      VALUES (${shootId}, ${line.recipient_name}, ${ledgerRole(line.role)}, ${line.amount})
     `
   }
 
@@ -124,32 +128,42 @@ export async function markLedgerEntryPaid(id: string, paid: boolean) {
   revalidatePath("/admin/financials")
 }
 
+export async function markShootCreatorPayoutsPaid(shootId: string, paid: boolean) {
+  await requireAdmin()
+  await sql`
+    UPDATE ledger_entries
+    SET status = ${paid ? "PAID" : "PENDING"}, paid_at = ${paid ? new Date().toISOString() : null}
+    WHERE shoot_id = ${shootId} AND role IN ('shooter', 'editor', 'labor')
+  `
+  revalidatePath("/admin")
+  revalidatePath("/admin/financials")
+}
+
 export interface FinancialsSummary {
   grossRevenue: number
   houseFundHealth: number
-  totalLaborPaid: number
-  founderPool: number
+  totalCreatorPayoutsPaid: number
+  adminPool: number
+  legacyTeamPool: number
 }
 
-/**
- * Gross revenue is every dollar ever settled (labor + house + founder pool +
- * driver reimbursement combined); house/founder pool are retained the moment
- * a shoot settles, while labor is only "paid" once marked PAID in the ledger.
- */
+/** Retained buckets count when settled; shooter and editor payouts count once marked PAID. */
 export async function getFinancialsSummary(): Promise<FinancialsSummary> {
   await requireAdmin()
 
   const { rows } = await sql<{
     gross_revenue: string
     house_fund_health: string
-    total_labor_paid: string
-    founder_pool: string
+    creator_payouts_paid: string
+    admin_pool: string
+    legacy_team_pool: string
   }>`
     SELECT
       COALESCE(SUM(amount), 0) AS gross_revenue,
       COALESCE(SUM(amount) FILTER (WHERE role = 'house'), 0) AS house_fund_health,
-      COALESCE(SUM(amount) FILTER (WHERE role = 'labor' AND status = 'PAID'), 0) AS total_labor_paid,
-      COALESCE(SUM(amount) FILTER (WHERE role = 'team_pool'), 0) AS founder_pool
+      COALESCE(SUM(amount) FILTER (WHERE role IN ('shooter','editor','labor') AND status = 'PAID'), 0) AS creator_payouts_paid,
+      COALESCE(SUM(amount) FILTER (WHERE role = 'admin'), 0) AS admin_pool,
+      COALESCE(SUM(amount) FILTER (WHERE role = 'team_pool'), 0) AS legacy_team_pool
     FROM ledger_entries
   `
 
@@ -158,8 +172,9 @@ export async function getFinancialsSummary(): Promise<FinancialsSummary> {
   return {
     grossRevenue: Number(row?.gross_revenue ?? 0),
     houseFundHealth: Number(row?.house_fund_health ?? 0),
-    totalLaborPaid: Number(row?.total_labor_paid ?? 0),
-    founderPool: Number(row?.founder_pool ?? 0),
+    totalCreatorPayoutsPaid: Number(row?.creator_payouts_paid ?? 0),
+    adminPool: Number(row?.admin_pool ?? 0),
+    legacyTeamPool: Number(row?.legacy_team_pool ?? 0),
   }
 }
 
@@ -182,7 +197,7 @@ export async function getRevenueByPackage(): Promise<RevenueByPackage[]> {
   return rows.map((r) => ({ package: r.shoot_type, revenue: Number(r.revenue) }))
 }
 
-export type ExpenseCategory = "payout" | "marketing" | "opex"
+export type ExpenseCategory = "payout" | "admin" | "marketing" | "opex"
 
 export interface Expense {
   id: string
@@ -237,13 +252,10 @@ export interface FundBucket {
   available: number
 }
 
-/**
- * The 60/30/10 split's three funds as spendable balances: every dollar the
- * ledger has ever allocated to that role, minus every expense logged against
- * its matching category. Mirrors calculateSplits()'s labor/house/team_pool roles.
- */
+/** Spendable reporting buckets for the current 50/15/10/25 ledger plus retained legacy allocations. */
 export async function getFundBuckets(): Promise<{
   creatorPayouts: FundBucket
+  admin: FundBucket
   opex: FundBucket
   marketing: FundBucket
 }> {
@@ -264,16 +276,17 @@ export async function getFundBuckets(): Promise<{
   const spent: Record<string, number> = {}
   for (const row of spentRows) spent[row.category] = Number(row.total)
 
-  function bucket(label: string, roleKey: LedgerRole, categoryKey: ExpenseCategory): FundBucket {
-    const total = allocated[roleKey] ?? 0
-    const used = spent[categoryKey] ?? 0
+  function bucket(label: string, roles: LedgerRole[], category: ExpenseCategory): FundBucket {
+    const total = roles.reduce((sum, role) => sum + (allocated[role] ?? 0), 0)
+    const used = spent[category] ?? 0
     return { label, allocated: total, spent: used, available: total - used }
   }
 
   return {
-    creatorPayouts: bucket("Creator Payouts (60%)", "labor", "payout"),
-    opex: bucket("OpEx & Business (30%)", "house", "opex"),
-    marketing: bucket("Marketing Fund (10%)", "team_pool", "marketing"),
+    creatorPayouts: bucket("Shooter & Editor Payouts", ["shooter", "editor", "labor"], "payout"),
+    admin: bucket("Admin Allocation (10%)", ["admin"], "admin"),
+    opex: bucket("House Reserve (25%)", ["house"], "opex"),
+    marketing: bucket("Legacy Team Pool", ["team_pool"], "marketing"),
   }
 }
 
@@ -283,14 +296,17 @@ export interface LedgerSummaryRow {
   clientName: string
   packageLabel: string
   totalInvoice: number
-  laborCut: number
+  shooterCut: number
+  editorCut: number
+  adminCut: number
   houseCut: number
-  founderCut: number
+  legacyLaborCut: number
+  legacyTeamPool: number
   status: LedgerStatus
-  laborEntryId: string | null
+  hasCreatorPayouts: boolean
 }
 
-/** One row per finalized shoot, aggregating its ledger entries by role. */
+/** One row per finalized shoot, with current split roles separated and legacy rows preserved. */
 export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
   await requireAdmin()
 
@@ -302,11 +318,14 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
     final_amount: string | null
     base_price: string
     travel_fee: string
-    labor_amount: string | null
-    house_amount: string | null
-    team_pool_amount: string | null
-    labor_status: string | null
-    labor_entry_id: string | null
+    shooter_amount: string
+    editor_amount: string
+    admin_amount: string
+    house_amount: string
+    legacy_labor_amount: string
+    legacy_team_pool_amount: string
+    creator_payout_count: number
+    creator_payouts_paid: boolean | null
   }>`
     SELECT
       s.id AS shoot_id,
@@ -316,11 +335,14 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
       s.final_amount,
       s.base_price,
       s.travel_fee,
-      MAX(CASE WHEN le.role = 'labor' THEN le.amount END) AS labor_amount,
-      MAX(CASE WHEN le.role = 'house' THEN le.amount END) AS house_amount,
-      MAX(CASE WHEN le.role = 'team_pool' THEN le.amount END) AS team_pool_amount,
-      MAX(CASE WHEN le.role = 'labor' THEN le.status END) AS labor_status,
-      MAX(CASE WHEN le.role = 'labor' THEN le.id::text END) AS labor_entry_id
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'shooter'), 0) AS shooter_amount,
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'editor'), 0) AS editor_amount,
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'admin'), 0) AS admin_amount,
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'house'), 0) AS house_amount,
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'labor'), 0) AS legacy_labor_amount,
+      COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'team_pool'), 0) AS legacy_team_pool_amount,
+      COUNT(*) FILTER (WHERE le.role IN ('shooter','editor','labor'))::int AS creator_payout_count,
+      BOOL_AND(le.status = 'PAID') FILTER (WHERE le.role IN ('shooter','editor','labor')) AS creator_payouts_paid
     FROM shoots s
     JOIN ledger_entries le ON le.shoot_id = s.id
     GROUP BY s.id, s.created_at, s.client_name, s.shoot_type, s.final_amount, s.base_price, s.travel_fee
@@ -333,10 +355,13 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
     clientName: r.client_name,
     packageLabel: r.shoot_type,
     totalInvoice: Number(r.final_amount ?? Number(r.base_price) + Number(r.travel_fee)),
-    laborCut: Number(r.labor_amount ?? 0),
+    shooterCut: Number(r.shooter_amount ?? 0),
+    editorCut: Number(r.editor_amount ?? 0),
+    adminCut: Number(r.admin_amount ?? 0),
     houseCut: Number(r.house_amount ?? 0),
-    founderCut: Number(r.team_pool_amount ?? 0),
-    status: (r.labor_status as LedgerStatus) ?? "PENDING",
-    laborEntryId: r.labor_entry_id,
+    legacyLaborCut: Number(r.legacy_labor_amount ?? 0),
+    legacyTeamPool: Number(r.legacy_team_pool_amount ?? 0),
+    status: r.creator_payouts_paid && r.creator_payout_count > 0 ? "PAID" : "PENDING",
+    hasCreatorPayouts: r.creator_payout_count > 0,
   }))
 }

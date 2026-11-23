@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { Clock } from "lucide-react"
 
 import { lookupVaultByPin } from "@/app/actions/vault-pin"
+import { confirmStandardVaultPrintCheckout } from "@/app/actions/standard-vault-print"
 import { BlooperReel } from "@/components/vault/blooper-reel"
 import { VaultPortal } from "@/components/vault/portal/vault-portal"
 import { VaultGate } from "@/components/vault/vault-gate"
@@ -34,8 +35,8 @@ function isPin(token: string) {
   return /^\d{4,6}$/.test(token)
 }
 
-export default async function VaultTokenPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params
+export default async function VaultTokenPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ print_session_id?: string; print_cancelled?: string }> }) {
+  const [{ token }, query] = await Promise.all([params, searchParams])
 
   if (!isPin(token)) {
     redirect("/vault")
@@ -78,6 +79,17 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
     )
   }
 
+  let printNotice: string | null = null
+  if (query.print_session_id) {
+    const result = await confirmStandardVaultPrintCheckout(vault.id, query.print_session_id)
+    if (result === "submitted") printNotice = "Your print order has been submitted to WHCC. A shipping update will be sent to your checkout email."
+    else if (result === "test_paid") printNotice = "Test payment confirmed. No print order was sent to WHCC."
+    else if (result === "processing") printNotice = "Payment received. Your print order is processing and will be submitted shortly."
+    else printNotice = "We couldn’t verify the print checkout. If you were charged, contact the studio."
+  } else if (query.print_cancelled === "1") {
+    printNotice = "Checkout was canceled. No payment was taken."
+  }
+
   return (
     <VaultShell heading={`Welcome, ${vault.clientName}`}>
       <VaultPortal
@@ -104,6 +116,7 @@ export default async function VaultTokenPage({ params }: { params: Promise<{ tok
           countersignature: vault.countersignature,
           countersignedAt: vault.countersignedAt,
         }}
+        printNotice={printNotice}
       />
     </VaultShell>
   )

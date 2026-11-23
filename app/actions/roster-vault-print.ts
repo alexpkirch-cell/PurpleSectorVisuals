@@ -2,6 +2,7 @@
 
 import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import { sql } from "@/lib/db"
+import { PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
 import { createWhccConfiguredProducts, getWhccConfiguredProductStatuses } from "@/lib/whcc"
@@ -23,17 +24,6 @@ export type RosterPrintSelection = {
 export type RosterPrintCheckoutResult =
   | { success: true; url: string }
   | { success: false; error: string }
-
-function appOrigin() {
-  const configured = process.env.NEXT_PUBLIC_SITE_URL?.trim()
-  if (configured) {
-    const url = new URL(configured)
-    if (url.protocol !== "https:" && url.hostname !== "localhost") throw new Error("Invalid site URL")
-    return url.origin
-  }
-  const deployment = process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL
-  return deployment ? `https://${deployment}` : "http://localhost:3000"
-}
 
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -228,7 +218,7 @@ export async function startRosterPrintCheckout(input: {
       `
     }
 
-    const origin = appOrigin()
+    const origin = PUBLIC_SITE_ORIGIN
     const stripe = getStripeClient()
     const checkout = await stripe.checkout.sessions.create({
       ui_mode: "hosted_page",
