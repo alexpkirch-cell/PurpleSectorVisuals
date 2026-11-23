@@ -23,7 +23,7 @@ export async function advanceShootToBooked(shootId: string) {
       status = 'booked_paid',
       client_signed_at = COALESCE(client_signed_at, now())
     WHERE id = ${shootId}
-      AND status IN ('new_inquiry', 'in_discussion', 'awaiting_signature')
+      AND status IN ('new_inquiry', 'in_discussion', 'awaiting_signature', 'booked')
     RETURNING id
   `
   if (rows.length === 0) return false

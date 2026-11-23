@@ -8,6 +8,7 @@ export type StageId =
   | "booked"
   | "culling"
   | "color_grading"
+  | "ready_for_delivery"
   | "delivered_settled"
 
 export interface PipelineStage {
@@ -44,9 +45,9 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
   },
   {
     id: "booked",
-    label: "Booked & Paid",
-    hint: "Signed, paid, and on the calendar",
-    statuses: ["booked_paid"],
+    label: "Booked",
+    hint: "Confirmed sessions on the calendar",
+    statuses: ["booked", "booked_paid"],
     dropStatus: "booked_paid",
   },
   {
@@ -64,6 +65,13 @@ export const PIPELINE_STAGES: readonly PipelineStage[] = [
     dropStatus: "color_grading",
   },
   {
+    id: "ready_for_delivery",
+    label: "Ready for Delivery",
+    hint: "Finished photos are ready; collect any remaining balance",
+    statuses: ["ready_for_delivery"],
+    dropStatus: "ready_for_delivery",
+  },
+  {
     id: "delivered_settled",
     label: "Delivered & Settled",
     hint: "Gallery released, payouts recorded",
@@ -76,9 +84,11 @@ export const STATUS_LABELS: Record<ShootStatus, string> = {
   new_inquiry: "New Inquiry",
   in_discussion: "Quote & Documents",
   awaiting_signature: "Awaiting Signature & Retainer",
+  booked: "Booked",
   booked_paid: "Booked & Paid",
   culling: "Culling",
   color_grading: "Color Grading",
+  ready_for_delivery: "Ready for Delivery",
   delivered_settled: "Delivered & Settled",
   declined: "Declined",
 }
@@ -86,14 +96,14 @@ export const STATUS_LABELS: Record<ShootStatus, string> = {
 const POST_PRODUCTION_STATUSES: readonly ShootStatus[] = ["culling", "color_grading"]
 
 const CONFIRMED_STATUSES: readonly ShootStatus[] = [
+  "booked",
   "booked_paid",
   ...POST_PRODUCTION_STATUSES,
+  "ready_for_delivery",
   "delivered_settled",
 ]
 
 const LEAD_STATUSES: readonly ShootStatus[] = ["new_inquiry", "in_discussion", "awaiting_signature"]
-
-const CLOSED_STATUSES: readonly ShootStatus[] = ["delivered_settled", "declined"]
 
 export function stageForStatus(status: ShootStatus): PipelineStage | null {
   return PIPELINE_STAGES.find((stage) => stage.statuses.includes(status)) ?? null

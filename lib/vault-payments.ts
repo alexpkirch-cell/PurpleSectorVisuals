@@ -37,6 +37,8 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
   await sql`
     UPDATE vaults SET
       deposit_paid = true,
+      deposit_paid_at = COALESCE(deposit_paid_at, now()),
+      deposit_payment_method = COALESCE(deposit_payment_method, 'stripe'),
       stripe_customer_id = COALESCE(${customerId}, stripe_customer_id),
       stripe_payment_method_id = COALESCE(${paymentMethodId}, stripe_payment_method_id)
     WHERE id = ${vaultId}

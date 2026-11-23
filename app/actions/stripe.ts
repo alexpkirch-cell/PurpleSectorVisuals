@@ -126,7 +126,7 @@ export async function startBalanceCheckout(vaultId: string) {
   const pool = getPool()
   try {
     const result = await pool.query(
-      `SELECT v.id, v.balance_amount, v.balance_paid,
+      `SELECT v.id, v.balance_amount, v.balance_paid, v.deposit_amount, v.deposit_paid, COALESCE(s.is_comped, false) AS is_comped,
               COALESCE(b.first_name, s.client_name) AS first_name, b.last_name,
               COALESCE(b.email, s.client_email) AS email,
               COALESCE(p.title, s.shoot_type) AS package_title, p.category AS service_category
@@ -145,6 +145,9 @@ export async function startBalanceCheckout(vaultId: string) {
     const row = result.rows[0]
     if (row.balance_paid) {
       return { success: false as const, error: "Balance already paid." }
+    }
+    if (!row.deposit_paid && !row.is_comped && Number(row.deposit_amount ?? 0) > 0) {
+      return { success: false as const, error: "Pay or record the retainer before paying the remaining balance." }
     }
 
     // Server-side amount validation — never trust a client-supplied price.

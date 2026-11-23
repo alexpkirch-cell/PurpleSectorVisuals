@@ -19,10 +19,12 @@ import { generateLedgerForShoot } from "@/app/actions/ledger"
 export type ShootStatus =
   | "new_inquiry"
   | "in_discussion"
+  | "booked"
   | "awaiting_signature"
   | "booked_paid"
   | "culling"
   | "color_grading"
+  | "ready_for_delivery"
   | "delivered_settled"
   | "declined"
 
@@ -56,11 +58,16 @@ export interface Shoot {
   vault_access_code: string
   created_at: string
   final_amount: string | null
+  deposit_amount: string
+  balance_amount: string
+  deposit_amount_custom: boolean
   settlement_items: SettlementItem[] | null
   vault_pin: string | null
   vault_status: "Onboarding" | "Active" | "Expired" | null
   vault_contract_signed: boolean | null
   vault_deposit_paid: boolean | null
+  vault_deposit_paid_at?: string | Date | null
+  vault_deposit_payment_method?: "stripe" | "cash" | "venmo_zelle" | "check" | "none" | null
   vault_must_have_shots: string | null
   vault_mood_board_links: string | null
   vault_prep_submitted_at: string | Date | null
@@ -177,11 +184,15 @@ export async function createShootInquiry(formData: {
   return { shootId: rows[0].id, vaultAccessCode }
 }
 
-/**
- * Admin-side intake for leads that arrive outside the public booking form
- * (a phone call, a DM, a referral). Creates the shoot as a New Inquiry so it
- * enters the same pipeline as every other lead.
- */
+type ManualBookingStage = "new_inquiry" | "booked" | "color_grading" | "ready_for_delivery"
+type ManualRetainerMethod = "none" | "cash" | "venmo_zelle" | "check"
+
+const MANUAL_SHOOT_TYPES = new Set(["Portraits", "Athletics", "Automotive", "Events", "Commercial", "Custom"])
+const MANUAL_BOOKING_STAGES = new Set<ManualBookingStage>(["new_inquiry", "booked", "color_grading", "ready_for_delivery"])
+const MANUAL_RETAINER_METHODS = new Set<ManualRetainerMethod>(["none", "cash", "venmo_zelle", "check"])
+const roundMoney = (amount: number) => Math.round(amount * 100) / 100
+
+/** Admin intake for both new leads and already-shot sessions, with a selectable start stage and payment schedule. */
 export async function createManualBooking(input: {
   clientName: string
   clientEmail: string
@@ -198,9 +209,13 @@ export async function createManualBooking(input: {
   assignedShooters: AssignedShooter[]
   assignedEditors: string[]
   driverReimbursement?: number
+  startingStage?: ManualBookingStage
+  retainerAmount?: number
+  retainerPaid?: boolean
+  retainerMethod?: ManualRetainerMethod
   notes?: string
 }): Promise<Shoot> {
-  await requireAdmin()
+  const admin = await requireAdmin()
 
   const clientName = input.clientName?.trim()
   const clientEmail = input.clientEmail?.trim()
@@ -208,6 +223,12 @@ export async function createManualBooking(input: {
   if (!clientName || !clientEmail || !shootType) {
     throw new Error("Client name, email, and shoot type are required")
   }
+  if (!MANUAL_SHOOT_TYPES.has(shootType)) throw new Error("Choose one of the five core shoot types or Custom.")
+
+  const startingStage = input.startingStage ?? "new_inquiry"
+  if (!MANUAL_BOOKING_STAGES.has(startingStage)) throw new Error("Choose a valid starting pipeline stage.")
+  const retainerMethod = input.retainerMethod ?? "none"
+  if (!MANUAL_RETAINER_METHODS.has(retainerMethod)) throw new Error("Choose a valid retainer payment method.")
 
   const shootDate = input.shootDate ? `${input.shootDate}T12:00:00Z` : null
   const location = input.location?.trim() || null
@@ -221,6 +242,23 @@ export async function createManualBooking(input: {
     discountType: input.discountType,
     discountValue: input.discountValue,
   })
+  const selectedPackage = input.selectedPackage?.trim() || null
+  const isComped = quote.isComped && selectedPackage !== null
+  const total = roundMoney(quote.total)
+  const rawRetainer = input.retainerAmount === undefined
+    ? roundMoney(total / 2)
+    : Number(input.retainerAmount)
+  if (!Number.isFinite(rawRetainer) || rawRetainer < 0 || rawRetainer > total) {
+    throw new Error("Retainer must be between $0.00 and the total quote.")
+  }
+  const depositAmount = isComped ? 0 : roundMoney(rawRetainer)
+  const balanceAmount = isComped ? 0 : roundMoney(total - depositAmount)
+  const depositPaid = isComped || depositAmount === 0 || Boolean(input.retainerPaid)
+  const paymentMethod: ManualRetainerMethod = depositAmount === 0 ? "none" : retainerMethod
+  if (startingStage === "ready_for_delivery" && depositAmount > 0 && !depositPaid) {
+    throw new Error("Pay or record the retainer before starting a shoot at Ready for Delivery.")
+  }
+  const status: ShootStatus = startingStage
   const driverReimbursement = Math.max(0, Number(input.driverReimbursement) || 0)
 
   let vaultAccessCode = generateVaultCode()
@@ -235,25 +273,53 @@ export async function createManualBooking(input: {
   const { rows: inserted } = await sql<{ id: string }>`
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
-      preferred_shooter, notes, vault_access_code,
+      preferred_shooter, notes, vault_access_code, status,
       selected_package, package_price, selected_addons, discount_type, discount_value,
-      total_price, base_price, deposit_amount, balance_amount, is_comped, driver_reimbursement,
-      assigned_shooters, assigned_editors
+      total_price, base_price, deposit_amount, balance_amount, deposit_amount_custom, is_comped,
+      driver_reimbursement, is_paid, assigned_shooters, assigned_editors
     )
     VALUES (
       ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
-      ${shootDate}, ${location}, ${locationMapsUrl},
-      ${leadShooterName(shooters)},
-      ${input.notes?.trim() || null}, ${vaultAccessCode},
-      ${input.selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
-      ${Number(input.discountValue) || 0},
-      ${quote.total}, ${quote.total}, ${quote.deposit}, ${quote.balance}, ${quote.isComped}, ${driverReimbursement},
-      ${JSON.stringify(shooters)}, ${JSON.stringify(editors)}
+      ${shootDate}, ${location}, ${locationMapsUrl}, ${leadShooterName(shooters)},
+      ${input.notes?.trim() || null}, ${vaultAccessCode}, ${status},
+      ${selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
+      ${Number(input.discountValue) || 0}, ${total}, ${total}, ${depositAmount}, ${balanceAmount}, true, ${isComped},
+      ${driverReimbursement}, ${depositPaid && balanceAmount === 0}, ${JSON.stringify(shooters)}, ${JSON.stringify(editors)}
     )
     RETURNING id
   `
+  const shootId = inserted[0].id
+  const pinCode = await allocateVaultPin()
+  const balancePaid = balanceAmount === 0
 
+  await sql`
+    INSERT INTO vaults (
+      shoot_id, pin_code, status, contract_signed, deposit_paid, deposit_paid_at, deposit_payment_method,
+      deposit_amount, balance_amount, balance_paid, final_quoted_fee, shoot_date, client_name
+    ) VALUES (
+      ${shootId}, ${pinCode}, 'Onboarding', false, ${depositPaid},
+      CASE WHEN ${depositPaid} THEN now() ELSE NULL END,
+      CASE WHEN ${depositPaid} THEN ${paymentMethod} ELSE NULL END,
+      ${depositAmount}, ${balanceAmount}, ${balancePaid}, ${total}, ${shootDate}, ${clientName}
+    )
+  `
+
+  if (depositPaid) {
+    await sql`
+      INSERT INTO vault_payments (vault_id, shoot_id, payment_type, method, amount, note, recorded_by)
+      SELECT v.id, ${shootId}, 'retainer', ${paymentMethod}, ${depositAmount},
+             ${depositAmount === 0 ? "Retainer waived ($0.00) during manual booking" : "Retainer recorded during manual booking"},
+             ${admin.name}
+      FROM vaults v WHERE v.shoot_id = ${shootId}
+    `
+  }
+
+  await saveVaultDocuments(shootId)
+  if (startingStage === "booked") await finalizeBookedShoot(shootId)
+
+  revalidatePath("/admin")
   revalidatePath("/admin/operations")
+  revalidatePath("/admin/financials")
 
   const { rows } = await sql<Shoot>`
     SELECT
@@ -262,6 +328,10 @@ export async function createManualBooking(input: {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
@@ -284,7 +354,7 @@ export async function createManualBooking(input: {
       v.client_signed_ip AS vault_client_signed_ip
     FROM shoots s
     LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE s.id = ${inserted[0].id}
+    WHERE s.id = ${shootId}
   `
   return rows[0]
 }
@@ -299,6 +369,8 @@ export async function listShoots(): Promise<Shoot[]> {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
@@ -338,6 +410,8 @@ export async function getShootAdmin(shootId: string): Promise<Shoot | null> {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
@@ -411,6 +485,8 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
@@ -513,6 +589,18 @@ export async function moveShootStage(id: string, status: ShootStatus): Promise<S
     throw new Error("Moving to Delivered & Settled requires finalizing a settlement")
   }
 
+  if (status === "ready_for_delivery") {
+    const { rows } = await sql<{ deposit_amount: string | null; deposit_paid: boolean | null; is_comped: boolean }>`
+      SELECT v.deposit_amount, v.deposit_paid, COALESCE(s.is_comped, false) AS is_comped
+      FROM shoots s LEFT JOIN vaults v ON v.shoot_id = s.id WHERE s.id = ${id} LIMIT 1
+    `
+    const shoot = rows[0]
+    if (!shoot) throw new Error("Shoot not found")
+    if (!shoot.is_comped && Number(shoot.deposit_amount ?? 0) > 0 && !shoot.deposit_paid) {
+      throw new Error("Pay or record the retainer before moving this shoot to Ready for Delivery")
+    }
+  }
+
   await sql`
     UPDATE shoots SET status = ${status} WHERE id = ${id}
   `
@@ -535,7 +623,9 @@ async function saveVaultDocuments(shootId: string) {
 
   const isComped = Boolean(shoot.is_comped)
   const total = contractTotalOf(shoot)
-  const { deposit, balance } = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
+  const defaultSplit = splitTotal(total)
+  const deposit = isComped ? 0 : Number(shoot.deposit_amount ?? defaultSplit.deposit)
+  const balance = isComped ? 0 : Number(shoot.balance_amount ?? Math.max(total - deposit, 0))
   const packageName = shoot.selected_package || shoot.package_tier || shoot.shoot_type
   const addons = (shoot.selected_addons ?? []).map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
 
@@ -578,16 +668,30 @@ async function syncShootPaymentAmounts(shootId: string) {
 
   const isComped = Boolean(shoot.is_comped)
   const total = contractTotalOf(shoot)
-  const { deposit, balance } = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
+  const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
+  const storedDeposit = Number(shoot.deposit_amount ?? 0)
+  const deposit = isComped
+    ? 0
+    : shoot.deposit_amount_custom
+      ? roundMoney(Math.min(Math.max(storedDeposit, 0), total))
+      : standardSplit.deposit
+  const balance = isComped ? 0 : roundMoney(Math.max(total - deposit, 0))
 
-  await sql`UPDATE shoots SET deposit_amount = ${deposit}, balance_amount = ${balance} WHERE id = ${shootId}`
+  await sql`
+    UPDATE shoots SET deposit_amount = ${deposit}, balance_amount = ${balance} WHERE id = ${shootId}
+  `
 
   await sql`
     UPDATE vaults SET
-      deposit_amount = CASE WHEN deposit_paid THEN deposit_amount ELSE ${deposit}::numeric END,
+      deposit_amount = CASE
+        WHEN deposit_paid THEN deposit_amount
+        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${deposit}::numeric
+        ELSE ${standardSplit.deposit}::numeric
+      END,
       balance_amount = CASE
         WHEN deposit_paid THEN GREATEST(${total}::numeric - COALESCE(deposit_amount, 0), 0)
-        ELSE ${balance}::numeric
+        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${balance}::numeric
+        ELSE ${standardSplit.balance}::numeric
       END,
       final_quoted_fee = ${total}::numeric
     WHERE shoot_id = ${shootId} AND NOT COALESCE(balance_paid, false)
@@ -598,8 +702,8 @@ async function syncShootPaymentAmounts(shootId: string) {
 
 /**
  * Confirms the final total quote for a shoot in the Quoted column, generates
- * (or updates) its client vault with a 20% deposit / 80% balance split, and
- * advances the shoot into Awaiting Retainer.
+ * (or updates) its client vault with the standard 50% retainer / 50% balance
+ * split (or preserves a retainer explicitly entered in Manual Booking), and advances the shoot into Awaiting Retainer.
  */
 export async function generateVaultAndAdvance(
   id: string,
@@ -621,10 +725,15 @@ export async function generateVaultAndAdvance(
     throw new Error("Shoot not found")
   }
 
-  // Comped shoots waive the deposit and balance entirely, which bypasses Stripe.
-  const { deposit: depositAmount, balance: balanceAmount } = isComped
-    ? { deposit: 0, balance: 0 }
-    : splitTotal(totalQuote)
+  // A retainer recorded in Manual Booking stays fixed; otherwise the standard split is applied.
+  const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(totalQuote)
+  const manualDeposit = Number(shoot.deposit_amount ?? 0)
+  const depositAmount = isComped
+    ? 0
+    : shoot.deposit_amount_custom
+      ? roundMoney(Math.min(Math.max(manualDeposit, 0), totalQuote))
+      : standardSplit.deposit
+  const balanceAmount = isComped ? 0 : roundMoney(Math.max(totalQuote - depositAmount, 0))
 
   const { rows: existingVaultRows } = await sql<{ id: string; countersigned_at: string | null }>`
     SELECT id, countersigned_at FROM vaults WHERE shoot_id = ${id}
@@ -675,6 +784,8 @@ export async function generateVaultAndAdvance(
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
@@ -753,7 +864,7 @@ export async function finalizeSettlement(
  * Finalizes the Admin Client Detail Sheet's intake form for a "New Inquiry"
  * lead: persists the CRM fields (admin notes, package/add-on selection,
  * confirmed logistics, team assignment, and any manual price override),
- * generates the client vault with a 20%/80% deposit split, and advances the
+ * generates the client vault with a 50%/50% deposit split, and advances the
  * shoot to Awaiting Retainer. Sending the retainer email + Stripe link is
  * stubbed to a console log until email/Stripe delivery is wired up.
  */
@@ -802,6 +913,7 @@ export async function finalizeBooking(
       base_price = ${totalPrice},
       total_price = ${totalPrice},
       is_comped = ${isComped},
+      deposit_amount_custom = false,
       travel_fee = 0,
       assigned_shooters = ${JSON.stringify(assignedShooters)},
       assigned_editors = ${JSON.stringify(assignedEditors)},
@@ -859,6 +971,8 @@ export async function finalizeBooking(
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
