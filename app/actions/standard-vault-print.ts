@@ -7,7 +7,7 @@ import type { StandardVaultPrintProduct } from "@/app/actions/vault-photos"
 import { requireAdmin } from "@/lib/require-admin"
 import { sql } from "@/lib/db"
 import { hasVaultSession } from "@/lib/vault-session"
-import { canViewDelivery } from "@/lib/vault-delivery"
+import { canDownloadDelivery, canViewDelivery } from "@/lib/vault-delivery"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
 import { createWhccConfiguredProducts, getWhccConfiguredProductStatuses } from "@/lib/whcc"
@@ -124,6 +124,9 @@ export async function startStandardVaultPrintCheckout(input: {
   }
   if (!(await hasVaultSession(input.vaultId)) || !(await canViewDelivery(input.vaultId))) {
     return { success: false, error: "Your client vault session expired or Final Delivery is not available yet." }
+  }
+  if (!(await canDownloadDelivery(input.vaultId))) {
+    return { success: false, error: "Pay your remaining balance to unlock print ordering." }
   }
 
   const normalized = new Map<string, VaultPrintSelection>()

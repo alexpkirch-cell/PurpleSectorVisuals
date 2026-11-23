@@ -77,14 +77,8 @@ export async function startRosterPrintCheckout(input: {
     const player = players[0]
     if (!player || !player.is_active) return { success: false, error: "That player is not available in this team roster." }
 
-    const { rows: purchases } = await sql<{ id: string }>`
-      SELECT id FROM public.roster_vault_orders
-      WHERE player_id = ${player.id} AND team_id = ${player.team_id}
-        AND buyer_session_id = ${parentSession.id} AND status = 'paid'
-      LIMIT 1
-    `
-    if (!purchases[0]) return { success: false, error: "Unlock this player gallery before ordering prints." }
-
+    // Professional prints are an optional purchase in both billing modes, orderable straight from the watermarked proofs;
+    // the original files go to WHCC from the server and are never sent to the browser.
     const productIds = [...new Set(selections.map((item) => item.productId))]
     const photoIds = [...new Set(selections.map((item) => item.photoId))]
     const [{ rows: products }, { rows: photos }] = await Promise.all([

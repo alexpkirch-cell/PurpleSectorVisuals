@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { PACKAGE_TYPE_OPTIONS } from "@/lib/portfolio-shoot-meta"
@@ -27,6 +28,7 @@ type ExifData = {
   focalLength: number | null
 }
 type Metadata = {
+  title: string
   shooterIds: string[]
   editorIds: string[]
   packageType: PortfolioCategory | ""
@@ -62,6 +64,7 @@ const EMPTY_EXIF: ExifData = {
   focalLength: null,
 }
 const EMPTY_METADATA: Metadata = {
+  title: "",
   shooterIds: [],
   editorIds: [],
   packageType: "",
@@ -115,6 +118,7 @@ async function readExif(file: File): Promise<ExifData> {
 
 function metadataKey(metadata: Metadata) {
   return JSON.stringify({
+    title: metadata.title.trim(),
     shooterIds: [...metadata.shooterIds].sort(),
     editorIds: [...metadata.editorIds].sort(),
     packageType: metadata.packageType,
@@ -331,6 +335,7 @@ export function BulkUploadStager({
       formData.append("is_public_portfolio", String(metadata.isPublicPortfolio))
       if (metadata.galleryId) formData.append("gallery_id", metadata.galleryId)
       if (metadata.packageType) formData.append("package_type", metadata.packageType)
+      if (metadata.title.trim()) formData.append("title", metadata.title.trim())
       formData.append("shooter_ids", JSON.stringify(metadata.shooterIds))
       formData.append("editor_ids", JSON.stringify(metadata.editorIds))
       formData.append("exif_data", JSON.stringify(chunk.map((item) => item.exif ?? EMPTY_EXIF)))
@@ -463,6 +468,17 @@ export function BulkUploadStager({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <Field>
+                <FieldLabel htmlFor="bulk-title">Public title (optional)</FieldLabel>
+                <Input
+                  id="bulk-title"
+                  value={selectedMetadata.title}
+                  maxLength={200}
+                  onChange={(event) => updateSelected("title", event.target.value)}
+                  placeholder="Leave blank for no title"
+                />
+                <p className="text-xs text-muted-foreground">Camera filenames are never used as public titles.</p>
+              </Field>
               <Field>
                 <FieldLabel htmlFor="bulk-shooters">Shooters</FieldLabel>
                 <MultiSelect

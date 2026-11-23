@@ -3,7 +3,7 @@ import type Stripe from "stripe"
 
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
-import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
+import { recordRosterVaultGalleryPayment, recordRosterVaultPhotoPayment } from "@/lib/roster-vault-payments"
 import { markRosterPrintCheckoutExpired, recordAndSubmitRosterPrintOrder } from "@/lib/roster-vault-print-orders"
 import { markStandardVaultPrintCheckoutExpired, recordAndSubmitStandardVaultPrintOrder } from "@/lib/standard-vault-print-orders"
 
@@ -22,19 +22,37 @@ async function submitToPrintful(shippingDetails: ShippingDetails | null) {
   // TODO: call the Printful Orders API here using process.env.PRINTFUL_API_KEY
 }
 
+type VaultPaymentType = "retainer" | "balance"
+
+/** `payment_type` is authoritative; sessions created before it existed carry `kind` ("deposit" meant the retainer). */
+function vaultPaymentTypeOf(metadata: Stripe.Metadata | null | undefined): VaultPaymentType | null {
+  const raw = metadata?.payment_type ?? metadata?.kind
+  if (raw === "balance") return "balance"
+  if (raw === "retainer" || raw === "deposit") return "retainer"
+  return null
+}
+
 /**
- * Server-authoritative confirmation for vault deposit/balance checkouts.
+ * Server-authoritative confirmation for vault retainer/balance checkouts.
  * The onboarding wizard and locked gallery also poll `checkout.session.retrieve`
  * after the embedded checkout completes, but the webhook is the source of
  * truth in case the client never re-checks (tab closed, network drop, etc.).
+ * A cleared balance sets balance_paid, which is what unlocks full-resolution downloads.
  */
 async function confirmVaultPayment(session: Stripe.Checkout.Session) {
   const vaultId = session.metadata?.vaultId
   if (!vaultId || session.payment_status !== "paid") return
 
+  const paymentType = vaultPaymentTypeOf(session.metadata)
+  if (!paymentType) {
+    console.error("[v0] Stripe vault checkout completed without a recognised payment_type:", session.id)
+    return
+  }
+
   try {
-    if (session.metadata?.kind === "balance") {
-      await recordBalancePayment(vaultId)
+    if (paymentType === "balance") {
+      const intent = session.payment_intent
+      await recordBalancePayment(vaultId, { paymentIntentId: typeof intent === "string" ? intent : (intent?.id ?? null) })
     } else {
       await recordDepositPayment(vaultId, session)
     }
@@ -68,6 +86,8 @@ export async function POST(request: Request) {
 
     if (session.metadata?.kind === "roster_gallery") {
       await recordRosterVaultGalleryPayment(session)
+    } else if (session.metadata?.kind === "roster_photo") {
+      await recordRosterVaultPhotoPayment(session)
     } else if (session.metadata?.kind === "roster_print") {
       await recordAndSubmitRosterPrintOrder(session)
     } else if (session.metadata?.kind === "standard_vault_print") {
@@ -89,9 +109,9 @@ export async function POST(request: Request) {
   if (event.type === "payment_intent.succeeded") {
     const intent = event.data.object as Stripe.PaymentIntent
     const vaultId = intent.metadata?.vaultId
-    if (vaultId && intent.metadata?.kind === "balance") {
+    if (vaultId && vaultPaymentTypeOf(intent.metadata) === "balance") {
       try {
-        await recordBalancePayment(vaultId, intent.id)
+        await recordBalancePayment(vaultId, { paymentIntentId: intent.id })
       } catch (error) {
         logStripeError("off-session balance confirmation failed", error)
       }

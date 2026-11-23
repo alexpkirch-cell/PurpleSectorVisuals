@@ -1,16 +1,22 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { LockKeyhole, LogOut, ShieldCheck, Users } from "lucide-react"
+import { FolderOpen, Images, LockKeyhole, LogOut, ShieldCheck, Users } from "lucide-react"
 
 import { logoutRosterVault } from "@/app/actions/roster-vault"
-import { startRosterGalleryCheckout } from "@/app/actions/roster-vault-payments"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 type RosterVaultData = {
   teamName: string
   parentName: string
+  billingMode: "all_inclusive" | "parent_pay"
+  awaitingTeamBalance: boolean
+  downloadsIncluded: boolean
+  singlePhotoPriceCents: number | null
+  teamFolderPhotoCount: number
   players: {
     id: string
     display_name: string
@@ -18,30 +24,22 @@ type RosterVaultData = {
     cover_image_url: string | null
     tier_name: string | null
     tier_price_cents: number | null
+    unlocked: boolean
   }[]
 }
+
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
+const formatCents = (cents: number) => currency.format(cents / 100)
+
+const OPEN_LINK_CLASS = cn(
+  buttonVariants(),
+  "mt-auto w-full border border-fuchsia-500/40 bg-fuchsia-600 text-white hover:bg-fuchsia-500",
+)
 
 export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [checkoutError, setCheckoutError] = useState<string | null>(null)
   const firstName = data.parentName.split(/\s+/)[0]
-
-  function unlockGallery(playerId: string) {
-    setCheckoutError(null)
-    startTransition(async () => {
-      const result = await startRosterGalleryCheckout(playerId)
-      if (!result.success) {
-        setCheckoutError(result.error)
-        return
-      }
-      if (result.paid) {
-        router.push(`/vault/roster/${playerId}`)
-        return
-      }
-      window.location.assign(result.url)
-    })
-  }
 
   function signOut() {
     startTransition(async () => {
@@ -49,6 +47,13 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
       router.refresh()
     })
   }
+
+  const modeSummary =
+    data.billingMode === "all_inclusive"
+      ? data.downloadsIncluded
+        ? "High-resolution downloads are included with your team package."
+        : "Browse watermarked proofs now. Downloads unlock as soon as your team's package is paid."
+      : "Browse watermarked proofs, then unlock a full digital bundle or single photos. Prints are always optional."
 
   return (
     <div className="min-h-svh bg-[#09090b] text-zinc-100">
@@ -60,7 +65,7 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
             </div>
             <p className="text-sm text-zinc-500">PURPLE SECTOR VISUALS <span className="px-1.5 text-zinc-700">/</span> MEDIA DAY</p>
             <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{data.teamName}</h1>
-            <p className="text-sm text-zinc-400">Welcome, {firstName}. Choose your player to preview their gallery.</p>
+            <p className="text-sm text-zinc-400">Welcome, {firstName}. {modeSummary}</p>
           </div>
           <Button type="button" variant="outline" onClick={signOut} disabled={pending} className="border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white">
             <LogOut className="size-4" aria-hidden="true" />
@@ -68,7 +73,26 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
           </Button>
         </header>
 
-        {checkoutError ? <p role="alert" className="rounded-lg border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-sm text-rose-200">{checkoutError}</p> : null}
+        {data.teamFolderPhotoCount > 0 ? (
+          <Link
+            href="/vault/roster/team"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-[#111114] p-5 transition-colors hover:border-fuchsia-500/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fuchsia-400"
+          >
+            <span className="flex items-center gap-4">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-fuchsia-500/10 text-fuchsia-400">
+                <FolderOpen className="size-6" aria-hidden="true" />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="font-heading text-lg font-semibold text-white">Team photos</span>
+                <span className="text-sm text-zinc-400">
+                  {data.teamFolderPhotoCount} shared photo{data.teamFolderPhotoCount === 1 ? "" : "s"}
+                  {data.downloadsIncluded ? " · downloads included" : data.singlePhotoPriceCents ? ` · ${formatCents(data.singlePhotoPriceCents)} per download` : ""}
+                </span>
+              </span>
+            </span>
+            <span className="text-sm font-medium text-fuchsia-400 group-hover:text-fuchsia-300">Open folder</span>
+          </Link>
+        ) : null}
 
         <section className="flex flex-col gap-5" aria-labelledby="players-heading">
           <div className="flex items-end justify-between gap-4">
@@ -115,22 +139,25 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
                     <div className="flex flex-1 flex-col items-center gap-3 px-3 pb-4 pt-4 text-center sm:px-4">
                       <h3 className="line-clamp-2 min-h-10 font-heading text-base font-semibold leading-snug text-zinc-100 sm:text-lg">{player.display_name}</h3>
                       <div className="flex min-h-8 flex-col items-center gap-0.5">
-                        <span className="text-[0.65rem] uppercase tracking-[0.14em] text-zinc-500">{player.tier_name ?? "Gallery tier not set"}</span>
-                        {player.tier_price_cents ? (
-                          <span className="font-mono text-xs text-zinc-300">{new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(player.tier_price_cents / 100)}</span>
-                        ) : null}
+                        {player.unlocked ? (
+                          <span className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.14em] text-emerald-400">
+                            <ShieldCheck className="size-3" aria-hidden="true" /> Downloads unlocked
+                          </span>
+                        ) : data.billingMode === "all_inclusive" ? (
+                          <span className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.14em] text-amber-400">
+                            <LockKeyhole className="size-3" aria-hidden="true" /> Proofs until team is paid
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-[0.65rem] uppercase tracking-[0.14em] text-zinc-500">{player.tier_name ?? "Full bundle"}</span>
+                            {player.tier_price_cents ? <span className="font-mono text-xs text-zinc-300">{formatCents(player.tier_price_cents)}</span> : null}
+                          </>
+                        )}
                       </div>
-                      <Button
-                        type="button"
-                        disabled={pending || !player.tier_price_cents || player.tier_price_cents < 100}
-                        onClick={() => unlockGallery(player.id)}
-                        className="mt-auto w-full border border-fuchsia-500/40 bg-fuchsia-600 text-white hover:bg-fuchsia-500 disabled:cursor-not-allowed disabled:border-zinc-800 disabled:bg-zinc-900 disabled:text-zinc-500 disabled:opacity-100"
-                        aria-label={`Unlock ${player.display_name}'s gallery${player.tier_price_cents ? ` for ${(player.tier_price_cents / 100).toFixed(2)} dollars` : ""}`}
-                      >
-                        <LockKeyhole className="size-3.5" aria-hidden="true" />
-                        {pending ? "Opening checkout…" : "Unlock Gallery"}
-                      </Button>
-                      {!player.tier_price_cents ? <span className="text-[0.65rem] text-zinc-600">Ask your organizer to set pricing</span> : null}
+                      <Link href={`/vault/roster/${player.id}`} className={OPEN_LINK_CLASS} aria-label={`${player.unlocked ? "Open" : "View proofs for"} ${player.display_name}'s gallery`}>
+                        {player.unlocked ? <Images className="size-3.5" aria-hidden="true" /> : <LockKeyhole className="size-3.5" aria-hidden="true" />}
+                        {player.unlocked ? "Open Gallery" : "View Proofs"}
+                      </Link>
                     </div>
                   </article>
                 </li>

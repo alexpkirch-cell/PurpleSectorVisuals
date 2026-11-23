@@ -1,0 +1,37 @@
+{
+  "storagePaths": [
+    "0b906b29-70d8-4517-9355-d5b218704062/d08d852a-08d2-4693-b1be-ea6f28b85eec-watermarked.jpg",
+    "0b906b29-70d8-4517-9355-d5b218704062/d08d852a-08d2-4693-b1be-ea6f28b85eec-original.jpg",
+    "0b906b29-70d8-4517-9355-d5b218704062/e18e3d3b-60ba-4986-a119-bcfdd703e7a3-watermarked.jpg",
+    "0b906b29-70d8-4517-9355-d5b218704062/e18e3d3b-60ba-4986-a119-bcfdd703e7a3-original.jpg",
+    "teams/d6a402f9-9a5b-48bc-becd-33b7f01c02e9/44430c91-f05b-4dce-b925-ec25e06f6f7a-watermarked.jpg",
+    "teams/d6a402f9-9a5b-48bc-becd-33b7f01c02e9/44430c91-f05b-4dce-b925-ec25e06f6f7a-original.jpg",
+    "7d761fb6-9513-4e97-88e5-e96d0559faee/ee4b7ea4-02eb-46d5-9c70-593752a99db5-watermarked.jpg",
+    "7d761fb6-9513-4e97-88e5-e96d0559faee/ee4b7ea4-02eb-46d5-9c70-593752a99db5-original.jpg",
+    "7d761fb6-9513-4e97-88e5-e96d0559faee/f7b3a2a7-d396-407e-bfcf-04fe103697ba-watermarked.jpg",
+    "7d761fb6-9513-4e97-88e5-e96d0559faee/f7b3a2a7-d396-407e-bfcf-04fe103697ba-original.jpg",
+    "teams/d2e0eaaa-9910-4564-ac4e-75010d814791/7207e2d6-2bea-4b8f-9b09-03f60eb1cb2b-watermarked.jpg",
+    "teams/d2e0eaaa-9910-4564-ac4e-75010d814791/7207e2d6-2bea-4b8f-9b09-03f60eb1cb2b-original.jpg"
+  ],
+  "admin": {
+    "id": "0cd136a4-202f-4ab5-9680-f93f24cbee95",
+    "email": "v0-verify-1795458818495@example.com",
+    "password": "V0-verify-admin-2604!"
+  },
+  "shootId": "d5b9c3e6-01a8-4deb-977d-e98feb21851c",
+  "vaultId": "3fe2c165-bcb5-48a2-9c2c-3164935c2065",
+  "rosterTeams": {
+    "parentPay": {
+      "teamId": "d6a402f9-9a5b-48bc-becd-33b7f01c02e9",
+      "playerId": "0b906b29-70d8-4517-9355-d5b218704062",
+      "code": "VERIFYPAY1",
+      "password": "verify-password-1"
+    },
+    "buyout": {
+      "teamId": "d2e0eaaa-9910-4564-ac4e-75010d814791",
+      "playerId": "7d761fb6-9513-4e97-88e5-e96d0559faee",
+      "code": "VERIFYALL1",
+      "password": "verify-password-1"
+    }
+  }
+}

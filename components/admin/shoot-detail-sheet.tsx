@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { LinkifiedText } from "@/components/admin/linkified-text"
 import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
+import { MarkBalancePaid } from "@/components/admin/mark-balance-paid"
 import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
 import { clientVaultUrl, PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
@@ -696,17 +697,20 @@ export function ShootDetailSheet({
                   </div>
 
                   {shoot.vault_pin && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <PaymentStatusPill
-                        label={`Retainer (${DEPOSIT_PERCENT_LABEL})`}
-                        paid={!!shoot.vault_deposit_paid}
-                        amount={shoot.vault_deposit_amount}
-                      />
-                      <PaymentStatusPill
-                        label={`Balance (${BALANCE_PERCENT_LABEL})`}
-                        paid={!!shoot.vault_balance_paid}
-                        amount={shoot.vault_balance_amount}
-                      />
+                    <div className="flex flex-col gap-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <PaymentStatusPill
+                          label={`Retainer (${DEPOSIT_PERCENT_LABEL})`}
+                          paid={!!shoot.vault_deposit_paid}
+                          amount={shoot.vault_deposit_amount}
+                        />
+                        <PaymentStatusPill
+                          label={`Balance (${BALANCE_PERCENT_LABEL})`}
+                          paid={!!shoot.vault_balance_paid}
+                          amount={shoot.vault_balance_amount}
+                        />
+                      </div>
+                      <MarkBalancePaid shoot={shoot} onUpdated={onUpdated} />
                     </div>
                   )}
 

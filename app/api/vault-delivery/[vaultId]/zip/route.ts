@@ -5,7 +5,7 @@ import { ZipArchive } from "archiver"
 import { NextResponse, type NextRequest } from "next/server"
 
 import { sql } from "@/lib/db"
-import { canViewDelivery } from "@/lib/vault-delivery"
+import { canDownloadDelivery, canViewDelivery } from "@/lib/vault-delivery"
 import { signStoragePaths } from "@/lib/vault-photo-signing"
 
 // A large delivery streams for a while; the archive is never held in memory.
@@ -34,6 +34,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   if (!(await canViewDelivery(vaultId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
+  if (!(await canDownloadDelivery(vaultId))) {
+    return NextResponse.json({ error: "Pay the remaining balance to unlock high-resolution downloads." }, { status: 402 })
   }
 
   const { rows: photos } = await sql<{ bucket: string; storage_path: string; file_name: string }>`
