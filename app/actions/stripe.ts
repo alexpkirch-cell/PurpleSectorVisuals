@@ -3,7 +3,8 @@
 import { Pool } from "pg"
 
 import { getStripeClient, logStripeError } from "@/lib/stripe"
-import { recordDepositPayment } from "@/lib/vault-payments"
+import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
+import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 function getPool() {
   const url = new URL(process.env.POSTGRES_URL as string)
@@ -77,7 +78,7 @@ export async function startDepositCheckout(vaultId: string) {
         },
       ],
       payment_intent_data: { setup_future_usage: "off_session" },
-      metadata: { vaultId, kind: "deposit", service_category: row.service_category ?? "" },
+      metadata: { vaultId, kind: "deposit", payment_type: "retainer", service_category: row.service_category ?? "" },
     })
 
     await pool.query(`UPDATE vaults SET stripe_session_id = $1 WHERE id = $2`, [session.id, vaultId])
@@ -117,12 +118,21 @@ export async function checkDepositStatus(vaultId: string) {
 }
 
 export async function startBalanceCheckout(vaultId: string) {
+  // Only the signed-in client (or an admin previewing the vault) can open a payment session for it.
+  if (!(await hasVaultSession(vaultId)) && !(await isAdminViewer())) {
+    return { success: false as const, error: "Please sign in to your vault to pay the remaining balance." }
+  }
+
   const pool = getPool()
   try {
     const result = await pool.query(
-      `SELECT v.id, v.balance_amount, v.balance_paid, b.first_name, b.last_name, p.title as package_title, p.category as service_category
+      `SELECT v.id, v.balance_amount, v.balance_paid,
+              COALESCE(b.first_name, s.client_name) AS first_name, b.last_name,
+              COALESCE(b.email, s.client_email) AS email,
+              COALESCE(p.title, s.shoot_type) AS package_title, p.category AS service_category
        FROM vaults v
        LEFT JOIN booking_requests b ON b.id = v.booking_request_id
+       LEFT JOIN shoots s ON s.id = v.shoot_id
        LEFT JOIN packages p ON p.id = b.package_id
        WHERE v.id = $1`,
       [vaultId]
@@ -150,20 +160,22 @@ export async function startBalanceCheckout(vaultId: string) {
       ui_mode: "embedded_page",
       redirect_on_completion: "never",
       mode: "payment",
+      customer_email: row.email ?? undefined,
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
               name: `Remaining Balance — ${row.package_title ?? "Session"}`,
-              description: `Final balance for ${clientName}`,
+              description: `Final 50% balance for ${clientName}`,
             },
             unit_amount: amountInCents,
           },
           quantity: 1,
         },
       ],
-      metadata: { vaultId, kind: "balance", service_category: row.service_category ?? "" },
+      metadata: { vaultId, kind: "balance", payment_type: "balance", service_category: row.service_category ?? "" },
+      payment_intent_data: { metadata: { vaultId, kind: "balance", payment_type: "balance" } },
     })
 
     await pool.query(`UPDATE vaults SET balance_stripe_session_id = $1 WHERE id = $2`, [session.id, vaultId])
@@ -192,7 +204,8 @@ export async function checkBalanceStatus(vaultId: string) {
     const stripe = getStripeClient()
     const session = await stripe.checkout.sessions.retrieve(row.balance_stripe_session_id)
     if (session.payment_status === "paid") {
-      await pool.query(`UPDATE vaults SET balance_paid = true WHERE id = $1`, [vaultId])
+      const intent = session.payment_intent
+      await recordBalancePayment(vaultId, { paymentIntentId: typeof intent === "string" ? intent : (intent?.id ?? null) })
       return { balancePaid: true }
     }
     return { balancePaid: false }

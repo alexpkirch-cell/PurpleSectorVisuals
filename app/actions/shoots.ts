@@ -66,6 +66,9 @@ export interface Shoot {
   vault_prep_submitted_at: string | Date | null
   vault_deposit_amount: string | null
   vault_balance_paid: boolean | null
+  /** How the second 50% arrived: stripe, cash, check or external_transfer. Null until paid. */
+  vault_balance_payment_method?: "stripe" | "cash" | "check" | "external_transfer" | null
+  vault_balance_paid_at?: string | Date | null
   vault_balance_amount: string | null
   vault_expires_at: string | null
   vault_is_minor: boolean | null
@@ -264,6 +267,8 @@ export async function createManualBooking(input: {
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,
@@ -299,6 +304,8 @@ export async function listShoots(): Promise<Shoot[]> {
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,
@@ -336,6 +343,8 @@ export async function getShootAdmin(shootId: string): Promise<Shoot | null> {
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,
@@ -407,6 +416,8 @@ export async function countersignShoot(shootId: string): Promise<Shoot> {
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,
@@ -669,6 +680,8 @@ export async function generateVaultAndAdvance(
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,
@@ -851,6 +864,8 @@ export async function finalizeBooking(
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,

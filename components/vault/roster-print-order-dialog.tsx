@@ -7,11 +7,18 @@ import { startRosterPrintCheckout, type RosterPrintSelection } from "@/app/actio
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import type { UnlockedRosterGallery } from "@/app/actions/roster-vault"
 
 type PhotoChoice = { productId: string; quantity: number }
 
-export function RosterPrintOrderDialog({ gallery }: { gallery: UnlockedRosterGallery }) {
+type PrintGallery = {
+  playerId: string
+  playerName: string
+  /** Thumbnails shown in the picker; watermarked proofs are fine because WHCC prints are fulfilled from the originals server-side. */
+  photos: { id: string; altText: string; imageUrl: string }[]
+  printProducts: { id: string; name: string; price_cents: number }[]
+}
+
+export function RosterPrintOrderDialog({ gallery }: { gallery: PrintGallery }) {
   const [open, setOpen] = useState(false)
   const [choices, setChoices] = useState<Record<string, PhotoChoice>>({})
   const [pending, startTransition] = useTransition()

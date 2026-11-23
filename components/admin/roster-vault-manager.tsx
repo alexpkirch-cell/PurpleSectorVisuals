@@ -7,8 +7,10 @@ import { toast } from "sonner"
 import {
   createRosterVaultGalleryTier,
   createRosterVaultPlayer,
+  createRosterVaultPlayerPhoto,
   createRosterVaultTeam,
   deleteRosterVaultPlayer,
+  deleteRosterVaultPlayerPhoto,
   listRosterVaultPlayers,
   listRosterVaultPhotosAdmin,
   listRosterVaultPrintProducts,
@@ -16,7 +18,6 @@ import {
   updateRosterVaultGalleryTier,
   updateRosterVaultPlayer,
   updateRosterVaultTeam,
-  type RosterVaultPhoto,
   type RosterVaultPlayer,
   type RosterVaultPrintProduct,
   type RosterVaultTeam,
@@ -25,8 +26,10 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { RosterVaultPhotoManager } from "@/components/admin/roster-vault-photo-manager"
+import { RosterVaultBillingSettings } from "@/components/admin/roster-vault-billing-settings"
+import { RosterVaultPhotoManager, type RosterPhotoPreview } from "@/components/admin/roster-vault-photo-manager"
 import { RosterVaultPrintProductManager } from "@/components/admin/roster-vault-print-product-manager"
+import { RosterVaultTeamFolder } from "@/components/admin/roster-vault-team-folder"
 import {
   Dialog,
   DialogContent,
@@ -54,7 +57,7 @@ export function RosterVaultManager({
   const [playersLoadedFor, setPlayersLoadedFor] = useState<string | null>(initialTeams[0]?.id ?? null)
   const [tiers, setTiers] = useState<RosterVaultTier[]>(initialTiers)
   const [printProducts, setPrintProducts] = useState<RosterVaultPrintProduct[]>(initialPrintProducts)
-  const [photos, setPhotos] = useState<RosterVaultPhoto[]>([])
+  const [photos, setPhotos] = useState<RosterPhotoPreview[]>([])
   const [photosFor, setPhotosFor] = useState<string | null>(null)
   const [newTeamOpen, setNewTeamOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<string | null>(null)
@@ -89,6 +92,7 @@ export function RosterVaultManager({
           name: String(formData.get("teamName") ?? ""),
           accessCode: String(formData.get("accessCode") ?? ""),
           password: String(formData.get("teamPassword") ?? ""),
+          vaultBillingMode: formData.get("vaultBillingMode") === "all_inclusive" ? "all_inclusive" : "parent_pay",
         })
         setTeams((current) => [team, ...current])
         setPlayers([])
@@ -298,7 +302,7 @@ export function RosterVaultManager({
               <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
               <h2 className="font-heading text-base font-semibold text-foreground">{selectedTeam.name} access</h2>
             </div>
-            <form action={handleTeamUpdate} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <form key={selectedTeam.id} action={handleTeamUpdate} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="roster-team-name">Team name</Label>
                 <Input id="roster-team-name" name="name" defaultValue={selectedTeam.name} required maxLength={100} />
@@ -321,6 +325,14 @@ export function RosterVaultManager({
             </form>
             <p className="mt-3 text-xs text-muted-foreground">Access codes and passwords are hashed and cannot be viewed here. Replacing either immediately changes the team login.</p>
           </section>
+
+          <RosterVaultBillingSettings
+            key={selectedTeam.id}
+            team={selectedTeam}
+            onTeamChange={(updated) => setTeams((current) => current.map((team) => team.id === updated.id ? updated : team))}
+          />
+
+          <RosterVaultTeamFolder key={`folder-${selectedTeam.id}`} teamId={selectedTeam.id} />
 
           <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5" aria-labelledby="gallery-tiers-heading">
             <div>
@@ -434,7 +446,15 @@ export function RosterVaultManager({
                     )}
                     {photosFor === player.id ? (
                       <div className="mt-4 border-t border-border pt-4">
-                        <RosterVaultPhotoManager playerId={player.id} photos={photos} onPhotosChange={setPhotos} />
+                        <RosterVaultPhotoManager
+                          ownerKey={player.id}
+                          storagePrefix={player.id}
+                          photos={photos}
+                          onPhotosChange={setPhotos}
+                          createRecord={(input) => createRosterVaultPlayerPhoto({ playerId: player.id, ...input })}
+                          deleteRecord={deleteRosterVaultPlayerPhoto}
+                          reload={() => listRosterVaultPhotosAdmin(player.id)}
+                        />
                       </div>
                     ) : null}
                   </li>
@@ -460,6 +480,14 @@ export function RosterVaultManager({
             <div className="flex flex-col gap-1.5"><Label htmlFor="create-team-name">Team name</Label><Input id="create-team-name" name="teamName" placeholder="Eagles Varsity" required maxLength={100} /></div>
             <div className="flex flex-col gap-1.5"><Label htmlFor="create-team-code">Team access code</Label><Input id="create-team-code" name="accessCode" placeholder="EAGLES2026" autoComplete="off" required minLength={6} maxLength={32} /><p className="text-xs text-muted-foreground">6–32 letters, numbers or hyphens. Case-insensitive.</p></div>
             <div className="flex flex-col gap-1.5"><Label htmlFor="create-team-password">Team password</Label><Input id="create-team-password" name="teamPassword" type="password" autoComplete="new-password" required minLength={10} maxLength={128} /><p className="text-xs text-muted-foreground">At least 10 characters.</p></div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="create-team-billing">Delivery &amp; billing mode</Label>
+              <select id="create-team-billing" name="vaultBillingMode" defaultValue="parent_pay" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
+                <option value="parent_pay">Low-Retainer / Parent Pay-Per-Order</option>
+                <option value="all_inclusive">All-Inclusive Team Buyout</option>
+              </select>
+              <p className="text-xs text-muted-foreground">Parent Pay: parents buy single photos, full player bundles, or prints. All-Inclusive: free downloads once you mark the team&apos;s 50% balance paid. You can change this later.</p>
+            </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setNewTeamOpen(false)}>Cancel</Button><Button type="submit" disabled={pending}>Create team</Button></DialogFooter>
           </form>
         </DialogContent>

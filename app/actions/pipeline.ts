@@ -149,6 +149,8 @@ export async function generateVaultAndSendLink(
       v.prep_submitted_at AS vault_prep_submitted_at,
       v.deposit_amount AS vault_deposit_amount,
       v.balance_paid AS vault_balance_paid,
+      v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at,
       v.balance_amount AS vault_balance_amount,
       v.expires_at AS vault_expires_at,
       v.is_minor AS vault_is_minor,

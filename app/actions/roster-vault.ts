@@ -5,6 +5,13 @@ import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import {
+  getRosterTeamBilling,
+  hasPaidPlayerBundle,
+  listPaidPhotoIds,
+  teamDownloadsIncluded,
+  type RosterBillingMode,
+} from "@/lib/roster-vault-access"
 import { createAdminClient, createClient } from "@/lib/supabase/server"
 
 const ROSTER_VAULT_BUCKET = "roster-vault-media"
@@ -20,12 +27,21 @@ const MIN_CODE_LENGTH = 6
 const MIN_PASSWORD_LENGTH = 10
 const MAX_COVER_URL_LENGTH = 2048
 
+export type RosterBalanceMethod = "stripe" | "cash" | "check" | "external_transfer"
+
 export type RosterVaultTeam = {
   id: string
   name: string
   is_active: boolean
   player_count: number
   created_at: string
+  vault_billing_mode: RosterBillingMode
+  /** All-Inclusive teams: the team's second 50% has been received, which unlocks every original. */
+  balance_paid: boolean
+  balance_paid_at: string | null
+  balance_payment_method: RosterBalanceMethod | null
+  /** Parent Pay teams: price of one single-photo download, or null to turn single-photo checkout off. */
+  single_photo_price_cents: number | null
 }
 
 export type RosterVaultPlayer = {
@@ -139,7 +155,8 @@ export async function getRosterVaultSession() {
 export async function listRosterVaultTeams(): Promise<RosterVaultTeam[]> {
   await requireAdmin()
   const { rows } = await sql<RosterVaultTeam>`
-    SELECT t.id, t.name, t.is_active, t.created_at, count(p.id)::int AS player_count
+    SELECT t.id, t.name, t.is_active, t.created_at, count(p.id)::int AS player_count,
+           t.vault_billing_mode, t.balance_paid, t.balance_paid_at, t.balance_payment_method, t.single_photo_price_cents
     FROM public.roster_vault_teams t
     LEFT JOIN public.roster_vault_players p ON p.team_id = t.id
     GROUP BY t.id
@@ -336,8 +353,140 @@ export async function deleteRosterVaultPlayerPhoto(id: string) {
   revalidatePath("/admin/roster-vault")
 }
 
-export async function createRosterVaultTeam(input: { name: string; accessCode: string; password: string }) {
+function parseBillingMode(value: unknown): RosterBillingMode {
+  if (value === "all_inclusive" || value === "parent_pay") return value
+  throw new Error("Choose All-Inclusive Team Buyout or Low-Retainer / Parent Pay-Per-Order.")
+}
+
+function parseSinglePhotoPriceCents(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null
+  const cents = Math.round(Number(value))
+  if (!Number.isInteger(cents) || cents < 100 || cents > 1_000_000) {
+    throw new Error("Enter a single-photo price between $1.00 and $10,000.00, or leave it blank to turn it off.")
+  }
+  return cents
+}
+
+export type RosterVaultTeamPhoto = Omit<RosterVaultPhoto, "player_id">
+
+export async function listRosterVaultTeamPhotosAdmin(teamId: string): Promise<RosterVaultTeamPhoto[]> {
   await requireAdmin()
+  const { rows } = await sql<Omit<RosterVaultTeamPhoto, "watermarked_url"> & { watermarked_path: string }>`
+    SELECT id, alt_text, sort_order, watermarked_path
+    FROM public.roster_vault_team_photos
+    WHERE team_id = ${teamId}
+    ORDER BY sort_order ASC, created_at ASC
+  `
+  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
+  return Promise.all(rows.map(async ({ watermarked_path, ...photo }) => {
+    const { data, error } = await storage.createSignedUrl(watermarked_path, 3600)
+    if (error || !data?.signedUrl) throw new Error("Could not create a team folder preview URL.")
+    return { ...photo, watermarked_url: data.signedUrl }
+  }))
+}
+
+export async function createRosterVaultTeamPhoto(input: {
+  teamId: string
+  watermarkedPath: string
+  originalPath: string
+  altText?: string
+}) {
+  await requireAdmin()
+  const { rows: teamRows } = await sql<{ id: string }>`SELECT id FROM public.roster_vault_teams WHERE id = ${input.teamId} LIMIT 1`
+  if (!teamRows[0]) throw new Error("Team not found.")
+  const safeId = input.teamId.replace(/[^0-9a-f-]/gi, "")
+  const watermarkedMatch = new RegExp(`^teams/${safeId}/([0-9a-f-]{36})-watermarked\\.(jpg|png|webp)$`, "i").exec(input.watermarkedPath)
+  const originalMatch = new RegExp(`^teams/${safeId}/([0-9a-f-]{36})-original\\.(jpg|png|webp)$`, "i").exec(input.originalPath)
+  if (!watermarkedMatch || !originalMatch || watermarkedMatch[1] !== originalMatch[1]) {
+    throw new Error("Invalid team folder file paths.")
+  }
+  const { rows: orderRows } = await sql<{ next_order: number }>`
+    SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS next_order
+    FROM public.roster_vault_team_photos WHERE team_id = ${input.teamId}
+  `
+  const altText = cleanName(input.altText, 160)
+  const { rows } = await sql<{ id: string; sort_order: number }>`
+    INSERT INTO public.roster_vault_team_photos (team_id, watermarked_path, original_path, alt_text, sort_order)
+    VALUES (${input.teamId}, ${input.watermarkedPath}, ${input.originalPath}, ${altText}, ${orderRows[0].next_order})
+    RETURNING id, sort_order
+  `
+  revalidatePath("/admin/roster-vault")
+  return rows[0]
+}
+
+export async function deleteRosterVaultTeamPhoto(id: string) {
+  await requireAdmin()
+  const { rows } = await sql<{ watermarked_path: string; original_path: string }>`
+    SELECT watermarked_path, original_path FROM public.roster_vault_team_photos WHERE id = ${id}
+  `
+  const photo = rows[0]
+  if (!photo) return
+  const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove([photo.watermarked_path, photo.original_path])
+  if (error) throw new Error("Could not delete the private storage files. The team folder record was kept.")
+  await sql`DELETE FROM public.roster_vault_team_photos WHERE id = ${id}`
+  revalidatePath("/admin/roster-vault")
+}
+
+export type RosterTeamBalanceState = {
+  balance_paid: boolean
+  balance_paid_at: string | null
+  balance_payment_method: RosterBalanceMethod | null
+}
+
+const OFFLINE_BALANCE_METHODS = ["cash", "check", "external_transfer"] as const
+
+/**
+ * All-Inclusive Team Buyout: records the team's second 50% as received, which unlocks free high-resolution downloads for
+ * everyone signed in with the team code (every player folder and the shared team folder).
+ */
+export async function markRosterTeamBalancePaid(input: {
+  teamId: string
+  method: (typeof OFFLINE_BALANCE_METHODS)[number]
+  note?: string
+}): Promise<RosterTeamBalanceState> {
+  await requireAdmin()
+  if (!OFFLINE_BALANCE_METHODS.includes(input.method)) throw new Error("Choose Cash, Check, or External Transfer.")
+  const note = cleanName(input.note, 500) || null
+
+  const { rows } = await sql<RosterTeamBalanceState & { vault_billing_mode: RosterBillingMode }>`
+    UPDATE public.roster_vault_teams SET
+      balance_paid = true,
+      balance_paid_at = COALESCE(balance_paid_at, now()),
+      balance_payment_method = ${input.method},
+      balance_payment_note = ${note},
+      updated_at = now()
+    WHERE id = ${input.teamId}
+    RETURNING balance_paid, balance_paid_at, balance_payment_method, vault_billing_mode
+  `
+  if (!rows[0]) throw new Error("Team not found.")
+  revalidatePath("/admin/roster-vault")
+  revalidatePath("/vault/roster")
+  return { balance_paid: rows[0].balance_paid, balance_paid_at: rows[0].balance_paid_at, balance_payment_method: rows[0].balance_payment_method }
+}
+
+/** Re-locks a buyout team's downloads, for a payment that was marked by mistake. */
+export async function markRosterTeamBalanceUnpaid(teamId: string): Promise<RosterTeamBalanceState> {
+  await requireAdmin()
+  const { rows } = await sql<RosterTeamBalanceState>`
+    UPDATE public.roster_vault_teams SET
+      balance_paid = false, balance_paid_at = NULL, balance_payment_method = NULL, balance_payment_note = NULL, updated_at = now()
+    WHERE id = ${teamId}
+    RETURNING balance_paid, balance_paid_at, balance_payment_method
+  `
+  if (!rows[0]) throw new Error("Team not found.")
+  revalidatePath("/admin/roster-vault")
+  revalidatePath("/vault/roster")
+  return rows[0]
+}
+
+export async function createRosterVaultTeam(input: {
+  name: string
+  accessCode: string
+  password: string
+  vaultBillingMode?: RosterBillingMode
+}) {
+  await requireAdmin()
+  const billingMode = parseBillingMode(input.vaultBillingMode ?? "parent_pay")
   const name = cleanName(input.name, MAX_TEAM_NAME)
   const accessCode = normalizeAccessCode(input.accessCode)
   const password = input.password
@@ -356,12 +505,13 @@ export async function createRosterVaultTeam(input: { name: string; accessCode: s
     const { rows } = await sql<RosterVaultTeam>`
       INSERT INTO public.roster_vault_teams (
         name, access_code_salt, access_code_hash, access_code_lookup_hash,
-        password_salt, password_hash
+        password_salt, password_hash, vault_billing_mode
       ) VALUES (
         ${name}, ${codeSalt}, ${hashCredential(accessCode, codeSalt)}, ${hash(accessCode)},
-        ${passwordSalt}, ${hashCredential(password, passwordSalt)}
+        ${passwordSalt}, ${hashCredential(password, passwordSalt)}, ${billingMode}
       )
-      RETURNING id, name, is_active, created_at, 0::int AS player_count
+      RETURNING id, name, is_active, created_at, 0::int AS player_count,
+                vault_billing_mode, balance_paid, balance_paid_at, balance_payment_method, single_photo_price_cents
     `
     created = rows[0]
   } catch (error) {
@@ -380,10 +530,16 @@ export async function updateRosterVaultTeam(input: {
   isActive: boolean
   accessCode?: string
   password?: string
+  vaultBillingMode?: RosterBillingMode
+  /** Dollars-in-cents price for one single-photo download (Parent Pay). Null turns it off. */
+  singlePhotoPriceCents?: number | null
 }) {
   await requireAdmin()
   const name = cleanName(input.name, MAX_TEAM_NAME)
   if (!name) throw new Error("Enter a team name.")
+  const billingMode = input.vaultBillingMode === undefined ? null : parseBillingMode(input.vaultBillingMode)
+  const singlePhotoPriceProvided = input.singlePhotoPriceCents !== undefined
+  const singlePhotoPriceCents = singlePhotoPriceProvided ? parseSinglePhotoPriceCents(input.singlePhotoPriceCents) : null
 
   let codeFields: { salt: string; hash: string; lookup: string } | null = null
   const accessCode = normalizeAccessCode(input.accessCode)
@@ -412,6 +568,8 @@ export async function updateRosterVaultTeam(input: {
         access_code_lookup_hash = COALESCE(${codeFields?.lookup ?? null}, access_code_lookup_hash),
         password_salt = COALESCE(${passwordFields?.salt ?? null}, password_salt),
         password_hash = COALESCE(${passwordFields?.hash ?? null}, password_hash),
+        vault_billing_mode = COALESCE(${billingMode}, vault_billing_mode),
+        single_photo_price_cents = CASE WHEN ${singlePhotoPriceProvided} THEN ${singlePhotoPriceCents}::integer ELSE single_photo_price_cents END,
         updated_at = now()
       WHERE id = ${input.id}
     `
@@ -602,87 +760,196 @@ export async function loginRosterVault(_previous: RosterLoginState, formData: Fo
 export async function getRosterVaultData() {
   const session = await getRosterVaultSession()
   if (!session) return null
-  const { rows } = await sql<{
-    id: string
-    display_name: string
-    jersey_number: string
-    cover_image_url: string | null
-    tier_name: string | null
-    tier_price_cents: number | null
-  }>`
-    SELECT p.id, p.display_name, p.jersey_number, p.cover_image_url,
-           t.name AS tier_name, t.price_cents AS tier_price_cents
-    FROM public.roster_vault_players p
-    LEFT JOIN public.roster_vault_gallery_tiers t ON t.id = p.tier_id AND t.is_active = true
-    WHERE p.team_id = ${session.team_id} AND p.is_active = true
-    ORDER BY p.sort_order ASC, p.display_name ASC
-  `
-  return { teamName: session.team_name, parentName: session.parent_name, players: rows }
+
+  const [billing, playersResult, teamPhotoCount] = await Promise.all([
+    getRosterTeamBilling(session.team_id),
+    sql<{
+      id: string
+      display_name: string
+      jersey_number: string
+      cover_image_url: string | null
+      tier_name: string | null
+      tier_price_cents: number | null
+      bundle_owned: boolean
+    }>`
+      SELECT p.id, p.display_name, p.jersey_number, p.cover_image_url,
+             t.name AS tier_name, t.price_cents AS tier_price_cents,
+             EXISTS (
+               SELECT 1 FROM public.roster_vault_orders o
+               WHERE o.player_id = p.id AND o.buyer_session_id = ${session.id} AND o.status = 'paid'
+             ) AS bundle_owned
+      FROM public.roster_vault_players p
+      LEFT JOIN public.roster_vault_gallery_tiers t ON t.id = p.tier_id AND t.is_active = true
+      WHERE p.team_id = ${session.team_id} AND p.is_active = true
+      ORDER BY p.sort_order ASC, p.display_name ASC
+    `,
+    sql<{ total: number }>`
+      SELECT count(*)::int AS total FROM public.roster_vault_team_photos WHERE team_id = ${session.team_id}
+    `,
+  ])
+
+  const downloadsIncluded = teamDownloadsIncluded(billing)
+  return {
+    teamName: session.team_name,
+    parentName: session.parent_name,
+    billingMode: billing.mode,
+    /** All-Inclusive team whose balance is not paid yet: proofs only. */
+    awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid,
+    downloadsIncluded,
+    singlePhotoPriceCents: billing.mode === "parent_pay" ? billing.singlePhotoPriceCents : null,
+    teamFolderPhotoCount: teamPhotoCount.rows[0]?.total ?? 0,
+    players: playersResult.rows.map((player) => ({ ...player, unlocked: downloadsIncluded || player.bundle_owned })),
+  }
 }
 
-export type UnlockedRosterGallery = {
-  playerId: string
-  playerName: string
-  jerseyNumber: string
+export type RosterGalleryPhoto = {
+  id: string
+  altText: string
+  /** The watermarked proof until this photo is unlocked, then the clean original. */
+  imageUrl: string
+  fileName: string
+  unlocked: boolean
+}
+
+export type RosterGalleryView = {
+  scope: "player" | "team"
+  playerId: string | null
+  title: string
+  jerseyNumber: string | null
   teamName: string
-  tierName: string
-  photos: { id: string; altText: string; imageUrl: string; fileName: string }[]
+  billingMode: RosterBillingMode
+  /** Every original is unlocked for this viewer: the player bundle was bought, or the team buyout is paid. */
+  allUnlocked: boolean
+  /** All-Inclusive team whose balance is still outstanding, so only watermarked proofs are shown. */
+  awaitingTeamBalance: boolean
+  /** The full digital bundle this parent can still buy (Parent Pay, player folders). */
+  bundle: { tierName: string; priceCents: number } | null
+  /** Price of one single-photo download (Parent Pay only), or null when single-photo checkout is off. */
+  singlePhotoPriceCents: number | null
+  photos: RosterGalleryPhoto[]
   printProducts: Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">[]
 }
 
-/** Returns watermark-free originals only after this exact parent session has a paid order for this player. */
-export async function getUnlockedRosterGallery(playerId: string): Promise<UnlockedRosterGallery | null> {
+type GalleryPhotoRow = { id: string; watermarked_path: string; original_path: string; alt_text: string }
+
+/** Signs the clean original only for unlocked photos; everything else gets the watermarked proof. */
+async function signGalleryPhotos(rows: GalleryPhotoRow[], unlocked: (id: string) => boolean, label: string) {
+  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
+  const baseName = label.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "photo"
+
+  return Promise.all(rows.map(async (photo, index): Promise<RosterGalleryPhoto> => {
+    const isUnlocked = unlocked(photo.id)
+    const extension = photo.original_path.split(".").pop()?.toLowerCase() || "jpg"
+    const fileName = `${baseName}-${String(index + 1).padStart(2, "0")}.${extension}`
+    const { data, error } = isUnlocked
+      ? await storage.createSignedUrl(photo.original_path, 3600, { download: fileName })
+      : await storage.createSignedUrl(photo.watermarked_path, 3600)
+    if (error || !data?.signedUrl) throw new Error("Could not open the gallery.")
+    return {
+      id: photo.id,
+      altText: photo.alt_text || `${label}, gallery photo ${index + 1}`,
+      imageUrl: data.signedUrl,
+      fileName,
+      unlocked: isUnlocked,
+    }
+  }))
+}
+
+/**
+ * A player folder for the signed-in parent. Watermarked proofs are always visible; originals are only signed once the
+ * team buyout is paid, this session bought the player's bundle, or this session bought that single photo.
+ */
+export async function getRosterGalleryView(playerId: string): Promise<RosterGalleryView | null> {
   const session = await getRosterVaultSession()
   if (!session) return null
 
-  const { rows: purchaseRows } = await sql<{ player_name: string; jersey_number: string; tier_name: string; team_name: string }>`
-    SELECT p.display_name AS player_name, p.jersey_number, o.tier_name_snapshot AS tier_name, t.name AS team_name
-    FROM public.roster_vault_orders o
-    JOIN public.roster_vault_players p ON p.id = o.player_id
-    JOIN public.roster_vault_teams t ON t.id = o.team_id
-    WHERE o.player_id = ${playerId}
-      AND o.buyer_session_id = ${session.id}
-      AND o.team_id = ${session.team_id}
-      AND o.status = 'paid'
-      AND p.is_active = true
-      AND t.is_active = true
+  const { rows: playerRows } = await sql<{
+    display_name: string
+    jersey_number: string
+    team_name: string
+    tier_name: string | null
+    tier_price_cents: number | null
+  }>`
+    SELECT p.display_name, p.jersey_number, team.name AS team_name,
+           t.name AS tier_name, t.price_cents AS tier_price_cents
+    FROM public.roster_vault_players p
+    JOIN public.roster_vault_teams team ON team.id = p.team_id AND team.is_active = true
+    LEFT JOIN public.roster_vault_gallery_tiers t ON t.id = p.tier_id AND t.is_active = true
+    WHERE p.id = ${playerId} AND p.team_id = ${session.team_id} AND p.is_active = true
     LIMIT 1
   `
-  const purchase = purchaseRows[0]
-  if (!purchase) return null
+  const player = playerRows[0]
+  if (!player) return null
 
-  const { rows: photos } = await sql<{ id: string; original_path: string; alt_text: string; sort_order: number }>`
-    SELECT id, original_path, alt_text, sort_order
-    FROM public.roster_vault_player_photos
-    WHERE player_id = ${playerId}
-    ORDER BY sort_order ASC, created_at ASC
-  `
-  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
-  const signedPhotos = await Promise.all(photos.map(async (photo, index) => {
-    const { data, error } = await storage.createSignedUrl(photo.original_path, 3600, { download: false })
-    if (error || !data?.signedUrl) throw new Error("Could not open the player gallery.")
-    const extension = photo.original_path.split(".").pop()?.toLowerCase() || "jpg"
-    return {
-      id: photo.id,
-      altText: photo.alt_text || `${purchase.player_name}, gallery photo ${index + 1}`,
-      imageUrl: data.signedUrl,
-      fileName: `${purchase.player_name.replace(/[^a-z0-9-]+/gi, "-")}-${String(index + 1).padStart(2, "0")}.${extension}`,
-    }
-  }))
-  const { rows: printProducts } = await sql<Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">>`
-    SELECT id, name, price_cents FROM public.roster_vault_print_products
-    WHERE team_id = ${session.team_id} AND is_active = true
-    ORDER BY name ASC
-  `
+  const billing = await getRosterTeamBilling(session.team_id)
+  const bundleOwned = await hasPaidPlayerBundle(session.id, session.team_id, playerId)
+  const allUnlocked = teamDownloadsIncluded(billing) || bundleOwned
+  const paidPhotoIds = allUnlocked ? new Set<string>() : await listPaidPhotoIds(session.id, "player")
+
+  const [{ rows: photoRows }, { rows: printProducts }] = await Promise.all([
+    sql<GalleryPhotoRow>`
+      SELECT id, watermarked_path, original_path, alt_text
+      FROM public.roster_vault_player_photos
+      WHERE player_id = ${playerId}
+      ORDER BY sort_order ASC, created_at ASC
+    `,
+    sql<Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">>`
+      SELECT id, name, price_cents FROM public.roster_vault_print_products
+      WHERE team_id = ${session.team_id} AND is_active = true
+      ORDER BY name ASC
+    `,
+  ])
+
+  const photos = await signGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), player.display_name)
+  const canBuyBundle =
+    billing.mode === "parent_pay" && !allUnlocked && Boolean(player.tier_name) && (player.tier_price_cents ?? 0) >= 100
 
   return {
+    scope: "player",
     playerId,
-    playerName: purchase.player_name,
-    jerseyNumber: purchase.jersey_number,
-    teamName: purchase.team_name,
-    tierName: purchase.tier_name,
-    photos: signedPhotos,
+    title: player.display_name,
+    jerseyNumber: player.jersey_number,
+    teamName: player.team_name,
+    billingMode: billing.mode,
+    allUnlocked,
+    awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid && !bundleOwned,
+    bundle: canBuyBundle ? { tierName: player.tier_name as string, priceCents: player.tier_price_cents as number } : null,
+    singlePhotoPriceCents: billing.mode === "parent_pay" && !allUnlocked ? billing.singlePhotoPriceCents : null,
+    photos,
     printProducts,
+  }
+}
+
+/** The shared team folder: team-wide photos that are not tied to one player. Same unlock rules, minus the player bundle. */
+export async function getRosterTeamFolderView(): Promise<RosterGalleryView | null> {
+  const session = await getRosterVaultSession()
+  if (!session) return null
+
+  const billing = await getRosterTeamBilling(session.team_id)
+  const allUnlocked = teamDownloadsIncluded(billing)
+  const paidPhotoIds = allUnlocked ? new Set<string>() : await listPaidPhotoIds(session.id, "team")
+
+  const { rows: photoRows } = await sql<GalleryPhotoRow>`
+    SELECT id, watermarked_path, original_path, alt_text
+    FROM public.roster_vault_team_photos
+    WHERE team_id = ${session.team_id}
+    ORDER BY sort_order ASC, created_at ASC
+  `
+  const photos = await signGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), `${session.team_name} team photo`)
+
+  return {
+    scope: "team",
+    playerId: null,
+    title: "Team photos",
+    jerseyNumber: null,
+    teamName: session.team_name,
+    billingMode: billing.mode,
+    allUnlocked,
+    awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid,
+    bundle: null,
+    singlePhotoPriceCents: billing.mode === "parent_pay" && !allUnlocked ? billing.singlePhotoPriceCents : null,
+    photos,
+    printProducts: [],
   }
 }
 

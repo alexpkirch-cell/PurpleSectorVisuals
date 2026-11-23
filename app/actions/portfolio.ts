@@ -28,6 +28,9 @@ export interface PortfolioItem {
   shooter?: string | null
   shot_by?: string | null
   edited_by?: string | null
+  /** Team-member IDs linked through portfolio_item_team_members, in credit order. Filled by the admin list only. */
+  shooter_ids?: string[]
+  editor_ids?: string[]
   camera?: string | null
   lens?: string | null
   settings?: string | null
@@ -82,21 +85,44 @@ async function resolveTeamCreditIds(names: (string | null | undefined)[]) {
   return requested.map((name) => membersByName.get(name.toLowerCase())!)
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Resolves selected team-member IDs (in selection order) and rejects unknown or inactive members. */
+async function resolveTeamMembersById(ids: string[]) {
+  const unique = [...new Set(ids)]
+  if (unique.length > MAX_TEAM_CREDITS_PER_ROLE) throw new Error(`Choose at most ${MAX_TEAM_CREDITS_PER_ROLE} credits per role.`)
+  if (unique.some((id) => !UUID_PATTERN.test(id))) throw new Error("Choose valid team members for credits.")
+  if (unique.length === 0) return [] as { id: string; name: string }[]
+
+  const { rows } = await sql<{ id: string; name: string }>`
+    SELECT id, name FROM public.team_members WHERE is_active = true AND id = ANY(${unique}::uuid[])
+  `
+  const byId = new Map(rows.map((member) => [member.id, member]))
+  if (byId.size !== unique.length) throw new Error("Choose only active team members for credits.")
+  return unique.map((id) => byId.get(id)!)
+}
+
+/**
+ * Makes the join table match the selection exactly: links that were deselected are deleted, newly selected members
+ * are inserted, and members that stay keep their row with an updated order.
+ */
 async function replaceTeamCredits(
   itemId: string,
   role: "shooter" | "editor",
   members: { id: string; name: string }[],
 ) {
+  const memberIds = members.map((member) => member.id)
   await sql`
     DELETE FROM public.portfolio_item_team_members
     WHERE portfolio_item_id = ${itemId} AND credit_type = ${role}
+      AND NOT (team_member_id = ANY(${memberIds}::uuid[]))
   `
   if (members.length === 0) return
   await sql`
     INSERT INTO public.portfolio_item_team_members (portfolio_item_id, team_member_id, credit_type, sort_order)
     SELECT ${itemId}, member_id, ${role}, ord::int - 1
-    FROM unnest(${members.map((member) => member.id)}::uuid[]) WITH ORDINALITY AS credits(member_id, ord)
-    ON CONFLICT DO NOTHING
+    FROM unnest(${memberIds}::uuid[]) WITH ORDINALITY AS credits(member_id, ord)
+    ON CONFLICT (portfolio_item_id, team_member_id, credit_type) DO UPDATE SET sort_order = EXCLUDED.sort_order
   `
 }
 
@@ -163,7 +189,26 @@ export async function listPackagePhotos(packageType: string): Promise<PackagePho
 /** Admin-only version, same shape, used by the Portfolio Content Manager. */
 export async function listPortfolioItemsAdmin(): Promise<PortfolioItem[]> {
   await requireAdmin()
-  return listPortfolioItems()
+  const [items, credits] = await Promise.all([
+    listPortfolioItems(),
+    sql<{ portfolio_item_id: string; team_member_id: string; credit_type: "shooter" | "editor" }>`
+      SELECT portfolio_item_id, team_member_id, credit_type
+      FROM public.portfolio_item_team_members
+      ORDER BY sort_order ASC, created_at ASC
+    `,
+  ])
+
+  const shooterIds = new Map<string, string[]>()
+  const editorIds = new Map<string, string[]>()
+  for (const credit of credits.rows) {
+    const target = credit.credit_type === "shooter" ? shooterIds : editorIds
+    target.set(credit.portfolio_item_id, [...(target.get(credit.portfolio_item_id) ?? []), credit.team_member_id])
+  }
+  return items.map((item) => ({
+    ...item,
+    shooter_ids: shooterIds.get(item.id) ?? [],
+    editor_ids: editorIds.get(item.id) ?? [],
+  }))
 }
 
 /**
@@ -263,6 +308,9 @@ export async function updatePortfolioItem(
     shooter?: string | null
     shot_by?: string | null
     edited_by?: string | null
+    /** Structured credits: the selected team-member IDs become the join-table rows and the public credit text. */
+    shooter_ids?: string[]
+    editor_ids?: string[]
     camera?: string | null
     lens?: string | null
     settings?: string | null
@@ -285,12 +333,28 @@ export async function updatePortfolioItem(
     if (categories.length === 0) throw new Error("An item needs at least one category")
   }
 
-  const shooterCreditsChanged = patch.shooter !== undefined || patch.shot_by !== undefined
-  const editorCreditsChanged = patch.edited_by !== undefined
-  const shooterCredits = shooterCreditsChanged
-    ? await resolveTeamCreditIds([patch.shot_by !== undefined ? patch.shot_by : patch.shooter])
-    : []
-  const editorCredits = editorCreditsChanged ? await resolveTeamCreditIds([patch.edited_by]) : []
+  // Selected IDs win over free-text names; names remain supported for older callers.
+  const shooterMembers = patch.shooter_ids !== undefined
+    ? await resolveTeamMembersById(patch.shooter_ids)
+    : patch.shooter !== undefined || patch.shot_by !== undefined
+      ? await resolveTeamCreditIds([patch.shot_by !== undefined ? patch.shot_by : patch.shooter])
+      : null
+  const editorMembers = patch.editor_ids !== undefined
+    ? await resolveTeamMembersById(patch.editor_ids)
+    : patch.edited_by !== undefined
+      ? await resolveTeamCreditIds([patch.edited_by])
+      : null
+
+  const joinedShooters = shooterMembers?.map((member) => member.name).join(", ") || null
+  const nextShooter = patch.shooter_ids !== undefined
+    ? joinedShooters
+    : patch.shooter !== undefined ? patch.shooter || null : (current.shooter ?? null)
+  const nextShotBy = patch.shooter_ids !== undefined
+    ? joinedShooters
+    : patch.shot_by !== undefined ? patch.shot_by || null : (current.shot_by ?? null)
+  const nextEditedBy = patch.editor_ids !== undefined
+    ? editorMembers?.map((member) => member.name).join(", ") || null
+    : patch.edited_by !== undefined ? patch.edited_by || null : (current.edited_by ?? null)
 
   await sql`
     UPDATE portfolio_items
@@ -298,9 +362,9 @@ export async function updatePortfolioItem(
         category = ${categories[0] ?? current.category},
         categories = ${categories}::text[],
         featured = ${patch.featured ?? current.featured},
-        shooter = ${patch.shooter !== undefined ? patch.shooter || null : (current.shooter ?? null)},
-        shot_by = ${patch.shot_by !== undefined ? patch.shot_by || null : (current.shot_by ?? null)},
-        edited_by = ${patch.edited_by !== undefined ? patch.edited_by || null : (current.edited_by ?? null)},
+        shooter = ${nextShooter},
+        shot_by = ${nextShotBy},
+        edited_by = ${nextEditedBy},
         camera = ${patch.camera !== undefined ? patch.camera || null : (current.camera ?? null)},
         lens = ${patch.lens !== undefined ? patch.lens || null : (current.lens ?? null)},
         settings = ${patch.settings !== undefined ? patch.settings || null : (current.settings ?? null)},
@@ -312,8 +376,8 @@ export async function updatePortfolioItem(
     WHERE id = ${id}
   `
 
-  if (shooterCreditsChanged) await replaceTeamCredits(id, "shooter", shooterCredits)
-  if (editorCreditsChanged) await replaceTeamCredits(id, "editor", editorCredits)
+  if (shooterMembers) await replaceTeamCredits(id, "shooter", shooterMembers)
+  if (editorMembers) await replaceTeamCredits(id, "editor", editorMembers)
 
   // Keep the library's filter metadata in step with edits made in the Portfolio CMS.
   await sql`

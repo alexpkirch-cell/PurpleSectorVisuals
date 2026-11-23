@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { sql } from "@/lib/db"
 import { requireAdmin } from "@/lib/require-admin"
 import { createAdminClient } from "@/lib/supabase/server"
-import { canViewDelivery } from "@/lib/vault-delivery"
+import { canViewDelivery, getDeliveryBalanceState } from "@/lib/vault-delivery"
 import { VAULT_PHOTOS_BUCKET } from "@/lib/vault-photo-storage"
 import { signStoragePaths } from "@/lib/vault-photo-signing"
 
@@ -33,6 +33,10 @@ export interface StandardVaultPrintProduct {
 export interface VaultDeliveryData {
   photos: VaultPhotoView[]
   printProducts: StandardVaultPrintProduct[]
+  /** The second 50% payment is outstanding: photos are watermarked previews with no download or print access. */
+  locked: boolean
+  /** Dollars owed to unlock; 0 when unlocked. */
+  balanceDue: number
 }
 
 interface VaultPhotoRow {
@@ -46,8 +50,22 @@ interface VaultPhotoRow {
   size_bytes: string | number | null
 }
 
-async function toPhotoViews(rows: VaultPhotoRow[]): Promise<VaultPhotoView[]> {
+async function toPhotoViews(rows: VaultPhotoRow[], options?: { watermarkedForVaultId?: string }): Promise<VaultPhotoView[]> {
   if (rows.length === 0) return []
+
+  // Locked galleries never receive a signed URL for any stored file: previews come from the watermark route.
+  if (options?.watermarkedForVaultId) {
+    const vaultId = options.watermarkedForVaultId
+    return rows.map((row) => ({
+      id: row.id,
+      fileName: row.file_name,
+      width: row.width,
+      height: row.height,
+      sizeBytes: null,
+      thumbUrl: `/api/vault-delivery/${vaultId}/preview/${row.id}`,
+      downloadUrl: null,
+    }))
+  }
 
   const [display, originals] = await Promise.all([
     signStoragePaths(rows.map((row) => ({ bucket: row.bucket, path: row.thumb_path ?? row.storage_path }))),
@@ -205,7 +223,7 @@ export async function deleteVaultPhoto(photoId: string): Promise<void> {
  */
 export async function getDeliveryPhotos(vaultId: string): Promise<VaultDeliveryData | null> {
   if (!(await canViewDelivery(vaultId))) return null
-  const [photoRows, printProducts] = await Promise.all([
+  const [photoRows, printProducts, balance] = await Promise.all([
     selectVaultPhotos(vaultId),
     sql<StandardVaultPrintProduct>`
       SELECT id, name, price_cents
@@ -213,6 +231,12 @@ export async function getDeliveryPhotos(vaultId: string): Promise<VaultDeliveryD
       WHERE is_active = true
       ORDER BY sort_order ASC, name ASC
     `.then((result) => result.rows),
+    getDeliveryBalanceState(vaultId),
   ])
-  return { photos: await toPhotoViews(photoRows), printProducts }
+  return {
+    photos: await toPhotoViews(photoRows, balance.locked ? { watermarkedForVaultId: vaultId } : undefined),
+    printProducts: balance.locked ? [] : printProducts,
+    locked: balance.locked,
+    balanceDue: balance.balanceDue,
+  }
 }

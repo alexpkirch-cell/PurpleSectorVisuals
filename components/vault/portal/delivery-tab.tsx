@@ -1,17 +1,23 @@
 "use client"
 
 import { useState } from "react"
-import { Download, DownloadCloud, Images, Printer } from "lucide-react"
+import { CircleCheck, Download, DownloadCloud, Images, Lock, Printer } from "lucide-react"
 import useSWR from "swr"
 
+import { checkBalanceStatus } from "@/app/actions/stripe"
 import { getDeliveryPhotos, type VaultDeliveryData, type VaultPhotoView } from "@/app/actions/vault-photos"
 import { Button, buttonVariants } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { BalanceCheckout } from "@/components/vault/balance-checkout"
 import { StandardPrintOrderDialog } from "@/components/vault/portal/standard-print-order-dialog"
 
 // Signed URLs last an hour; refreshing well inside that keeps tiles and downloads working on a long visit.
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000
+// While the balance is outstanding nothing is signed, so a short poll picks up an offline payment marked by the studio.
+const LOCKED_REFRESH_INTERVAL_MS = 10 * 1000
+
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" })
 
 function PhotoTile({ photo, onOpen }: { photo: VaultPhotoView; onOpen: () => void }) {
   return (
@@ -50,14 +56,32 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
   const [presetPhotoId, setPresetPhotoId] = useState<string | null>(null)
 
-  const { data: delivery, isLoading } = useSWR<VaultDeliveryData | null>(
-    ["delivery-photos", vaultId],
-    () => getDeliveryPhotos(vaultId),
-    { refreshInterval: REFRESH_INTERVAL_MS, revalidateOnFocus: false }
-  )
+  const [payDialogOpen, setPayDialogOpen] = useState(false)
+  const [justUnlocked, setJustUnlocked] = useState(false)
+
+  const {
+    data: delivery,
+    isLoading,
+    mutate,
+  } = useSWR<VaultDeliveryData | null>(["delivery-photos", vaultId], () => getDeliveryPhotos(vaultId), {
+    refreshInterval: (latest) => (latest?.locked ? LOCKED_REFRESH_INTERVAL_MS : REFRESH_INTERVAL_MS),
+    revalidateOnFocus: false,
+  })
   const photos = delivery?.photos ?? null
   const printProducts = delivery?.printProducts ?? []
+  const locked = delivery?.locked ?? false
+  const balanceLabel = currency.format(delivery?.balanceDue ?? 0)
   const openPhoto = photos?.find((photo) => photo.id === openId) ?? null
+
+  async function handlePaymentComplete() {
+    // The webhook is authoritative; confirming here too means the gallery unlocks without waiting for it.
+    await checkBalanceStatus(vaultId)
+    const refreshed = await mutate()
+    if (refreshed && !refreshed.locked) {
+      setPayDialogOpen(false)
+      setJustUnlocked(true)
+    }
+  }
 
   return (
     <section aria-labelledby="delivery-heading" className="flex flex-col gap-6">
@@ -72,13 +96,20 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
             </h2>
             <p className="text-sm text-muted-foreground">
               {photos && photos.length > 0
-                ? `${photos.length} finished ${photos.length === 1 ? "photo" : "photos"}, delivered in full resolution.`
+                ? locked
+                  ? `${photos.length} finished ${photos.length === 1 ? "photo" : "photos"} are ready. These are watermarked previews until your remaining 50% balance of ${balanceLabel} is paid.`
+                  : `${photos.length} finished ${photos.length === 1 ? "photo" : "photos"}, delivered in full resolution.`
                 : "Your finished photos will appear here."}
             </p>
           </div>
         </div>
 
-        {photos && photos.length > 0 && (
+        {photos && photos.length > 0 && locked ? (
+          <Button type="button" size="lg" onClick={() => setPayDialogOpen(true)} className="w-full shrink-0 sm:w-auto">
+            <Lock data-icon="inline-start" />
+            Pay Remaining Balance ({balanceLabel}) to Unlock Downloads
+          </Button>
+        ) : photos && photos.length > 0 ? (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               type="button"
@@ -103,11 +134,17 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
               Download All High-Res
             </a>
           </div>
-        )}
+        ) : null}
       </div>
 
+      {justUnlocked && !locked ? (
+        <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">
+          <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
+          Payment received. Your full-resolution gallery and print ordering are unlocked.
+        </p>
+      ) : null}
       {printNotice ? <p role="status" className="rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">{printNotice}</p> : null}
-      {!isLoading && photos && photos.length > 0 && printProducts.length === 0 ? (
+      {!isLoading && !locked && photos && photos.length > 0 && printProducts.length === 0 ? (
         <p role="status" className="text-xs text-muted-foreground">Print options are being prepared. Check back soon or contact the studio.</p>
       ) : null}
 
@@ -157,22 +194,47 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
                   Download original
                 </a>
               ) : null}
-              <Button
-                type="button"
-                variant="default"
-                disabled={printProducts.length === 0}
-                onClick={() => {
-                  const photoId = openPhoto.id
-                  setOpenId(null)
-                  setPresetPhotoId(photoId)
-                  setPrintDialogOpen(true)
-                }}
-              >
-                <Printer data-icon="inline-start" />
-                Order Prints
-              </Button>
+              {locked ? (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setOpenId(null)
+                    setPayDialogOpen(true)
+                  }}
+                >
+                  <Lock data-icon="inline-start" />
+                  Pay Remaining Balance ({balanceLabel}) to Unlock Downloads
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="default"
+                  disabled={printProducts.length === 0}
+                  onClick={() => {
+                    const photoId = openPhoto.id
+                    setOpenId(null)
+                    setPresetPhotoId(photoId)
+                    setPrintDialogOpen(true)
+                  }}
+                >
+                  <Printer data-icon="inline-start" />
+                  Order Prints
+                </Button>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={payDialogOpen} onOpenChange={setPayDialogOpen}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Pay remaining balance</DialogTitle>
+            <DialogDescription>
+              Your final 50% balance of {balanceLabel} unlocks full-resolution downloads and print ordering the moment it clears.
+            </DialogDescription>
+          </DialogHeader>
+          {payDialogOpen ? <BalanceCheckout vaultId={vaultId} onComplete={() => void handlePaymentComplete()} /> : null}
         </DialogContent>
       </Dialog>
 

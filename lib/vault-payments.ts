@@ -30,6 +30,10 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
     }
   }
 
+  const { rows: before } = await sql<{ deposit_paid: boolean | null; deposit_amount: string | null; shoot_id: string | null }>`
+    SELECT deposit_paid, deposit_amount, shoot_id FROM vaults WHERE id = ${vaultId}
+  `
+
   await sql`
     UPDATE vaults SET
       deposit_paid = true,
@@ -37,6 +41,17 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
       stripe_payment_method_id = COALESCE(${paymentMethodId}, stripe_payment_method_id)
     WHERE id = ${vaultId}
   `
+
+  if (before[0] && !before[0].deposit_paid) {
+    const intent = session.payment_intent
+    await sql`
+      INSERT INTO vault_payments (vault_id, shoot_id, payment_type, method, amount, stripe_payment_intent_id)
+      VALUES (
+        ${vaultId}, ${before[0].shoot_id}, 'retainer', 'stripe', ${Number(before[0].deposit_amount ?? 0)},
+        ${typeof intent === "string" ? intent : (intent?.id ?? null)}
+      )
+    `
+  }
 
   await sql`
     UPDATE projects SET status = 'Retainer_Paid'
@@ -59,13 +74,59 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
   }
 }
 
-export async function recordBalancePayment(vaultId: string, paymentIntentId?: string | null) {
-  await sql`
+export type BalancePaymentMethod = "stripe" | "cash" | "check" | "external_transfer"
+
+/**
+ * Marks a vault's second 50% payment as received, which unlocks the full-resolution gallery. Safe to call repeatedly
+ * (webhook, client poll, admin action): only the first call that flips the flag writes the payment log row and marks
+ * the shoot paid.
+ */
+export async function recordBalancePayment(
+  vaultId: string,
+  options: {
+    paymentIntentId?: string | null
+    method?: BalancePaymentMethod
+    note?: string | null
+    recordedBy?: string | null
+  } = {},
+) {
+  const method = options.method ?? "stripe"
+  const paymentIntentId = options.paymentIntentId ?? null
+
+  const { rows } = await sql<{ shoot_id: string | null; balance_amount: string | null }>`
     UPDATE vaults SET
       balance_paid = true,
-      balance_payment_intent_id = COALESCE(${paymentIntentId ?? null}, balance_payment_intent_id)
-    WHERE id = ${vaultId}
+      balance_paid_at = COALESCE(balance_paid_at, now()),
+      balance_payment_method = COALESCE(balance_payment_method, ${method}),
+      balance_payment_note = COALESCE(${options.note ?? null}, balance_payment_note),
+      balance_payment_intent_id = COALESCE(${paymentIntentId}, balance_payment_intent_id)
+    WHERE id = ${vaultId} AND NOT COALESCE(balance_paid, false)
+    RETURNING shoot_id, balance_amount
   `
+
+  const flipped = rows[0]
+  if (!flipped) {
+    // Already paid: just attach the Stripe payment intent if the first confirmation did not have it yet.
+    if (paymentIntentId) {
+      await sql`
+        UPDATE vaults SET balance_payment_intent_id = COALESCE(balance_payment_intent_id, ${paymentIntentId})
+        WHERE id = ${vaultId}
+      `
+    }
+    return { alreadyPaid: true as const }
+  }
+
+  await sql`
+    INSERT INTO vault_payments (vault_id, shoot_id, payment_type, method, amount, stripe_payment_intent_id, note, recorded_by)
+    VALUES (
+      ${vaultId}, ${flipped.shoot_id}, 'balance', ${method}, ${Number(flipped.balance_amount ?? 0)},
+      ${paymentIntentId}, ${options.note ?? null}, ${options.recordedBy ?? null}
+    )
+  `
+  if (flipped.shoot_id) {
+    await sql`UPDATE shoots SET is_paid = true WHERE id = ${flipped.shoot_id}`
+  }
+  return { alreadyPaid: false as const }
 }
 
 export type OffSessionChargeResult = { success: true; paymentIntentId: string } | { success: false; error: string }
@@ -117,7 +178,7 @@ export async function chargeBalanceOffSession(vaultId: string): Promise<OffSessi
         off_session: true,
         confirm: true,
         description: "Remaining balance (off-session)",
-        metadata: { vaultId, kind: "balance", service_category: vault.service_category ?? "" },
+        metadata: { vaultId, kind: "balance", payment_type: "balance", service_category: vault.service_category ?? "" },
       },
       { idempotencyKey: `balance-${vaultId}-${Math.floor(Date.now() / 60000)}` },
     )
@@ -126,7 +187,7 @@ export async function chargeBalanceOffSession(vaultId: string): Promise<OffSessi
       return { success: false, error: `Charge did not complete (status: ${paymentIntent.status}).` }
     }
 
-    await recordBalancePayment(vaultId, paymentIntent.id)
+    await recordBalancePayment(vaultId, { paymentIntentId: paymentIntent.id })
     return { success: true, paymentIntentId: paymentIntent.id }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Charge failed."

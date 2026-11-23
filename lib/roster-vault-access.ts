@@ -1,0 +1,52 @@
+import "server-only"
+
+import { sql } from "@/lib/db"
+
+export type RosterBillingMode = "all_inclusive" | "parent_pay"
+
+export type RosterTeamBilling = {
+  mode: RosterBillingMode
+  /** The team's second 50% is received (set by an admin). Only meaningful for all_inclusive teams. */
+  balancePaid: boolean
+  /** Price of one single-photo download in parent_pay mode; null disables single-photo checkout. */
+  singlePhotoPriceCents: number | null
+}
+
+export type RosterPhotoKind = "player" | "team"
+
+export async function getRosterTeamBilling(teamId: string): Promise<RosterTeamBilling> {
+  const { rows } = await sql<{ vault_billing_mode: RosterBillingMode; balance_paid: boolean; single_photo_price_cents: number | null }>`
+    SELECT vault_billing_mode, balance_paid, single_photo_price_cents
+    FROM public.roster_vault_teams WHERE id = ${teamId} LIMIT 1
+  `
+  const team = rows[0]
+  return {
+    mode: team?.vault_billing_mode === "all_inclusive" ? "all_inclusive" : "parent_pay",
+    balancePaid: Boolean(team?.balance_paid),
+    singlePhotoPriceCents: team?.single_photo_price_cents ?? null,
+  }
+}
+
+/** All-Inclusive Team Buyout: once the team's balance is paid, every original is free for anyone signed in with the team code. */
+export function teamDownloadsIncluded(billing: RosterTeamBilling) {
+  return billing.mode === "all_inclusive" && billing.balancePaid
+}
+
+/** True when this parent session bought the full digital bundle for the player (a paid tier order). */
+export async function hasPaidPlayerBundle(sessionId: string, teamId: string, playerId: string) {
+  const { rows } = await sql<{ id: string }>`
+    SELECT id FROM public.roster_vault_orders
+    WHERE buyer_session_id = ${sessionId} AND team_id = ${teamId} AND player_id = ${playerId} AND status = 'paid'
+    LIMIT 1
+  `
+  return Boolean(rows[0])
+}
+
+/** Ids of photos this parent session bought individually. */
+export async function listPaidPhotoIds(sessionId: string, kind: RosterPhotoKind) {
+  const { rows } = await sql<{ photo_id: string }>`
+    SELECT photo_id FROM public.roster_vault_photo_orders
+    WHERE buyer_session_id = ${sessionId} AND photo_kind = ${kind} AND status = 'paid'
+  `
+  return new Set(rows.map((row) => row.photo_id))
+}

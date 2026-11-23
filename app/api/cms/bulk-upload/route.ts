@@ -177,6 +177,7 @@ export async function POST(request: Request) {
   const shooterNames = shooterIds.map((id) => namesById.get(id)!)
   const editorNames = editorIds.map((id) => namesById.get(id)!)
 
+  // Public titles stay blank unless an admin typed one; camera filenames (P1010412.JPG) are never used as titles.
   const titleValue = formData.get("title")
   const title = typeof titleValue === "string" ? titleValue.trim().slice(0, 200) : ""
   const storage = createAdminClient().storage
@@ -236,7 +237,7 @@ export async function POST(request: Request) {
             image_url, featured, sort_order
           )
           VALUES (
-            ${title || fileName}, ${category}, ARRAY[${category}]::text[], ${packageType},
+            ${title}, ${category}, ARRAY[${category}]::text[], ${packageType},
             ${shooterNames.join(", ") || null}, ${shooterNames.join(", ") || null}, ${editorNames.join(", ") || null},
             ${exif.cameraBody}, ${exif.cameraBody}, ${exif.lens}, ${exif.aperture}, ${exif.shutterSpeed}, ${exif.iso}, ${exif.focalLength}, ${settings},
             ${imageUrl}, false, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM public.portfolio_items)
@@ -250,7 +251,7 @@ export async function POST(request: Request) {
             shooter, editor, categories, title
           ) VALUES (
             ${PORTFOLIO_IMAGES_BUCKET}, ${publicPath}, ${imageUrl}, ${fileName}, ${image.type}, ${image.size},
-            ${shooterNames.join(", ") || null}, ${editorNames.join(", ") || null}, ARRAY[${category}]::text[], ${title || fileName}
+            ${shooterNames.join(", ") || null}, ${editorNames.join(", ") || null}, ARRAY[${category}]::text[], ${title}
           )
           ON CONFLICT (bucket, storage_path) DO NOTHING
         `

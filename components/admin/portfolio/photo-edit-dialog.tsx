@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -10,67 +10,51 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PORTFOLIO_CATEGORY_OPTIONS, isPortfolioCategory, itemCategories } from "@/lib/portfolio-categories"
 
-const TEAM_OPTION = "Team"
-const UNASSIGNED = "__unassigned__"
 const MAX_TITLE_LENGTH = 200
+const MAX_CREDITS = 12
 
 interface PhotoEditDialogProps {
   item: PortfolioItem
-  people: string[]
+  teamMembers: { id: string; name: string }[]
   onOpenChange: (open: boolean) => void
   onSaved: (updated: PortfolioItem) => void
 }
 
-function PersonSelect({
-  id,
-  label,
-  value,
-  options,
-  disabled,
-  onChange,
-}: {
-  id: string
-  label: string
-  value: string
-  options: string[]
-  disabled: boolean
-  onChange: (value: string) => void
-}) {
-  const choices = [...new Set([...options, ...(value !== UNASSIGNED ? [value] : [])])]
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs text-muted-foreground">
-        {label}
-      </Label>
-      <Select value={value} onValueChange={(next) => next && onChange(next)} disabled={disabled}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-          {choices.map((name) => (
-            <SelectItem key={name} value={name}>
-              {name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
+/** Linked IDs when the join table has them; otherwise match the legacy credit text against active team names. */
+function initialCreditIds(linkedIds: string[] | undefined, creditText: string | null | undefined, members: { id: string; name: string }[]) {
+  if (linkedIds && linkedIds.length > 0) return linkedIds
+  const byName = new Map(members.map((member) => [member.name.trim().toLowerCase(), member.id]))
+  return (creditText ?? "")
+    .split(",")
+    .map((name) => byName.get(name.trim().toLowerCase()))
+    .filter((id): id is string => Boolean(id))
 }
 
-export function PhotoEditDialog({ item, people, onOpenChange, onSaved }: PhotoEditDialogProps) {
+function sameIds(a: string[], b: string[]) {
+  return a.length === b.length && a.every((id, index) => id === b[index])
+}
+
+export function PhotoEditDialog({ item, teamMembers, onOpenChange, onSaved }: PhotoEditDialogProps) {
+  const initialShooters = useMemo(
+    () => initialCreditIds(item.shooter_ids, item.shot_by ?? item.shooter, teamMembers),
+    [item, teamMembers],
+  )
+  const initialEditors = useMemo(
+    () => initialCreditIds(item.editor_ids, item.edited_by, teamMembers),
+    [item, teamMembers],
+  )
+
   const [title, setTitle] = useState(item.title ?? "")
-  const [shooter, setShooter] = useState(item.shot_by ?? item.shooter ?? UNASSIGNED)
-  const [editor, setEditor] = useState(item.edited_by ?? UNASSIGNED)
+  const [shooterIds, setShooterIds] = useState<string[]>(initialShooters)
+  const [editorIds, setEditorIds] = useState<string[]>(initialEditors)
   const [categories, setCategories] = useState<string[]>(itemCategories(item))
   const [saving, setSaving] = useState(false)
 
-  const options = [...new Set([...people, TEAM_OPTION])]
+  const memberOptions = teamMembers.map((member) => ({ value: member.id, label: member.name }))
+  const namesFor = (ids: string[]) =>
+    ids.map((id) => teamMembers.find((member) => member.id === id)?.name).filter((name): name is string => Boolean(name))
 
   async function handleSave() {
     const nextCategories = categories.filter(isPortfolioCategory)
@@ -80,26 +64,28 @@ export function PhotoEditDialog({ item, people, onOpenChange, onSaved }: PhotoEd
     }
 
     const nextTitle = title.trim().slice(0, MAX_TITLE_LENGTH)
-    const nextShooter = shooter === UNASSIGNED ? null : shooter
-    const nextEditor = editor === UNASSIGNED ? null : editor
+    const shootersChanged = !sameIds(shooterIds, initialShooters)
+    const editorsChanged = !sameIds(editorIds, initialEditors)
 
     setSaving(true)
     try {
+      // Credits are only sent when they were edited, so untouched legacy credit text is never overwritten.
       await updatePortfolioItem(item.id, {
         title: nextTitle,
         categories: nextCategories,
-        shooter: nextShooter,
-        shot_by: nextShooter,
-        edited_by: nextEditor,
+        ...(shootersChanged ? { shooter_ids: shooterIds } : {}),
+        ...(editorsChanged ? { editor_ids: editorIds } : {}),
       })
+
+      const shooterText = namesFor(shooterIds).join(", ") || null
+      const editorText = namesFor(editorIds).join(", ") || null
       onSaved({
         ...item,
         title: nextTitle,
         category: nextCategories[0],
         categories: nextCategories,
-        shooter: nextShooter,
-        shot_by: nextShooter,
-        edited_by: nextEditor,
+        ...(shootersChanged ? { shooter: shooterText, shot_by: shooterText, shooter_ids: shooterIds } : {}),
+        ...(editorsChanged ? { edited_by: editorText, editor_ids: editorIds } : {}),
       })
       toast.success("Photo updated")
       onOpenChange(false)
@@ -144,22 +130,32 @@ export function PhotoEditDialog({ item, people, onOpenChange, onSaved }: PhotoEd
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <PersonSelect
-              id="edit-photo-shooter"
-              label="Shooter"
-              value={shooter}
-              options={options}
-              disabled={saving}
-              onChange={setShooter}
-            />
-            <PersonSelect
-              id="edit-photo-editor"
-              label="Editor"
-              value={editor}
-              options={options}
-              disabled={saving}
-              onChange={setEditor}
-            />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-photo-shooters" className="text-xs text-muted-foreground">
+                Shooters
+              </Label>
+              <MultiSelect
+                id="edit-photo-shooters"
+                options={memberOptions}
+                value={shooterIds}
+                onChange={setShooterIds}
+                placeholder="Select shooters"
+                max={MAX_CREDITS}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="edit-photo-editors" className="text-xs text-muted-foreground">
+                Editors
+              </Label>
+              <MultiSelect
+                id="edit-photo-editors"
+                options={memberOptions}
+                value={editorIds}
+                onChange={setEditorIds}
+                placeholder="Select editors"
+                max={MAX_CREDITS}
+              />
+            </div>
           </div>
 
           <div className="flex flex-col gap-1.5">
