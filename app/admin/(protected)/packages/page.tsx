@@ -1,9 +1,7 @@
 import type { Metadata } from "next"
 
 import { listPackages } from "@/app/actions/packages"
-import { listBookingAddons, listBookingTiers } from "@/app/actions/booking-config"
 import { PackageManager } from "@/components/admin/package-manager"
-import { BookingTierManager } from "@/components/admin/booking-tier-manager"
 
 export const metadata: Metadata = {
   title: "Package Manager | Purple Sector Visuals",
@@ -11,11 +9,7 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminPackagesPage() {
-  const [packages, bookingTiers, bookingAddons] = await Promise.all([
-    listPackages(),
-    listBookingTiers(),
-    listBookingAddons(),
-  ])
+  const packages = await listPackages()
 
   return (
     <div className="flex flex-col gap-10">
@@ -27,14 +21,10 @@ export default async function AdminPackagesPage() {
         </p>
       </div>
 
-      <BookingTierManager initialTiers={bookingTiers} initialAddons={bookingAddons} />
-
-      <div className="h-px bg-border" />
-
       <div>
-        <h2 className="font-heading text-lg font-medium text-foreground">Public Package Catalog</h2>
+        <h2 className="font-heading text-lg font-medium text-foreground">Canonical Package Catalog</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          The category-based packages shown on the public /packages page.
+          These packages and add-ons are the single pricing source for the public configurator, booking inquiry, and Admin Manual Booking.
         </p>
       </div>
 

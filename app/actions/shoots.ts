@@ -9,6 +9,7 @@ import { buildMapsUrl } from "@/lib/maps"
 import { advanceShootForVault, finalizeBookedShoot } from "@/lib/shoot-booking"
 import { splitTotal } from "@/lib/payment-terms"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
+import { resolveCanonicalPackageQuote } from "@/lib/catalog-pricing"
 import { contractTotalOf, leadShooterName } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
 import { createClient } from "@/lib/supabase/server"
@@ -145,15 +146,30 @@ export async function createShootInquiry(formData: {
   clientName: string
   clientEmail: string
   clientPhone?: string
-  shootType: string
+  /** Kept only for custom / undecided inquiries; canonical packages supply their own category. */
+  shootType?: string
+  packageId?: string | null
+  selectedAddOnIds?: string[]
   shootDate?: string
   location?: string
   preferredShooter?: string
   notes?: string
 }) {
-  if (!formData.clientName?.trim() || !formData.clientEmail?.trim() || !formData.shootType?.trim()) {
-    throw new Error("Missing required fields")
+  if (!formData.clientName?.trim() || !formData.clientEmail?.trim()) {
+    throw new Error("Client name and email are required")
   }
+
+  const selectedAddOnIds = formData.selectedAddOnIds ?? []
+  const packageQuote = formData.packageId
+    ? await resolveCanonicalPackageQuote({ packageId: formData.packageId, addOnIds: selectedAddOnIds })
+    : null
+  if (!packageQuote && selectedAddOnIds.length > 0) throw new Error("Choose a current package before selecting add-ons.")
+  const shootType = packageQuote?.package.category ?? (formData.shootType?.trim() || "Custom")
+  const packageName = packageQuote?.package.title ?? null
+  const packagePrice = packageQuote?.quote.basePrice ?? 0
+  const selectedAddons = packageQuote?.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price })) ?? []
+  const total = packageQuote?.quote.total ?? 0
+  const schedule = packageQuote?.quote ?? computeQuote({ basePrice: 0, addons: [], discountType: "fixed", discountValue: 0 })
 
   let vaultAccessCode = generateVaultCode()
 
@@ -169,12 +185,18 @@ export async function createShootInquiry(formData: {
   const { rows } = await sql<{ id: string }>`
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date,
-      location, preferred_shooter, notes, vault_access_code
+      location, preferred_shooter, notes, vault_access_code,
+      package_id, is_custom_package, selected_package, package_price, selected_add_on_ids, selected_addons,
+      discount_type, discount_value, total_price, base_price, deposit_amount, balance_amount,
+      deposit_amount_custom, is_comped
     )
     VALUES (
       ${formData.clientName}, ${formData.clientEmail}, ${formData.clientPhone ?? null},
-      ${formData.shootType}, ${formData.shootDate ?? null}, ${formData.location ?? null},
-      ${formData.preferredShooter ?? null}, ${formData.notes ?? null}, ${vaultAccessCode}
+      ${shootType}, ${formData.shootDate ?? null}, ${formData.location ?? null},
+      ${formData.preferredShooter ?? null}, ${formData.notes ?? null}, ${vaultAccessCode},
+      ${packageQuote?.package.id ?? null}, false, ${packageName}, ${packagePrice}, ${selectedAddOnIds}::text[],
+      ${JSON.stringify(selectedAddons)}, 'fixed', 0, ${schedule.total}, ${schedule.total},
+      ${schedule.deposit}, ${schedule.balance}, false, ${Boolean(packageQuote && schedule.isComped)}
     )
     RETURNING id
   `
@@ -198,9 +220,11 @@ export async function createManualBooking(input: {
   clientEmail: string
   clientPhone?: string
   shootType: string
-  selectedPackage: string
-  packagePrice: number
-  selectedAddons: SettlementItem[]
+  packageId?: string | null
+  isCustomPackage?: boolean
+  customPackageName?: string
+  customPrice?: number
+  selectedAddOnIds?: string[]
   discountType: DiscountType
   discountValue: number
   shootDate?: string
@@ -219,11 +243,9 @@ export async function createManualBooking(input: {
 
   const clientName = input.clientName?.trim()
   const clientEmail = input.clientEmail?.trim()
-  const shootType = input.shootType?.trim()
-  if (!clientName || !clientEmail || !shootType) {
-    throw new Error("Client name, email, and shoot type are required")
+  if (!clientName || !clientEmail) {
+    throw new Error("Client name and email are required")
   }
-  if (!MANUAL_SHOOT_TYPES.has(shootType)) throw new Error("Choose one of the five core shoot types or Custom.")
 
   const startingStage = input.startingStage ?? "new_inquiry"
   if (!MANUAL_BOOKING_STAGES.has(startingStage)) throw new Error("Choose a valid starting pipeline stage.")
@@ -235,15 +257,43 @@ export async function createManualBooking(input: {
   const locationMapsUrl = location ? input.locationMapsUrl?.trim() || buildMapsUrl(location) : null
   const shooters = input.assignedShooters.filter((s) => s.name.trim())
   const editors = input.assignedEditors.filter((name) => name.trim())
-  const addons = input.selectedAddons.map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
-  const quote = computeQuote({
-    basePrice: input.packagePrice,
-    addons,
-    discountType: input.discountType,
-    discountValue: input.discountValue,
-  })
-  const selectedPackage = input.selectedPackage?.trim() || null
-  const isComped = quote.isComped && selectedPackage !== null
+  const selectedAddOnIds = input.selectedAddOnIds ?? []
+  let selectedPackage = ""
+  let packageId: string | null = null
+  let packageCategory: string | null = null
+  let packagePrice = 0
+  let addons: SettlementItem[] = []
+  let quote: ReturnType<typeof computeQuote>
+
+  if (input.isCustomPackage) {
+    if (input.packageId || selectedAddOnIds.length > 0) throw new Error("Custom packages cannot use catalog package or add-on IDs.")
+    selectedPackage = input.customPackageName?.trim().slice(0, 120) || "Custom"
+    packagePrice = Number(input.customPrice)
+    if (!Number.isFinite(packagePrice) || packagePrice < 0) throw new Error("Enter a valid custom package amount of $0.00 or more.")
+    quote = computeQuote({ basePrice: packagePrice, addons: [], discountType: input.discountType, discountValue: input.discountValue })
+  } else if (input.packageId) {
+    const resolved = await resolveCanonicalPackageQuote({
+      packageId: input.packageId,
+      addOnIds: selectedAddOnIds,
+      discountType: input.discountType,
+      discountValue: input.discountValue,
+    })
+    packageId = resolved.package.id
+    packageCategory = resolved.package.category
+    selectedPackage = resolved.package.title
+    packagePrice = Number(resolved.package.base_price)
+    addons = resolved.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price }))
+    quote = resolved.quote
+  } else {
+    if (selectedAddOnIds.length > 0) throw new Error("Choose a package before selecting add-ons.")
+    quote = computeQuote({ basePrice: 0, addons: [], discountType: input.discountType, discountValue: input.discountValue })
+  }
+
+  const shootType = packageCategory ?? input.shootType?.trim()
+  if (!shootType || !MANUAL_SHOOT_TYPES.has(shootType)) {
+    throw new Error("Choose a valid shoot type from the five core categories or Custom.")
+  }
+  const isComped = quote.isComped && Boolean(selectedPackage)
   const total = roundMoney(quote.total)
   const rawRetainer = input.retainerAmount === undefined
     ? roundMoney(total / 2)
@@ -274,7 +324,7 @@ export async function createManualBooking(input: {
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
       preferred_shooter, notes, vault_access_code, status,
-      selected_package, package_price, selected_addons, discount_type, discount_value,
+      package_id, is_custom_package, selected_package, package_price, selected_add_on_ids, selected_addons, discount_type, discount_value,
       total_price, base_price, deposit_amount, balance_amount, deposit_amount_custom, is_comped,
       driver_reimbursement, is_paid, assigned_shooters, assigned_editors
     )
@@ -282,7 +332,7 @@ export async function createManualBooking(input: {
       ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
       ${shootDate}, ${location}, ${locationMapsUrl}, ${leadShooterName(shooters)},
       ${input.notes?.trim() || null}, ${vaultAccessCode}, ${status},
-      ${selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
+      ${packageId}, ${Boolean(input.isCustomPackage)}, ${selectedPackage || null}, ${packagePrice}, ${selectedAddOnIds}::text[], ${JSON.stringify(addons)}, ${input.discountType},
       ${Number(input.discountValue) || 0}, ${total}, ${total}, ${depositAmount}, ${balanceAmount}, true, ${isComped},
       ${driverReimbursement}, ${depositPaid && balanceAmount === 0}, ${JSON.stringify(shooters)}, ${JSON.stringify(editors)}
     )

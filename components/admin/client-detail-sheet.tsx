@@ -4,8 +4,7 @@ import { useMemo, useState } from "react"
 import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
- import { Badge } from "@/components/ui/badge"
- import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
  import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -14,7 +13,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { type Shoot } from "@/app/actions/shoots"
 import { generateVaultAndSendLink } from "@/app/actions/pipeline"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
-import type { BookingAddon, BookingTier, PackageTier } from "@/app/actions/booking-config"
+import type { ServicePackage } from "@/lib/packages"
+import { computeQuote, type DiscountType } from "@/lib/pricing"
 import {
   calculateFourBucketSplit,
   type EditingScenario,
@@ -88,31 +88,29 @@ function buildActivityFeed(shoot: Shoot): ActivityEntry[] {
 
 export function ClientDetailSheet({
   shoot,
-  bookingTiers,
-  bookingAddons,
+  packages,
   onOpenChange,
   onFinalized,
 }: {
   shoot: Shoot | null
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
+  packages: ServicePackage[]
   onOpenChange: (open: boolean) => void
   onFinalized: (shoot: Shoot) => void
 }) {
   const [adminNotes, setAdminNotes] = useState("")
-  const [packageTier, setPackageTier] = useState<PackageTier>("Base")
+  const [packageId, setPackageId] = useState("")
+  const [customPrice, setCustomPrice] = useState("0")
   const [addonIds, setAddonIds] = useState<string[]>([])
+  const [discountType, setDiscountType] = useState<DiscountType>("fixed")
+  const [discountValue, setDiscountValue] = useState("0")
   const [confirmedDate, setConfirmedDate] = useState("")
   const [confirmedTime, setConfirmedTime] = useState("")
   const [confirmedLocation, setConfirmedLocation] = useState("")
-  const [totalPrice, setTotalPrice] = useState("0")
-  const [priceTouched, setPriceTouched] = useState(false)
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [isFinalizing, setIsFinalizing] = useState(false)
   const [leadSource, setLeadSource] = useState<LeadSource>("psv_house")
 
-  // The team is assigned once, below. The revenue preview reads it instead of asking again.
   const shootingScenario: ShootingScenario =
     shooters.length < 2 ? "solo" : shooters.some((shooter) => shooter.role === "co_lead") ? "two_equal" : "lead_second"
   const leadShooter = asPhotographer(leadShooterName(shooters))
@@ -124,13 +122,18 @@ export function ClientDetailSheet({
   if (shoot !== syncedShoot) {
     setSyncedShoot(shoot)
     if (shoot) {
+      const currentPackage = packages.find((pkg) => pkg.id === shoot.package_id)
+        ?? packages.find((pkg) => pkg.title === shoot.selected_package && pkg.category === shoot.shoot_type)
       setAdminNotes(shoot.admin_notes ?? "")
-      setPackageTier((shoot.package_tier as PackageTier) || "Base")
-      setAddonIds(
-        (shoot.selected_addons ?? [])
-          .map((item) => bookingAddons.find((a) => a.name === item.label)?.id)
-          .filter((id): id is string => !!id),
-      )
+      setPackageId(shoot.is_custom_package ? "custom" : currentPackage?.id ?? "")
+      setCustomPrice(String(Number(shoot.package_price) || 0))
+      setAddonIds(shoot.selected_add_on_ids?.length
+        ? shoot.selected_add_on_ids
+        : (shoot.selected_addons ?? [])
+            .map((item) => currentPackage?.add_ons.find((addon) => addon.name === item.label)?.id)
+            .filter((id): id is string => Boolean(id)))
+      setDiscountType(shoot.discount_type ?? "fixed")
+      setDiscountValue(String(Number(shoot.discount_value) || 0))
       const rawShootDate: unknown = shoot.shoot_date
       const shootDateIso = rawShootDate
         ? rawShootDate instanceof Date
@@ -142,29 +145,29 @@ export function ClientDetailSheet({
       setConfirmedLocation(shoot.location ?? "")
       setShooters(shootersOf(shoot))
       setEditors(editorsOf(shoot))
-      setPriceTouched(false)
     }
   }
 
-  const calculatedTotal = useMemo(() => {
-    const addonsTotal = addonIds.reduce((sum, id) => {
-      const addon = bookingAddons.find((a) => a.id === id)
-      return sum + (addon?.price ?? 0)
-    }, 0)
-    const tierPrice = bookingTiers.find((t) => t.tier_key === packageTier)?.price ?? 0
-    return tierPrice + addonsTotal
-  }, [packageTier, addonIds, bookingTiers, bookingAddons])
-
-  if (!priceTouched && totalPrice !== String(calculatedTotal)) {
-    setTotalPrice(String(calculatedTotal))
-  }
-
-  const isPriceOverridden = priceTouched && Number(totalPrice) !== calculatedTotal
+  const selectedPackage = packages.find((pkg) => pkg.id === packageId) ?? null
+  const isCustomPackage = packageId === "custom"
+  const packageBasePrice = isCustomPackage
+    ? Number(customPrice) || 0
+    : Number(selectedPackage?.base_price) || 0
+  const selectedAddons = (selectedPackage?.add_ons ?? [])
+    .filter((addon) => addonIds.includes(addon.id))
+    .map((addon) => ({ label: addon.name, amount: Number(addon.price) || 0 }))
+  const quote = computeQuote({
+    basePrice: packageBasePrice,
+    addons: selectedAddons,
+    discountType,
+    discountValue: Number(discountValue) || 0,
+  })
+  const calculatedTotal = quote.total
 
   const revenueSplit = useMemo(
     () =>
       calculateFourBucketSplit({
-        grossTotal: Number(totalPrice) || 0,
+        grossTotal: calculatedTotal,
         leadSource,
         shootingScenario,
         soloShooter,
@@ -172,30 +175,32 @@ export function ClientDetailSheet({
         editingScenario,
         singleEditor,
       }),
-    [totalPrice, leadSource, shootingScenario, soloShooter, leadShooter, editingScenario, singleEditor],
+    [calculatedTotal, leadSource, shootingScenario, soloShooter, leadShooter, editingScenario, singleEditor],
   )
 
   function toggleAddon(id: string) {
-    setAddonIds((current) => (current.includes(id) ? current.filter((a) => a !== id) : [...current, id]))
+    setAddonIds((current) => (current.includes(id) ? current.filter((addonId) => addonId !== id) : [...current, id]))
   }
 
   async function handleGenerateVaultAndSendLink() {
     if (!shoot) return
+    if (!packageId) {
+      toast.error("Choose a current package or Custom pricing before generating the vault.")
+      return
+    }
     setIsFinalizing(true)
     try {
-      const selectedAddons = addonIds.map((id) => {
-        const addon = bookingAddons.find((a) => a.id === id)!
-        return { label: addon.name, amount: addon.price }
-      })
-
       const { shoot: updated, pinCode } = await generateVaultAndSendLink(shoot.id, {
         adminNotes: adminNotes || null,
-        packageTier,
-        selectedAddons,
+        packageId: selectedPackage?.id ?? null,
+        isCustomPackage,
+        customPrice: isCustomPackage ? packageBasePrice : undefined,
+        selectedAddOnIds: addonIds,
+        discountType,
+        discountValue: Number(discountValue) || 0,
         confirmedDate: confirmedDate || null,
         confirmedTime: confirmedTime || null,
         confirmedLocation: confirmedLocation || null,
-        totalPrice: Number(totalPrice) || 0,
         assignedShooters: shooters,
         assignedEditors: editors,
       })
