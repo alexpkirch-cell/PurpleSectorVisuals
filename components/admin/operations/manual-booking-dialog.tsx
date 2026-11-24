@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
 
@@ -22,7 +22,6 @@ import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { listActivePackages } from "@/app/actions/packages"
 import { createManualBooking, type Shoot } from "@/app/actions/shoots"
-import { formatCurrency } from "@/lib/operations"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
 import type { AssignedShooter } from "@/lib/settlement"
 import { cn } from "@/lib/utils"
@@ -57,6 +56,15 @@ type RetainerMethod = (typeof RETAINER_METHODS)[number]["value"]
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
 
 export function ManualBookingDialog({
   open,
@@ -96,13 +104,10 @@ export function ManualBookingDialog({
   const isCustom = packageId === CUSTOM_PACKAGE
 
   const addonCatalog = selectedPackage?.add_ons ?? []
-  const addonOptions = useMemo(
-    () => addonCatalog.map((addon) => ({
-      value: addon.id,
-      label: `${addon.name} (${formatCurrency(Number(addon.price) || 0)})`,
-    })),
-    [addonCatalog],
-  )
+  const addonOptions = addonCatalog.map((addon) => ({
+    value: addon.id,
+    label: `${addon.name} (${formatCurrency(Number(addon.price) || 0)})`,
+  }))
 
   const packageName = isCustom ? customPackageName.trim() || "Custom" : (selectedPackage?.title ?? "")
   const packagePrice = isCustom ? Number(customPrice) || 0 : Number(selectedPackage?.base_price) || 0

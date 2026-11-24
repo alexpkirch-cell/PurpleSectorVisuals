@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
@@ -164,19 +164,15 @@ export function ClientDetailSheet({
   })
   const calculatedTotal = quote.total
 
-  const revenueSplit = useMemo(
-    () =>
-      calculateFourBucketSplit({
-        grossTotal: calculatedTotal,
-        leadSource,
-        shootingScenario,
-        soloShooter,
-        leadShooter,
-        editingScenario,
-        singleEditor,
-      }),
-    [calculatedTotal, leadSource, shootingScenario, soloShooter, leadShooter, editingScenario, singleEditor],
-  )
+  const revenueSplit = calculateFourBucketSplit({
+    grossTotal: calculatedTotal,
+    leadSource,
+    shootingScenario,
+    soloShooter,
+    leadShooter,
+    editingScenario,
+    singleEditor,
+  })
 
   function toggleAddon(id: string) {
     setAddonIds((current) => (current.includes(id) ? current.filter((addonId) => addonId !== id) : [...current, id]))

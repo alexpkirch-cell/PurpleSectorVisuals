@@ -24,22 +24,20 @@ export function deferResizeObserver(target: Window | null | undefined) {
     constructor(callback: ResizeObserverCallback) {
       let frame = 0
       let pending: ResizeObserverEntry[] = []
-      let self: ResizeObserver | undefined
 
-      const deliver = (entries: ResizeObserverEntry[]) => {
+      const deliver: ResizeObserverCallback = (entries, observer) => {
         pending = pending.concat(entries)
         if (frame) return
         frame = win.requestAnimationFrame(() => {
           frame = 0
           const batch = pending
           pending = []
-          callback(batch, self as ResizeObserver)
+          callback(batch, observer)
         })
       }
 
       super(deliver)
-      self = this
-      this.deliver = deliver
+      this.deliver = (entries) => deliver(entries, this)
     }
 
     observe(target: Element, options?: ResizeObserverOptions) {

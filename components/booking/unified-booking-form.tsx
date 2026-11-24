@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Camera } from "lucide-react"
 
@@ -49,12 +49,12 @@ export function UnifiedBookingForm({
   const isCustomProject = selectedPackageId === CUSTOM_PROJECT_VALUE || !selectedPackage
   const packageAddOns = selectedPackage?.add_ons ?? []
   const selectedAddOns = packageAddOns.filter((addOn) => selectedAddOnIds.includes(addOn.id))
-  const quote = useMemo(() => computeQuote({
+  const quote = computeQuote({
     basePrice: Number(selectedPackage?.base_price ?? 0),
     addons: selectedAddOns.map((addOn) => ({ label: addOn.name, amount: Number(addOn.price) || 0 })),
     discountType: "fixed",
     discountValue: 0,
-  }), [selectedPackage, selectedAddOns])
+  })
 
   function handlePackageChange(value: string | null) {
     setSelectedPackageId(value ?? "")
@@ -131,7 +131,13 @@ export function UnifiedBookingForm({
           <Label htmlFor="shootType">Shoot type / package</Label>
           <Select value={selectedPackageId} onValueChange={handlePackageChange}>
             <SelectTrigger id="shootType" className="w-full">
-              <SelectValue placeholder="Select a package" className="truncate" />
+              <SelectValue placeholder="Select a package" className="truncate">
+                {selectedPackage
+                  ? `${selectedPackage.title} — ${currency.format(Number(selectedPackage.base_price))}`
+                  : selectedPackageId === CUSTOM_PROJECT_VALUE
+                    ? CUSTOM_PROJECT_LABEL
+                    : undefined}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent className="w-[--radix-select-trigger-width] min-w-full max-w-[95vw]">
               <SelectGroup>

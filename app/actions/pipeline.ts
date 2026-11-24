@@ -94,8 +94,13 @@ export async function generateVaultAndSendLink(
     : shoot.shoot_date
   const assignedShooters = input.assignedShooters.filter((shooter) => shooter.name.trim())
   const assignedEditors = input.assignedEditors.filter((name) => name.trim())
-  const depositAmount = quote.deposit
-  const balanceAmount = quote.balance
+  const customRetainer = Boolean(shoot.deposit_amount_custom)
+  const depositAmount = quote.isComped
+    ? 0
+    : customRetainer
+      ? Math.round(Math.min(Math.max(Number(shoot.deposit_amount) || 0, 0), quote.total) * 100) / 100
+      : quote.deposit
+  const balanceAmount = quote.isComped ? 0 : Math.round((quote.total - depositAmount) * 100) / 100
 
   await sql`
     UPDATE shoots SET
@@ -114,7 +119,7 @@ export async function generateVaultAndSendLink(
       total_price = ${quote.total},
       deposit_amount = ${depositAmount},
       balance_amount = ${balanceAmount},
-      deposit_amount_custom = false,
+      deposit_amount_custom = ${customRetainer},
       is_comped = ${quote.isComped},
       travel_fee = 0,
       assigned_shooters = ${JSON.stringify(assignedShooters)},

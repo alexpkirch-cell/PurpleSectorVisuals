@@ -170,7 +170,6 @@ export async function createShootInquiry(formData: {
   const packageName = packageQuote?.package.title ?? null
   const packagePrice = packageQuote?.quote.basePrice ?? 0
   const selectedAddons = packageQuote?.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price })) ?? []
-  const total = packageQuote?.quote.total ?? 0
   const schedule = packageQuote?.quote ?? computeQuote({ basePrice: 0, addons: [], discountType: "fixed", discountValue: 0 })
 
   let vaultAccessCode = generateVaultCode()
@@ -572,9 +571,6 @@ export async function updateShoot(
     clientName: string
     clientEmail: string
     clientPhone: string | null
-    /** Manual contract total. It replaces the package auto-calculation: 0 comps the shoot, anything above 0 un-comps it. */
-    basePrice: number
-    travelFee: number
     isPaid: boolean
     notes: string | null
     location: string | null
@@ -587,11 +583,6 @@ export async function updateShoot(
   const location = fields.location?.trim() || null
   const locationMapsUrl = location ? fields.locationMapsUrl?.trim() || buildMapsUrl(location) : null
 
-  const priceChanged = fields.basePrice !== undefined
-  const price = priceChanged ? Math.max(0, Number(fields.basePrice) || 0) : null
-  // The typed number is the single source of truth for comp status, so a comped shoot can take a real price.
-  const isComped = price === null ? null : price === 0
-
   await sql`
     UPDATE shoots SET
       client_name = COALESCE(NULLIF(BTRIM(${fields.clientName ?? null}), ''), client_name),
@@ -599,16 +590,11 @@ export async function updateShoot(
       client_phone = CASE WHEN ${fields.clientPhone !== undefined}::boolean THEN NULLIF(BTRIM(${fields.clientPhone ?? null}), '') ELSE client_phone END,
       location = CASE WHEN ${locationChanged}::boolean THEN ${location} ELSE location END,
       location_maps_url = CASE WHEN ${locationChanged}::boolean THEN ${locationMapsUrl} ELSE location_maps_url END,
-      base_price = COALESCE(${price}::numeric, base_price),
-      total_price = COALESCE(${price}::numeric, total_price),
-      is_comped = COALESCE(${isComped}::boolean, is_comped),
-      travel_fee = COALESCE(${fields.travelFee ?? null}, travel_fee),
       is_paid = COALESCE(${fields.isPaid ?? null}, is_paid),
       notes = COALESCE(${fields.notes ?? null}, notes)
     WHERE id = ${id}
   `
 
-  if (price !== null) await syncShootPaymentAmounts(id)
   if (locationChanged) await syncShootToGoogleCalendar(id)
 
   revalidatePath("/admin")
@@ -701,50 +687,6 @@ async function saveVaultDocuments(shootId: string) {
     UPDATE vaults SET invoice_data = ${JSON.stringify(invoice)}, contract_html = ${contractHtml}
     WHERE shoot_id = ${shootId} AND contract_signed = false
   `
-}
-
-/**
- * Re-derives the retainer and balance after the contract total changes, on the shoot and on its vault, then refreshes
- * the unsigned invoice and agreement. A paid retainer is money already received, so only the balance follows the new
- * total; a fully paid vault is left alone.
- */
-async function syncShootPaymentAmounts(shootId: string) {
-  const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${shootId}`
-  const shoot = rows[0]
-  if (!shoot) return
-
-  const isComped = Boolean(shoot.is_comped)
-  const total = contractTotalOf(shoot)
-  const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
-  const storedDeposit = Number(shoot.deposit_amount ?? 0)
-  const deposit = isComped
-    ? 0
-    : shoot.deposit_amount_custom
-      ? roundMoney(Math.min(Math.max(storedDeposit, 0), total))
-      : standardSplit.deposit
-  const balance = isComped ? 0 : roundMoney(Math.max(total - deposit, 0))
-
-  await sql`
-    UPDATE shoots SET deposit_amount = ${deposit}, balance_amount = ${balance} WHERE id = ${shootId}
-  `
-
-  await sql`
-    UPDATE vaults SET
-      deposit_amount = CASE
-        WHEN deposit_paid THEN deposit_amount
-        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${deposit}::numeric
-        ELSE ${standardSplit.deposit}::numeric
-      END,
-      balance_amount = CASE
-        WHEN deposit_paid THEN GREATEST(${total}::numeric - COALESCE(deposit_amount, 0), 0)
-        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${balance}::numeric
-        ELSE ${standardSplit.balance}::numeric
-      END,
-      final_quoted_fee = ${total}::numeric
-    WHERE shoot_id = ${shootId} AND NOT COALESCE(balance_paid, false)
-  `
-
-  await saveVaultDocuments(shootId)
 }
 
 /**

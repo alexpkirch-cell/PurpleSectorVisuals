@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { generateVaultAndAdvance, type Shoot } from "@/app/actions/shoots"
 
-const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export function GenerateVaultModal({
   shoot,
