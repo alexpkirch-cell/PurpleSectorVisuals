@@ -7,7 +7,7 @@
 @theme inline {
     --font-heading: var(--font-heading);
     --font-sans: var(--font-sans);
-    --font-serif: var(--font-serif);
+    --font-serif: Georgia, "Times New Roman", serif;
     --color-paper: var(--paper);
     --color-paper-foreground: var(--paper-foreground);
     --color-paper-muted: var(--paper-muted);

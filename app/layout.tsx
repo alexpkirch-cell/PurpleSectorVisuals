@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { Geist, Geist_Mono, Source_Serif_4, Space_Grotesk } from "next/font/google"
+import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google"
 import Script from "next/script"
 
 import "./globals.css"
@@ -21,13 +21,6 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
-})
-
-const sourceSerif = Source_Serif_4({
-  subsets: ["latin"],
-  weight: ["400", "600"],
-  style: ["normal", "italic"],
-  variable: "--font-serif",
 })
 
 const spaceGrotesk = Space_Grotesk({
@@ -63,7 +56,6 @@ export default function RootLayout({
         fontMono.variable,
         "font-sans",
         geist.variable,
-        sourceSerif.variable,
         spaceGrotesk.variable,
         "bg-background"
       )}
