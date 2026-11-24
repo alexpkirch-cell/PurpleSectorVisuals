@@ -10,7 +10,6 @@ type CalendarShoot = Pick<
   | "shoot_date"
   | "location"
   | "selected_package"
-  | "package_tier"
   | "assigned_shooters"
   | "assigned_shooter"
   | "admin_notes"
@@ -38,7 +37,7 @@ export function calendarEventTitle(shoot: Pick<Shoot, "client_name" | "shoot_typ
 export function calendarEventDescription(shoot: CalendarShoot, vaultUrl: string | null) {
   const shooters = shootersOf(shoot)
   return [
-    `Package: ${shoot.selected_package || shoot.package_tier || shoot.shoot_type}`,
+    `Package: ${shoot.selected_package || shoot.shoot_type}`,
     `Lead Shooter: ${leadShooterName(shooters) ?? "Unassigned"}`,
     `Team: ${shooters.map((shooter) => shooter.name).join(", ") || "Unassigned"}`,
     `Vault Link: ${vaultUrl ?? "Not generated yet"}`,

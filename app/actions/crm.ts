@@ -24,7 +24,7 @@ export async function listClientDirectory(): Promise<ClientSummary[]> {
       MAX(s.client_name) AS name,
       MAX(s.client_email) AS email,
       MAX(s.client_phone) AS phone,
-      COALESCE(SUM(CASE WHEN s.is_comped THEN 0 ELSE COALESCE(s.total_price, s.final_amount, s.base_price, 0) END), 0) AS lifetime_spend,
+      COALESCE(SUM(CASE WHEN s.is_comped THEN 0 ELSE COALESCE(s.total_price, s.final_amount, 0) END), 0) AS lifetime_spend,
       COUNT(*)::int AS shoot_count
     FROM shoots s
     WHERE s.client_name IS NOT NULL
@@ -292,7 +292,7 @@ export async function queryReports(filters: ReportFilters = {}): Promise<ReportR
   `
 
   return rows.map((row) => {
-    const gross = row.is_comped ? 0 : Number(row.total_price ?? row.final_amount ?? row.base_price ?? row.final_quoted_fee ?? 0)
+    const gross = row.is_comped ? 0 : Number(row.total_price ?? row.final_amount ?? row.final_quoted_fee ?? 0)
     const lines = computeSettlement({
       totalCollected: gross,
       driverReimbursement: Number(row.driver_reimbursement ?? 0),

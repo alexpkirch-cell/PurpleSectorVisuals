@@ -9,6 +9,7 @@ import { buildMapsUrl } from "@/lib/maps"
 import { advanceShootForVault, finalizeBookedShoot } from "@/lib/shoot-booking"
 import { splitTotal } from "@/lib/payment-terms"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
+import { resolveCanonicalPackageQuote } from "@/lib/catalog-pricing"
 import { contractTotalOf, leadShooterName } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
 import { createClient } from "@/lib/supabase/server"
@@ -53,7 +54,9 @@ export interface Shoot {
   is_paid: boolean
   notes: string | null
   admin_notes: string | null
-  package_tier: string | null
+  package_id?: string | null
+  is_custom_package?: boolean
+  selected_add_on_ids?: string[]
   selected_addons: SettlementItem[] | null
   vault_access_code: string
   created_at: string
@@ -145,15 +148,29 @@ export async function createShootInquiry(formData: {
   clientName: string
   clientEmail: string
   clientPhone?: string
-  shootType: string
+  /** Kept only for custom / undecided inquiries; canonical packages supply their own category. */
+  shootType?: string
+  packageId?: string | null
+  selectedAddOnIds?: string[]
   shootDate?: string
   location?: string
   preferredShooter?: string
   notes?: string
 }) {
-  if (!formData.clientName?.trim() || !formData.clientEmail?.trim() || !formData.shootType?.trim()) {
-    throw new Error("Missing required fields")
+  if (!formData.clientName?.trim() || !formData.clientEmail?.trim()) {
+    throw new Error("Client name and email are required")
   }
+
+  const selectedAddOnIds = formData.selectedAddOnIds ?? []
+  const packageQuote = formData.packageId
+    ? await resolveCanonicalPackageQuote({ packageId: formData.packageId, addOnIds: selectedAddOnIds })
+    : null
+  if (!packageQuote && selectedAddOnIds.length > 0) throw new Error("Choose a current package before selecting add-ons.")
+  const shootType = packageQuote?.package.category ?? (formData.shootType?.trim() || "Custom")
+  const packageName = packageQuote?.package.title ?? null
+  const packagePrice = packageQuote?.quote.basePrice ?? 0
+  const selectedAddons = packageQuote?.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price })) ?? []
+  const schedule = packageQuote?.quote ?? computeQuote({ basePrice: 0, addons: [], discountType: "fixed", discountValue: 0 })
 
   let vaultAccessCode = generateVaultCode()
 
@@ -169,12 +186,18 @@ export async function createShootInquiry(formData: {
   const { rows } = await sql<{ id: string }>`
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date,
-      location, preferred_shooter, notes, vault_access_code
+      location, preferred_shooter, notes, vault_access_code,
+      package_id, is_custom_package, selected_package, package_price, selected_add_on_ids, selected_addons,
+      discount_type, discount_value, total_price, base_price, deposit_amount, balance_amount,
+      deposit_amount_custom, is_comped
     )
     VALUES (
       ${formData.clientName}, ${formData.clientEmail}, ${formData.clientPhone ?? null},
-      ${formData.shootType}, ${formData.shootDate ?? null}, ${formData.location ?? null},
-      ${formData.preferredShooter ?? null}, ${formData.notes ?? null}, ${vaultAccessCode}
+      ${shootType}, ${formData.shootDate ?? null}, ${formData.location ?? null},
+      ${formData.preferredShooter ?? null}, ${formData.notes ?? null}, ${vaultAccessCode},
+      ${packageQuote?.package.id ?? null}, false, ${packageName}, ${packagePrice}, ${selectedAddOnIds}::text[],
+      ${JSON.stringify(selectedAddons)}, 'fixed', 0, ${schedule.total}, ${schedule.total},
+      ${schedule.deposit}, ${schedule.balance}, false, ${Boolean(packageQuote && schedule.isComped)}
     )
     RETURNING id
   `
@@ -198,9 +221,11 @@ export async function createManualBooking(input: {
   clientEmail: string
   clientPhone?: string
   shootType: string
-  selectedPackage: string
-  packagePrice: number
-  selectedAddons: SettlementItem[]
+  packageId?: string | null
+  isCustomPackage?: boolean
+  customPackageName?: string
+  customPrice?: number
+  selectedAddOnIds?: string[]
   discountType: DiscountType
   discountValue: number
   shootDate?: string
@@ -219,11 +244,9 @@ export async function createManualBooking(input: {
 
   const clientName = input.clientName?.trim()
   const clientEmail = input.clientEmail?.trim()
-  const shootType = input.shootType?.trim()
-  if (!clientName || !clientEmail || !shootType) {
-    throw new Error("Client name, email, and shoot type are required")
+  if (!clientName || !clientEmail) {
+    throw new Error("Client name and email are required")
   }
-  if (!MANUAL_SHOOT_TYPES.has(shootType)) throw new Error("Choose one of the five core shoot types or Custom.")
 
   const startingStage = input.startingStage ?? "new_inquiry"
   if (!MANUAL_BOOKING_STAGES.has(startingStage)) throw new Error("Choose a valid starting pipeline stage.")
@@ -235,15 +258,43 @@ export async function createManualBooking(input: {
   const locationMapsUrl = location ? input.locationMapsUrl?.trim() || buildMapsUrl(location) : null
   const shooters = input.assignedShooters.filter((s) => s.name.trim())
   const editors = input.assignedEditors.filter((name) => name.trim())
-  const addons = input.selectedAddons.map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
-  const quote = computeQuote({
-    basePrice: input.packagePrice,
-    addons,
-    discountType: input.discountType,
-    discountValue: input.discountValue,
-  })
-  const selectedPackage = input.selectedPackage?.trim() || null
-  const isComped = quote.isComped && selectedPackage !== null
+  const selectedAddOnIds = input.selectedAddOnIds ?? []
+  let selectedPackage = ""
+  let packageId: string | null = null
+  let packageCategory: string | null = null
+  let packagePrice = 0
+  let addons: SettlementItem[] = []
+  let quote: ReturnType<typeof computeQuote>
+
+  if (input.isCustomPackage) {
+    if (input.packageId || selectedAddOnIds.length > 0) throw new Error("Custom packages cannot use catalog package or add-on IDs.")
+    selectedPackage = input.customPackageName?.trim().slice(0, 120) || "Custom"
+    packagePrice = Number(input.customPrice)
+    if (!Number.isFinite(packagePrice) || packagePrice < 0) throw new Error("Enter a valid custom package amount of $0.00 or more.")
+    quote = computeQuote({ basePrice: packagePrice, addons: [], discountType: input.discountType, discountValue: input.discountValue })
+  } else if (input.packageId) {
+    const resolved = await resolveCanonicalPackageQuote({
+      packageId: input.packageId,
+      addOnIds: selectedAddOnIds,
+      discountType: input.discountType,
+      discountValue: input.discountValue,
+    })
+    packageId = resolved.package.id
+    packageCategory = resolved.package.category
+    selectedPackage = resolved.package.title
+    packagePrice = Number(resolved.package.base_price)
+    addons = resolved.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price }))
+    quote = resolved.quote
+  } else {
+    if (selectedAddOnIds.length > 0) throw new Error("Choose a package before selecting add-ons.")
+    quote = computeQuote({ basePrice: 0, addons: [], discountType: input.discountType, discountValue: input.discountValue })
+  }
+
+  const shootType = packageCategory ?? input.shootType?.trim()
+  if (!shootType || !MANUAL_SHOOT_TYPES.has(shootType)) {
+    throw new Error("Choose a valid shoot type from the five core categories or Custom.")
+  }
+  const isComped = quote.isComped && Boolean(selectedPackage)
   const total = roundMoney(quote.total)
   const rawRetainer = input.retainerAmount === undefined
     ? roundMoney(total / 2)
@@ -274,7 +325,7 @@ export async function createManualBooking(input: {
     INSERT INTO shoots (
       client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
       preferred_shooter, notes, vault_access_code, status,
-      selected_package, package_price, selected_addons, discount_type, discount_value,
+      package_id, is_custom_package, selected_package, package_price, selected_add_on_ids, selected_addons, discount_type, discount_value,
       total_price, base_price, deposit_amount, balance_amount, deposit_amount_custom, is_comped,
       driver_reimbursement, is_paid, assigned_shooters, assigned_editors
     )
@@ -282,7 +333,7 @@ export async function createManualBooking(input: {
       ${clientName}, ${clientEmail}, ${input.clientPhone?.trim() || null}, ${shootType},
       ${shootDate}, ${location}, ${locationMapsUrl}, ${leadShooterName(shooters)},
       ${input.notes?.trim() || null}, ${vaultAccessCode}, ${status},
-      ${selectedPackage}, ${quote.basePrice}, ${JSON.stringify(addons)}, ${input.discountType},
+      ${packageId}, ${Boolean(input.isCustomPackage)}, ${selectedPackage || null}, ${packagePrice}, ${selectedAddOnIds}::text[], ${JSON.stringify(addons)}, ${input.discountType},
       ${Number(input.discountValue) || 0}, ${total}, ${total}, ${depositAmount}, ${balanceAmount}, true, ${isComped},
       ${driverReimbursement}, ${depositPaid && balanceAmount === 0}, ${JSON.stringify(shooters)}, ${JSON.stringify(editors)}
     )
@@ -520,9 +571,6 @@ export async function updateShoot(
     clientName: string
     clientEmail: string
     clientPhone: string | null
-    /** Manual contract total. It replaces the package auto-calculation: 0 comps the shoot, anything above 0 un-comps it. */
-    basePrice: number
-    travelFee: number
     isPaid: boolean
     notes: string | null
     location: string | null
@@ -535,11 +583,6 @@ export async function updateShoot(
   const location = fields.location?.trim() || null
   const locationMapsUrl = location ? fields.locationMapsUrl?.trim() || buildMapsUrl(location) : null
 
-  const priceChanged = fields.basePrice !== undefined
-  const price = priceChanged ? Math.max(0, Number(fields.basePrice) || 0) : null
-  // The typed number is the single source of truth for comp status, so a comped shoot can take a real price.
-  const isComped = price === null ? null : price === 0
-
   await sql`
     UPDATE shoots SET
       client_name = COALESCE(NULLIF(BTRIM(${fields.clientName ?? null}), ''), client_name),
@@ -547,16 +590,11 @@ export async function updateShoot(
       client_phone = CASE WHEN ${fields.clientPhone !== undefined}::boolean THEN NULLIF(BTRIM(${fields.clientPhone ?? null}), '') ELSE client_phone END,
       location = CASE WHEN ${locationChanged}::boolean THEN ${location} ELSE location END,
       location_maps_url = CASE WHEN ${locationChanged}::boolean THEN ${locationMapsUrl} ELSE location_maps_url END,
-      base_price = COALESCE(${price}::numeric, base_price),
-      total_price = COALESCE(${price}::numeric, total_price),
-      is_comped = COALESCE(${isComped}::boolean, is_comped),
-      travel_fee = COALESCE(${fields.travelFee ?? null}, travel_fee),
       is_paid = COALESCE(${fields.isPaid ?? null}, is_paid),
       notes = COALESCE(${fields.notes ?? null}, notes)
     WHERE id = ${id}
   `
 
-  if (price !== null) await syncShootPaymentAmounts(id)
   if (locationChanged) await syncShootToGoogleCalendar(id)
 
   revalidatePath("/admin")
@@ -577,12 +615,7 @@ export async function moveShootStage(id: string, status: ShootStatus): Promise<S
       throw new Error("Shoot not found")
     }
 
-    const total = contractTotalOf(shoot)
-    if (total <= 0 && !shoot.is_comped) {
-      throw new Error("Set the total price (or comp the shoot) before moving to Awaiting Signature & Retainer")
-    }
-
-    return generateVaultAndAdvance(id, { totalQuote: total, isComped: Boolean(shoot.is_comped) })
+    return generateVaultAndAdvance(id)
   }
 
   if (status === "delivered_settled") {
@@ -626,7 +659,7 @@ async function saveVaultDocuments(shootId: string) {
   const defaultSplit = splitTotal(total)
   const deposit = isComped ? 0 : Number(shoot.deposit_amount ?? defaultSplit.deposit)
   const balance = isComped ? 0 : Number(shoot.balance_amount ?? Math.max(total - deposit, 0))
-  const packageName = shoot.selected_package || shoot.package_tier || shoot.shoot_type
+  const packageName = shoot.selected_package || shoot.shoot_type
   const addons = (shoot.selected_addons ?? []).map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
 
   const invoice = buildInvoiceData({
@@ -657,75 +690,57 @@ async function saveVaultDocuments(shootId: string) {
 }
 
 /**
- * Re-derives the retainer and balance after the contract total changes, on the shoot and on its vault, then refreshes
- * the unsigned invoice and agreement. A paid retainer is money already received, so only the balance follows the new
- * total; a fully paid vault is left alone.
- */
-async function syncShootPaymentAmounts(shootId: string) {
-  const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${shootId}`
-  const shoot = rows[0]
-  if (!shoot) return
-
-  const isComped = Boolean(shoot.is_comped)
-  const total = contractTotalOf(shoot)
-  const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(total)
-  const storedDeposit = Number(shoot.deposit_amount ?? 0)
-  const deposit = isComped
-    ? 0
-    : shoot.deposit_amount_custom
-      ? roundMoney(Math.min(Math.max(storedDeposit, 0), total))
-      : standardSplit.deposit
-  const balance = isComped ? 0 : roundMoney(Math.max(total - deposit, 0))
-
-  await sql`
-    UPDATE shoots SET deposit_amount = ${deposit}, balance_amount = ${balance} WHERE id = ${shootId}
-  `
-
-  await sql`
-    UPDATE vaults SET
-      deposit_amount = CASE
-        WHEN deposit_paid THEN deposit_amount
-        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${deposit}::numeric
-        ELSE ${standardSplit.deposit}::numeric
-      END,
-      balance_amount = CASE
-        WHEN deposit_paid THEN GREATEST(${total}::numeric - COALESCE(deposit_amount, 0), 0)
-        WHEN ${Boolean(shoot.deposit_amount_custom)} THEN ${balance}::numeric
-        ELSE ${standardSplit.balance}::numeric
-      END,
-      final_quoted_fee = ${total}::numeric
-    WHERE shoot_id = ${shootId} AND NOT COALESCE(balance_paid, false)
-  `
-
-  await saveVaultDocuments(shootId)
-}
-
-/**
  * Confirms the final total quote for a shoot in the Quoted column, generates
  * (or updates) its client vault with the standard 50% retainer / 50% balance
  * split (or preserves a retainer explicitly entered in Manual Booking), and advances the shoot into Awaiting Retainer.
  */
-export async function generateVaultAndAdvance(
-  id: string,
-  input: { totalQuote: number; isComped?: boolean },
-): Promise<Shoot> {
+export async function generateVaultAndAdvance(id: string): Promise<Shoot> {
   await requireAdmin()
 
-  if (!Number.isFinite(input.totalQuote) || input.totalQuote < 0) {
-  throw new Error("Enter a valid total quote before generating the vault")
-  }
-  
-  // A $0 total has nothing to charge, so it takes the comped path.
-  const isComped = Boolean(input.isComped) || input.totalQuote === 0
-  const totalQuote = isComped ? 0 : input.totalQuote
-  
   const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
   const shoot = shootRows[0]
-  if (!shoot) {
-    throw new Error("Shoot not found")
+  if (!shoot) throw new Error("Shoot not found")
+  if (shoot.status !== "new_inquiry" && shoot.status !== "in_discussion") {
+    throw new Error("Only New Inquiry or Call / In Discussion shoots can generate a vault from this action")
   }
 
-  // A retainer recorded in Manual Booking stays fixed; otherwise the standard split is applied.
+  let packageId = shoot.package_id ?? null
+  let packageName = shoot.selected_package?.trim() ?? ""
+  let packagePrice = Number(shoot.package_price) || 0
+  let addOnIds = shoot.selected_add_on_ids ?? []
+  let selectedAddons = shoot.selected_addons ?? []
+  let quote: ReturnType<typeof computeQuote>
+
+  if (packageId) {
+    const resolved = await resolveCanonicalPackageQuote({
+      packageId,
+      addOnIds,
+      discountType: shoot.discount_type ?? "fixed",
+      discountValue: Number(shoot.discount_value) || 0,
+    })
+    packageId = resolved.package.id
+    packageName = resolved.package.title
+    packagePrice = Number(resolved.package.base_price)
+    addOnIds = resolved.selectedAddOnIds
+    selectedAddons = resolved.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price }))
+    quote = resolved.quote
+  } else if (shoot.is_custom_package) {
+    if (!Number.isFinite(packagePrice) || packagePrice < 0) throw new Error("Enter a valid custom package amount.")
+    quote = computeQuote({
+      basePrice: packagePrice,
+      addons: [],
+      discountType: shoot.discount_type ?? "fixed",
+      discountValue: Number(shoot.discount_value) || 0,
+    })
+    packageName ||= "Custom"
+    addOnIds = []
+    selectedAddons = []
+  } else {
+    throw new Error("Choose a current catalog package or enter a custom amount before generating the vault.")
+  }
+
+  const totalQuote = quote.total
+  const isComped = quote.isComped
   const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(totalQuote)
   const manualDeposit = Number(shoot.deposit_amount ?? 0)
   const depositAmount = isComped
@@ -738,7 +753,6 @@ export async function generateVaultAndAdvance(
   const { rows: existingVaultRows } = await sql<{ id: string; countersigned_at: string | null }>`
     SELECT id, countersigned_at FROM vaults WHERE shoot_id = ${id}
   `
-
   if (existingVaultRows[0]?.countersigned_at) {
     throw new Error("This agreement is countersigned and locked, so its vault can't be regenerated.")
   }
@@ -749,23 +763,39 @@ export async function generateVaultAndAdvance(
         deposit_amount = ${depositAmount},
         balance_amount = ${balanceAmount},
         final_quoted_fee = ${totalQuote},
-        shoot_date = COALESCE(shoot_date, ${shoot.shoot_date})
+        shoot_date = COALESCE(shoot_date, ${shoot.shoot_date}),
+        deposit_paid = CASE WHEN ${isComped} THEN true ELSE deposit_paid END,
+        deposit_paid_at = CASE WHEN ${isComped} THEN COALESCE(deposit_paid_at, now()) ELSE deposit_paid_at END,
+        deposit_payment_method = CASE WHEN ${isComped} THEN 'none' ELSE deposit_payment_method END,
+        balance_paid = CASE WHEN ${isComped} THEN true ELSE balance_paid END,
+        balance_paid_at = CASE WHEN ${isComped} THEN COALESCE(balance_paid_at, now()) ELSE balance_paid_at END
       WHERE shoot_id = ${id}
     `
   } else {
     const pinCode = await allocateVaultPin()
-
     await sql`
-      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
-      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${totalQuote}, ${shoot.shoot_date})
+      INSERT INTO vaults (
+        shoot_id, pin_code, status, deposit_paid, deposit_paid_at, deposit_payment_method,
+        balance_paid, balance_paid_at, deposit_amount, balance_amount, final_quoted_fee, shoot_date, client_name
+      ) VALUES (
+        ${id}, ${pinCode}, 'Onboarding', ${isComped}, CASE WHEN ${isComped} THEN now() ELSE NULL END,
+        CASE WHEN ${isComped} THEN 'none' ELSE NULL END, ${isComped}, CASE WHEN ${isComped} THEN now() ELSE NULL END,
+        ${depositAmount}, ${balanceAmount}, ${totalQuote}, ${shoot.shoot_date}, ${shoot.client_name}
+      )
     `
   }
 
   await sql`
     UPDATE shoots SET
       status = 'awaiting_signature',
-      base_price = ${totalQuote},
+      package_id = ${packageId},
+      is_custom_package = ${Boolean(shoot.is_custom_package)},
+      selected_package = ${packageName},
+      package_price = ${packagePrice},
+      selected_add_on_ids = ${addOnIds}::text[],
+      selected_addons = ${JSON.stringify(selectedAddons)},
       total_price = ${totalQuote},
+      base_price = ${totalQuote},
       is_comped = ${isComped},
       deposit_amount = ${depositAmount},
       balance_amount = ${balanceAmount},
@@ -774,41 +804,24 @@ export async function generateVaultAndAdvance(
   `
 
   await saveVaultDocuments(id)
-
   revalidatePath("/admin")
+  revalidatePath("/admin/operations")
 
   const { rows } = await sql<Shoot>`
-    SELECT
-      s.*,
-      v.pin_code AS vault_pin,
-      v.status AS vault_status,
-      v.contract_signed AS vault_contract_signed,
-      v.deposit_paid AS vault_deposit_paid,
-      v.deposit_paid_at AS vault_deposit_paid_at,
-      v.deposit_payment_method AS vault_deposit_payment_method,
-      v.must_have_shots AS vault_must_have_shots,
-      v.mood_board_links AS vault_mood_board_links,
-      v.prep_submitted_at AS vault_prep_submitted_at,
-      v.deposit_amount AS vault_deposit_amount,
-      v.balance_paid AS vault_balance_paid,
-      v.balance_payment_method AS vault_balance_payment_method,
-      v.balance_paid_at AS vault_balance_paid_at,
-      v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at,
-      v.is_minor AS vault_is_minor,
-      v.guardian_name AS vault_guardian_name,
-      v.guardian_relationship AS vault_guardian_relationship,
-      v.guardian_phone AS vault_guardian_phone,
-      v.guardian_email AS vault_guardian_email,
-      v.id AS vault_id,
-      v.requires_countersign AS vault_requires_countersign,
-      v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at,
-      v.countersignature AS vault_countersignature,
-      v.client_signed_ip AS vault_client_signed_ip
-    FROM shoots s
-    LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE s.id = ${id}
+    SELECT s.*, v.pin_code AS vault_pin, v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed, v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at, v.deposit_payment_method AS vault_deposit_payment_method,
+      v.must_have_shots AS vault_must_have_shots, v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at, v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid, v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at, v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at, v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name, v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone, v.guardian_email AS vault_guardian_email,
+      v.id AS vault_id, v.requires_countersign AS vault_requires_countersign,
+      v.client_signed_at AS vault_client_signed_at, v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature, v.client_signed_ip AS vault_client_signed_ip
+    FROM shoots s LEFT JOIN vaults v ON v.shoot_id = s.id WHERE s.id = ${id}
   `
   return rows[0]
 }
@@ -857,146 +870,6 @@ export async function finalizeSettlement(
   revalidatePath("/admin/financials")
 
   const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
-  return rows[0]
-}
-
-/**
- * Finalizes the Admin Client Detail Sheet's intake form for a "New Inquiry"
- * lead: persists the CRM fields (admin notes, package/add-on selection,
- * confirmed logistics, team assignment, and any manual price override),
- * generates the client vault with a 50%/50% deposit split, and advances the
- * shoot to Awaiting Retainer. Sending the retainer email + Stripe link is
- * stubbed to a console log until email/Stripe delivery is wired up.
- */
-export async function finalizeBooking(
-  id: string,
-  input: {
-    adminNotes: string | null
-    packageTier: "Base" | "Standard"
-    selectedAddons: SettlementItem[]
-    confirmedDate: string | null
-    confirmedTime: string | null
-    confirmedLocation: string | null
-    totalPrice: number
-    isComped?: boolean
-    assignedShooters: AssignedShooter[]
-    assignedEditors: string[]
-  },
-): Promise<Shoot> {
-  await requireAdmin()
-
-  const assignedShooters = input.assignedShooters.filter((shooter) => shooter.name.trim())
-  const assignedEditors = input.assignedEditors.filter((name) => name.trim())
-  const isComped = Boolean(input.isComped)
-  const totalPrice = isComped ? 0 : input.totalPrice
-
-  if (!isComped && (!Number.isFinite(totalPrice) || totalPrice <= 0)) {
-    throw new Error("Enter a valid total price before finalizing the booking")
-  }
-
-  const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
-  const shoot = shootRows[0]
-  if (!shoot) {
-    throw new Error("Shoot not found")
-  }
-
-  const shootDate =
-    input.confirmedDate ? `${input.confirmedDate}T${input.confirmedTime || "00:00"}:00` : shoot.shoot_date
-
-  await sql`
-    UPDATE shoots SET
-      admin_notes = ${input.adminNotes},
-      package_tier = ${input.packageTier},
-      selected_addons = ${JSON.stringify(input.selectedAddons)},
-      location = COALESCE(${input.confirmedLocation}, location),
-      shoot_date = ${shootDate},
-      base_price = ${totalPrice},
-      total_price = ${totalPrice},
-      is_comped = ${isComped},
-      deposit_amount_custom = false,
-      travel_fee = 0,
-      assigned_shooters = ${JSON.stringify(assignedShooters)},
-      assigned_editors = ${JSON.stringify(assignedEditors)},
-      status = 'awaiting_signature'
-    WHERE id = ${id}
-  `
-
-  const { deposit: depositAmount, balance: balanceAmount } = isComped
-    ? { deposit: 0, balance: 0 }
-    : splitTotal(totalPrice)
-
-  await sql`UPDATE shoots SET deposit_amount = ${depositAmount}, balance_amount = ${balanceAmount} WHERE id = ${id}`
-
-  const { rows: existingVaultRows } = await sql<{ id: string }>`
-    SELECT id FROM vaults WHERE shoot_id = ${id}
-  `
-
-  let pinCode = ""
-  if (existingVaultRows.length > 0) {
-    await sql`
-      UPDATE vaults SET
-        deposit_amount = ${depositAmount},
-        balance_amount = ${balanceAmount},
-        final_quoted_fee = ${totalPrice},
-        shoot_date = COALESCE(${shootDate}, shoot_date)
-      WHERE shoot_id = ${id}
-    `
-    const { rows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
-    pinCode = rows[0].pin_code
-  } else {
-    pinCode = await allocateVaultPin()
-
-    await sql`
-      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
-      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${totalPrice}, ${shootDate})
-    `
-  }
-
-  await saveVaultDocuments(id)
-
-  // TODO: wire up real delivery once email + Stripe are connected.
-  console.log("[v0] Sending confirmation email to", shoot.client_email, {
-    vaultAccessCode: shoot.vault_access_code,
-    vaultPin: pinCode,
-    depositAmount,
-    stripeRetainerLink: `https://checkout.stripe.com/pay/retainer_${id}`,
-  })
-
-  revalidatePath("/admin")
-
-  const { rows } = await sql<Shoot>`
-    SELECT
-      s.*,
-      v.pin_code AS vault_pin,
-      v.status AS vault_status,
-      v.contract_signed AS vault_contract_signed,
-      v.deposit_paid AS vault_deposit_paid,
-      v.deposit_paid_at AS vault_deposit_paid_at,
-      v.deposit_payment_method AS vault_deposit_payment_method,
-      v.must_have_shots AS vault_must_have_shots,
-      v.mood_board_links AS vault_mood_board_links,
-      v.prep_submitted_at AS vault_prep_submitted_at,
-      v.deposit_amount AS vault_deposit_amount,
-      v.balance_paid AS vault_balance_paid,
-      v.balance_payment_method AS vault_balance_payment_method,
-      v.balance_paid_at AS vault_balance_paid_at,
-      v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at,
-      v.is_minor AS vault_is_minor,
-      v.guardian_name AS vault_guardian_name,
-      v.guardian_relationship AS vault_guardian_relationship,
-      v.guardian_phone AS vault_guardian_phone,
-      v.guardian_email AS vault_guardian_email,
-      v.id AS vault_id,
-      v.requires_countersign AS vault_requires_countersign,
-      v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at,
-      v.countersignature AS vault_countersignature,
-      v.client_signed_ip AS vault_client_signed_ip
-    FROM shoots s
-    LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE s.id = ${id}
-  `
   return rows[0]
 }
 

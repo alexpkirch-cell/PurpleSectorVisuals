@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { listBookingAddons, listBookingTiers } from "@/app/actions/booking-config"
+import { listActivePackages } from "@/app/actions/packages"
 import { listPendingPrintOrders } from "@/app/actions/print-orders"
 import { listShoots } from "@/app/actions/shoots"
 import { listStandardPrintProductsAdmin } from "@/app/actions/standard-vault-print"
@@ -15,11 +15,10 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminOperationsPage() {
-  const [shoots, pendingPrintOrders, bookingTiers, bookingAddons, standardPrintProducts] = await Promise.all([
+  const [shoots, pendingPrintOrders, packages, standardPrintProducts] = await Promise.all([
     listShoots(),
     listPendingPrintOrders(),
-    listBookingTiers(),
-    listBookingAddons(),
+    listActivePackages(),
     listStandardPrintProductsAdmin(),
   ])
 
@@ -31,8 +30,7 @@ export default async function AdminOperationsPage() {
   return (
     <OperationsDashboard
       initialShoots={shoots}
-      bookingTiers={bookingTiers}
-      bookingAddons={bookingAddons}
+      packages={packages}
       monthKey={monthKey}
       monthLabel={monthLabel}
       todayKey={todayKey}

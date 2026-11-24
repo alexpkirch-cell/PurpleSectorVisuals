@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import { PACKAGE_CATEGORIES, type PackageCategory, type ServicePackage } from "@/lib/packages"
+import { computeQuote } from "@/lib/pricing"
 
 const DEFAULT_CATEGORY: PackageCategory = "Portraits"
 
@@ -16,9 +17,7 @@ const DEFAULT_CATEGORY: PackageCategory = "Portraits"
 const PERFECT_FOR = /^perfect for\s*:?\s*/i
 
 function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
-    value,
-  )
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
 export function StudioConfigurator({ packages }: { packages: ServicePackage[] }) {
@@ -64,13 +63,11 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
     [categoryPackages, activePackageId],
   )
 
-  // Physical print products are handled at checkout, not as a configurator
-  // add-on. Add-ons list cheapest first, with $0 inquiry items (e.g. a season
-  // pass) last. Only the selected package's add-ons are ever rendered or counted.
+  // Add-ons come only from the selected package's canonical database row and are displayed cheapest first.
   const visibleAddOns = useMemo(
     () =>
       (activePackage?.add_ons ?? [])
-        .filter((addOn) => !/print/i.test(addOn.name))
+        .slice()
         .sort((a, b) => Number(a.price === 0) - Number(b.price === 0) || a.price - b.price),
     [activePackage],
   )
@@ -104,25 +101,20 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
     })
   }
 
-  const basePrice = activePackage ? Number(activePackage.base_price) : 0
   const selectedAddOns = visibleAddOns.filter((addOn) => selectedAddOnIds.has(addOn.id))
-  const addOnsTotal = selectedAddOns.reduce((sum, addOn) => sum + addOn.price, 0)
-  // The "Monthly Retainer Agreement" add-on is a 15% discount off the whole order rather
-  // than a flat surcharge, so it's excluded from addOnsTotal and applied separately below.
-  const retainerAddOn = selectedAddOns.find((addOn) => /retainer agreement/i.test(addOn.name))
-  const surchargeAddOnsTotal = selectedAddOns
-    .filter((addOn) => addOn !== retainerAddOn)
-    .reduce((sum, addOn) => sum + addOn.price, 0)
-  const preDiscountTotal = basePrice + surchargeAddOnsTotal
-  const retainerDiscount = retainerAddOn ? preDiscountTotal * 0.15 : 0
-  const estimatedTotal = preDiscountTotal - retainerDiscount
+  const quote = computeQuote({
+    basePrice: activePackage ? Number(activePackage.base_price) : 0,
+    addons: selectedAddOns.map((addOn) => ({ label: addOn.name, amount: Number(addOn.price) || 0 })),
+    discountType: "fixed",
+    discountValue: 0,
+  })
+  const estimatedTotal = quote.total
 
   function handleBookSetup() {
     if (!activePackage || !activeCategory) return
     const params = new URLSearchParams({
-      category: activeCategory.toLowerCase(),
-      total: String(estimatedTotal),
-      tier: activePackage.title,
+      packageId: activePackage.id,
+      addOns: [...selectedAddOnIds].join(","),
     })
     router.push(`/book?${params.toString()}`)
   }
@@ -287,7 +279,7 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
                       {addOn.name}
                     </Label>
                     <span className="shrink-0 text-sm font-medium tabular-nums text-[#e829f1]">
-                      {/retainer agreement/i.test(addOn.name) ? "-15% total" : `+${formatCurrency(addOn.price)}`}
+                      {`+${formatCurrency(Number(addOn.price) || 0)}`}
                     </span>
                     <Switch
                       id={`addon-${addOn.id}`}
@@ -314,11 +306,6 @@ export function StudioConfigurator({ packages }: { packages: ServicePackage[] })
               <p className="font-heading text-2xl font-bold text-foreground">
                 {formatCurrency(estimatedTotal)}
               </p>
-              {retainerAddOn ? (
-                <p className="mt-0.5 text-xs font-medium text-[#e829f1]">
-                  Includes 15% retainer discount (-{formatCurrency(retainerDiscount)})
-                </p>
-              ) : null}
             </div>
             <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:gap-6">
               <button

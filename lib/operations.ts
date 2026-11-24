@@ -132,7 +132,8 @@ export interface OperationsKpis {
 
 function shootValue(shoot: Shoot) {
   if (shoot.final_amount !== null) return Number(shoot.final_amount) || 0
-  return (Number(shoot.base_price) || 0) + (Number(shoot.travel_fee) || 0)
+  if (shoot.total_price !== null) return Number(shoot.total_price) || 0
+  return 0
 }
 
 export function computeKpis(shoots: readonly Shoot[], monthKey: string): OperationsKpis {
@@ -221,5 +222,5 @@ export function leadShooterOf(shoot: Shoot) {
 }
 
 export function packageOf(shoot: Shoot) {
-  return shoot.package_tier || shoot.shoot_type
+  return shoot.selected_package || shoot.shoot_type
 }

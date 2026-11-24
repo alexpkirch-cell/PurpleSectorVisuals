@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, type FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
 
@@ -20,10 +20,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { MultiSelect } from "@/components/admin/multi-select"
 import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
-import { listBookingAddons } from "@/app/actions/booking-config"
 import { listActivePackages } from "@/app/actions/packages"
 import { createManualBooking, type Shoot } from "@/app/actions/shoots"
-import { formatCurrency } from "@/lib/operations"
 import { computeQuote, type DiscountType } from "@/lib/pricing"
 import type { AssignedShooter } from "@/lib/settlement"
 import { cn } from "@/lib/utils"
@@ -59,6 +57,15 @@ type RetainerMethod = (typeof RETAINER_METHODS)[number]["value"]
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
 
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)
+}
+
 export function ManualBookingDialog({
   open,
   onOpenChange,
@@ -71,17 +78,13 @@ export function ManualBookingDialog({
   const { data: packages = [] } = useSWR(open ? "manual-booking-packages" : null, listActivePackages, {
     revalidateOnFocus: false,
   })
-  const { data: bookingAddons = [] } = useSWR(open ? "manual-booking-addons" : null, listBookingAddons, {
-    revalidateOnFocus: false,
-  })
-
   const [shootType, setShootType] = useState("")
   const [location, setLocation] = useState("")
   const [locationMapsUrl, setLocationMapsUrl] = useState<string | null>(null)
   const [packageId, setPackageId] = useState("")
   const [customPackageName, setCustomPackageName] = useState("")
   const [customPrice, setCustomPrice] = useState("")
-  const [addonNames, setAddonNames] = useState<string[]>([])
+  const [addonIds, setAddonIds] = useState<string[]>([])
   const [discountType, setDiscountType] = useState<DiscountType>("percent")
   const [discountValue, setDiscountValue] = useState("")
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
@@ -100,25 +103,17 @@ export function ManualBookingDialog({
   const selectedPackage = packages.find((pkg) => pkg.id === packageId) ?? null
   const isCustom = packageId === CUSTOM_PACKAGE
 
-  const addonCatalog = useMemo(() => {
-    const merged = new Map<string, number>()
-    for (const addon of bookingAddons) merged.set(addon.name, Number(addon.price) || 0)
-    for (const addon of selectedPackage?.add_ons ?? []) merged.set(addon.name, Number(addon.price) || 0)
-    return merged
-  }, [bookingAddons, selectedPackage])
-
-  const addonOptions = useMemo(
-    () =>
-      [...addonCatalog.entries()].map(([name, price]) => ({
-        value: name,
-        label: `${name} (${formatCurrency(price)})`,
-      })),
-    [addonCatalog],
-  )
+  const addonCatalog = selectedPackage?.add_ons ?? []
+  const addonOptions = addonCatalog.map((addon) => ({
+    value: addon.id,
+    label: `${addon.name} (${formatCurrency(Number(addon.price) || 0)})`,
+  }))
 
   const packageName = isCustom ? customPackageName.trim() || "Custom" : (selectedPackage?.title ?? "")
   const packagePrice = isCustom ? Number(customPrice) || 0 : Number(selectedPackage?.base_price) || 0
-  const selectedAddons = addonNames.map((name) => ({ label: name, amount: addonCatalog.get(name) ?? 0 }))
+  const selectedAddons = addonCatalog
+    .filter((addon) => addonIds.includes(addon.id))
+    .map((addon) => ({ label: addon.name, amount: Number(addon.price) || 0 }))
 
   const quote = computeQuote({
     basePrice: packagePrice,
@@ -141,7 +136,7 @@ export function ManualBookingDialog({
     setPackageId("")
     setCustomPackageName("")
     setCustomPrice("")
-    setAddonNames([])
+    setAddonIds([])
     setDiscountType("percent")
     setDiscountValue("")
     setShooters([])
@@ -166,9 +161,11 @@ export function ManualBookingDialog({
         clientEmail: text("clientEmail"),
         clientPhone: text("clientPhone"),
         shootType,
-        selectedPackage: packageName,
-        packagePrice,
-        selectedAddons,
+        packageId: selectedPackage?.id ?? null,
+        isCustomPackage: isCustom,
+        customPackageName: customPackageName.trim(),
+        customPrice: isCustom ? packagePrice : undefined,
+        selectedAddOnIds: addonIds,
         discountType,
         discountValue: Number(discountValue) || 0,
         shootDate: text("shootDate") || undefined,
@@ -229,7 +226,7 @@ export function ManualBookingDialog({
                   onChange={(e) => {
                     setShootType(e.target.value)
                     setPackageId("")
-                    setAddonNames([])
+                    setAddonIds([])
                   }}
                   required
                   className={selectClass}
@@ -288,7 +285,7 @@ export function ManualBookingDialog({
                   value={packageId}
                   onChange={(e) => {
                     setPackageId(e.target.value)
-                    setAddonNames([])
+                    setAddonIds([])
                   }}
                   className={selectClass}
                 >
@@ -343,26 +340,13 @@ export function ManualBookingDialog({
                   <MultiSelect
                     id="mb-addons"
                     options={addonOptions}
-                    value={addonNames}
-                    onChange={setAddonNames}
+                    value={addonIds}
+                    onChange={setAddonIds}
                     placeholder="Extra location, rollers, rush..."
                   />
                 </div>
               )}
             </div>
-
-            {isCustom && (
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="mb-addons-custom">Add-ons</Label>
-                <MultiSelect
-                  id="mb-addons-custom"
-                  options={addonOptions}
-                  value={addonNames}
-                  onChange={setAddonNames}
-                  placeholder="Extra location, rollers, rush..."
-                />
-              </div>
-            )}
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="mb-discount">Discount</Label>

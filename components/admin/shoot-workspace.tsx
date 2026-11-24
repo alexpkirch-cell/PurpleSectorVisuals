@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { ArrowLeft, ExternalLink, Images, Upload } from "lucide-react"
 
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
@@ -23,14 +22,10 @@ import { clientVaultUrl } from "@/lib/site-url"
  */
 export function ShootWorkspace({
   initialShoot,
-  bookingTiers,
-  bookingAddons,
   embedded = false,
   onChange,
 }: {
   initialShoot: Shoot
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
   /** Inline inside the Client Profile: no back link, and the Client Card owns the contact fields. */
   embedded?: boolean
   /** Called with the latest shoot whenever something in the workspace changes it. */
@@ -91,8 +86,6 @@ export function ShootWorkspace({
       <ShootDetailSheet
         variant="page"
         shoot={shoot}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
         onUpdated={handleUpdated}
         hideClientContact={embedded}
         pageExtras={

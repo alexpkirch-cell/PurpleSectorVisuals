@@ -39,12 +39,15 @@ export function editorsOf(shoot: Pick<Shoot, "assigned_editors" | "assigned_edit
 
 /** The single total the client owes: comped shoots are $0, otherwise the stored contract total. */
 export function contractTotalOf(
-  shoot: Pick<Shoot, "is_comped" | "total_price" | "base_price" | "travel_fee">,
+  shoot: Pick<Shoot, "is_comped" | "total_price" | "final_amount">,
 ): number {
   if (shoot.is_comped) return 0
-  const total = Number(shoot.total_price) || 0
-  if (total > 0) return total
-  return (Number(shoot.base_price) || 0) + (Number(shoot.travel_fee) || 0)
+  if (shoot.total_price !== null) {
+    const total = Number(shoot.total_price)
+    return Number.isFinite(total) ? Math.max(total, 0) : 0
+  }
+  const finalAmount = Number(shoot.final_amount)
+  return Number.isFinite(finalAmount) ? Math.max(finalAmount, 0) : 0
 }
 
 export function leadShooterName(shooters: readonly AssignedShooter[]) {

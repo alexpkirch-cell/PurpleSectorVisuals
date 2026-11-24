@@ -316,8 +316,7 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
     client_name: string
     shoot_type: string
     final_amount: string | null
-    base_price: string
-    travel_fee: string
+    total_price: string | null
     shooter_amount: string
     editor_amount: string
     admin_amount: string
@@ -333,8 +332,7 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
       s.client_name,
       s.shoot_type,
       s.final_amount,
-      s.base_price,
-      s.travel_fee,
+      s.total_price,
       COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'shooter'), 0) AS shooter_amount,
       COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'editor'), 0) AS editor_amount,
       COALESCE(SUM(le.amount) FILTER (WHERE le.role = 'admin'), 0) AS admin_amount,
@@ -345,7 +343,7 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
       BOOL_AND(le.status = 'PAID') FILTER (WHERE le.role IN ('shooter','editor','labor')) AS creator_payouts_paid
     FROM shoots s
     JOIN ledger_entries le ON le.shoot_id = s.id
-    GROUP BY s.id, s.created_at, s.client_name, s.shoot_type, s.final_amount, s.base_price, s.travel_fee
+    GROUP BY s.id, s.created_at, s.client_name, s.shoot_type, s.final_amount, s.total_price
     ORDER BY s.created_at DESC
   `
 
@@ -354,7 +352,7 @@ export async function listLedgerSummary(): Promise<LedgerSummaryRow[]> {
     date: r.created_at,
     clientName: r.client_name,
     packageLabel: r.shoot_type,
-    totalInvoice: Number(r.final_amount ?? Number(r.base_price) + Number(r.travel_fee)),
+    totalInvoice: Number(r.final_amount ?? r.total_price ?? 0),
     shooterCut: Number(r.shooter_amount ?? 0),
     editorCut: Number(r.editor_amount ?? 0),
     adminCut: Number(r.admin_amount ?? 0),
