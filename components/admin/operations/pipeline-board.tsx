@@ -201,7 +201,7 @@ export function PipelineBoard({ shoots, onMove, onOpen, onDecline, onDelete, onG
                           <dt className="sr-only">Package</dt>
                           <Package className="size-3.5 shrink-0" aria-hidden="true" />
                           <dd className="truncate">
-                            {shoot.package_tier ? `${shoot.package_tier} · ${shoot.shoot_type}` : shoot.shoot_type}
+                            {shoot.selected_package || shoot.shoot_type}
                           </dd>
                         </div>
                       </dl>

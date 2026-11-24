@@ -21,8 +21,8 @@ import {
   deleteCalendarBlock,
   type CalendarBlockType,
 } from "@/app/actions/admin-calendar"
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
+import type { ServicePackage } from "@/lib/packages"
 import { ShootPipelineDrawer } from "@/components/admin/shoot-pipeline-drawer"
 import { buildStudioGrid, dayOfMonthOfKey, dayKeyOf, eachDayKey, isInStudioWindow } from "@/lib/calendar-days"
 import {
@@ -52,16 +52,14 @@ export function StudioCalendar({
   shoots,
   blocks,
   todayKey,
-  bookingTiers,
-  bookingAddons,
+  packages,
   className,
 }: {
   shoots: Shoot[]
   blocks: CalendarBlock[]
   /** The UTC day the server rendered, so the grid is identical on the server and in the browser. */
   todayKey: string
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
+  packages: ServicePackage[]
   className?: string
 }) {
   const router = useRouter()
@@ -265,8 +263,7 @@ export function StudioCalendar({
 
       <ShootPipelineDrawer
         shoot={selectedShoot}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
+        packages={packages}
         onClose={() => setSelectedShoot(null)}
         onUpdated={(updated) => {
           setSelectedShoot(updated)

@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
-import { listBookingAddons, listBookingTiers } from "@/app/actions/booking-config"
 import { getDraftVaultAdmin } from "@/app/actions/crm"
 import { getShootAdmin } from "@/app/actions/shoots"
 import { DraftVaultWorkspace } from "@/components/admin/draft-vault-workspace"
@@ -28,6 +27,5 @@ export default async function ShootWorkspacePage({ params }: { params: Promise<{
     return <DraftVaultWorkspace vault={draftVault} />
   }
 
-  const [bookingTiers, bookingAddons] = await Promise.all([listBookingTiers(), listBookingAddons()])
-  return <ShootWorkspace initialShoot={shoot} bookingTiers={bookingTiers} bookingAddons={bookingAddons} />
+  return <ShootWorkspace initialShoot={shoot} />
 }

@@ -15,7 +15,6 @@ import {
   MoreVertical,
   PenLine,
   Phone,
-  RotateCcw,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -57,7 +56,6 @@ import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL } from "@/lib/payment-term
 import { editorsOf, shootersOf } from "@/lib/shoot-team"
 import type { AssignedShooter } from "@/lib/settlement"
 import { countersignShoot, moveShootStage, updateShoot, updateShootTeam, type Shoot } from "@/app/actions/shoots"
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 
 const POST_PRODUCTION_CHECKLIST_ITEMS = ["RAWs Backed Up", "Culled", "Color Graded", "Uploaded to Vault"] as const
 const CHECKLIST_VISIBLE_STATUSES = new Set(["booked_paid", "culling", "color_grading"])
@@ -167,8 +165,6 @@ function Panel({
 
 export function ShootDetailSheet({
   shoot,
-  bookingTiers,
-  bookingAddons,
   variant = "sheet",
   pageExtras,
   hideClientContact = false,
@@ -178,8 +174,6 @@ export function ShootDetailSheet({
   onDeleteRequested,
 }: {
   shoot: Shoot | null
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
   /** "page" renders the same controls full width, without the slide-over sheet. */
   variant?: "sheet" | "page"
   /** Page variant only: more cards that join the same two-column grid after the overview and finances cards. */
@@ -196,7 +190,6 @@ export function ShootDetailSheet({
   const Title = isPage ? PageTitle : SheetTitle
   const Description = isPage ? PageDescription : SheetDescription
 
-  const [totalPrice, setTotalPrice] = useState("0")
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("0")
@@ -212,29 +205,11 @@ export function ShootDetailSheet({
   const [copied, setCopied] = useState<"code" | "link" | null>(null)
   const [postProductionProgress, setPostProductionProgress] = useState<Record<string, boolean>>({})
 
-  const calculatedTotal = useMemo(() => {
-    if (!shoot) return 0
-    const tierPrice = bookingTiers.find((t) => t.tier_key === shoot.package_tier)?.price ?? 0
-    const addonsTotal = (shoot.selected_addons ?? []).reduce((sum, item) => sum + (item.amount ?? 0), 0)
-    const packageTotal = tierPrice + addonsTotal
-    return packageTotal > 0 ? packageTotal : Number(shoot.base_price) + Number(shoot.travel_fee)
-  }, [shoot, bookingTiers])
-
-  // The saved contract total wins over the package auto-calculation, so a manual override survives a refresh. Typed input
-  // is only replaced when the saved total itself changes, never just because the parent passed a fresh copy of the shoot.
-  const savedTotal = shoot
+  const contractTotal = shoot
     ? shoot.is_comped
       ? 0
-      : Number(shoot.total_price) > 0
-        ? Number(shoot.total_price)
-        : calculatedTotal
+      : Number(shoot.total_price ?? shoot.final_amount ?? 0) || 0
     : 0
-  const priceKey = shoot ? `${shoot.id}|${savedTotal}` : ""
-  const [syncedPriceKey, setSyncedPriceKey] = useState("")
-  if (priceKey !== syncedPriceKey) {
-    setSyncedPriceKey(priceKey)
-    setTotalPrice(String(savedTotal))
-  }
 
   const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
   if (shoot !== syncedShoot) {
@@ -252,11 +227,6 @@ export function ShootDetailSheet({
       setLocationMapsUrl(shoot.location_maps_url)
     }
   }
-
-  const typedPrice = Number(totalPrice) || 0
-  // A $0 total comps the shoot; any other number is a real price, so the comped lock never outlives what is typed.
-  const isComping = typedPrice === 0
-  const isPriceOverridden = !isComping && typedPrice !== calculatedTotal
 
   function togglePostProductionItem(item: string) {
     setPostProductionProgress((current) => ({ ...current, [item]: !current[item] }))
@@ -285,7 +255,6 @@ export function ShootDetailSheet({
       const cleanShooters = shooters.filter((s) => s.name.trim())
       const cleanEditors = editors.filter((name) => name.trim())
       const reimbursement = Math.max(0, Number(driverReimbursement) || 0)
-      const price = Math.max(0, Number(totalPrice) || 0)
 
       const trimmedLocation = location.trim()
       const trimmedClientName = clientName.trim()
@@ -297,8 +266,6 @@ export function ShootDetailSheet({
         ...(trimmedClientName && trimmedClientName !== shoot.client_name ? { clientName: trimmedClientName } : {}),
         ...(trimmedClientEmail && trimmedClientEmail !== shoot.client_email ? { clientEmail: trimmedClientEmail } : {}),
         ...(trimmedClientPhone !== (shoot.client_phone ?? "") ? { clientPhone: trimmedClientPhone || null } : {}),
-        basePrice: price,
-        travelFee: 0,
         notes: notes || null,
         ...(locationChanged
           ? { location: trimmedLocation || null, locationMapsUrl: locationMapsUrl ?? undefined }
@@ -314,10 +281,6 @@ export function ShootDetailSheet({
         client_name: trimmedClientName || shoot.client_name,
         client_email: trimmedClientEmail || shoot.client_email,
         client_phone: trimmedClientPhone || null,
-        base_price: String(price),
-        travel_fee: "0",
-        total_price: String(price),
-        is_comped: price === 0,
         assigned_shooters: cleanShooters,
         assigned_editors: cleanEditors,
         assigned_shooter: cleanShooters.find((s) => s.role === "lead")?.name ?? cleanShooters[0]?.name ?? null,
@@ -652,47 +615,21 @@ export function ShootDetailSheet({
                 </Panel>
 
                 <Panel isPage={isPage} value="finances" title="Finances &amp; Splits" className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor="totalPrice">Total Contract Price</Label>
-                      {isPriceOverridden && (
-                        <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                          Override active
-                        </Badge>
-                      )}
-                      {isComping && (
-                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                          Comped
-                        </Badge>
-                      )}
+                  <div className="flex flex-col gap-2 rounded-lg border border-border bg-accent/10 p-3">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-muted-foreground">Catalog package</span>
+                      <span className="font-medium text-foreground">{shoot.selected_package || shoot.shoot_type}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Input
-                        id="totalPrice"
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="0.01"
-                        value={totalPrice}
-                        onChange={(e) => setTotalPrice(e.target.value)}
-                      />
-                      {calculatedTotal > 0 && typedPrice !== calculatedTotal && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setTotalPrice(String(calculatedTotal))}
-                          aria-label="Reset to default package price"
-                          className="shrink-0"
-                        >
-                          <RotateCcw className="size-3.5" />
-                        </Button>
-                      )}
-                    </div>
+                    {shoot.is_comped ? (
+                      <p className="text-xs text-primary">Comped quote · $0.00 due</p>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="text-muted-foreground">Exact contract total</span>
+                        <span className="font-semibold tabular-nums text-foreground">{formatCurrency(contractTotal)}</span>
+                      </div>
+                    )}
                     <p className="text-[0.65rem] text-muted-foreground">
-                      {isComping
-                        ? "A $0 total comps this shoot: no retainer or balance is due. Type any amount to charge for it."
-                        : "Type any amount to override the package + add-ons price. It saves exactly as entered."}
+                      Contract pricing is set from the canonical package, selected add-ons, and discount when the vault is generated. Use Manual Booking for a custom amount.
                     </p>
                   </div>
 

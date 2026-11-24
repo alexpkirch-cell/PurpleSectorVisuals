@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, ExternalLink } from "lucide-react"
 
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
 import { ClientCard } from "@/components/admin/client-card"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
@@ -20,7 +19,7 @@ function formatDate(value: string | null) {
 
 function amountOf(shoot: Shoot) {
   if (shoot.is_comped) return 0
-  return Number(shoot.total_price ?? shoot.final_amount ?? shoot.base_price ?? 0) || 0
+  return Number(shoot.total_price ?? shoot.final_amount ?? 0) || 0
 }
 
 function formatCurrency(value: number) {
@@ -33,15 +32,11 @@ export function ClientDashboard({
   client,
   relationshipNotes,
   initialShoots,
-  bookingTiers,
-  bookingAddons,
 }: {
   clientKey: string
   client: { name: string; email: string; phone: string | null }
   relationshipNotes: string
   initialShoots: Shoot[]
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
 }) {
   const router = useRouter()
   const [shoots, setShoots] = useState(initialShoots)
@@ -127,8 +122,6 @@ export function ClientDashboard({
 
       <ShootDetailSheet
         shoot={shoots.find((item) => item.id === workspaceShootId) ?? null}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
         onOpenChange={(open) => !open && setWorkspaceShootId(null)}
         onUpdated={handleShootChange}
       />

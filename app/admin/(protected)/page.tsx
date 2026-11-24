@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { StudioCalendar, type CalendarBlock } from "@/components/admin/studio-calendar"
 import { ExecutiveDashboard } from "@/components/admin/executive-dashboard"
 import { getExecutiveMetrics } from "@/app/actions/dashboard"
-import { listBookingAddons, listBookingTiers } from "@/app/actions/booking-config"
+import { listActivePackages } from "@/app/actions/packages"
 import { listShoots } from "@/app/actions/shoots"
 import { buildStudioGrid, todayKeyUtc } from "@/lib/calendar-days"
 
@@ -20,7 +20,7 @@ export default async function AdminOverviewPage() {
   const todayKey = todayKeyUtc()
   const gridDays = buildStudioGrid(todayKey)
 
-  const [{ data: calendarBlocks }, shoots, bookingTiers, bookingAddons, metrics] = await Promise.all([
+  const [{ data: calendarBlocks }, shoots, packages, metrics] = await Promise.all([
     supabase
       .from("calendar_blocks")
       .select("id, start_date, end_date, type, label")
@@ -29,8 +29,7 @@ export default async function AdminOverviewPage() {
       .order("start_date", { ascending: true }),
     // The very query the Operations schedule uses, so both calendars always show the same shoots on the same days.
     listShoots(),
-    listBookingTiers(),
-    listBookingAddons(),
+    listActivePackages(),
     getExecutiveMetrics(),
   ])
 
@@ -52,8 +51,7 @@ export default async function AdminOverviewPage() {
         shoots={scheduledShoots}
         blocks={(calendarBlocks ?? []) as CalendarBlock[]}
         todayKey={todayKey}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
+        packages={packages}
       />
     </div>
   )

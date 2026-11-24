@@ -13,7 +13,6 @@ interface RefreshRow {
   client_name: string | null
   location: string | null
   selected_package: string | null
-  package_tier: string | null
   shoot_type: string | null
 }
 
@@ -24,7 +23,7 @@ interface RefreshRow {
  */
 export async function refreshStaleContract(vaultId: string): Promise<string | null> {
   const { rows } = await sql<RefreshRow>`
-    SELECT v.shoot_date, v.invoice_data, s.client_name, s.location, s.selected_package, s.package_tier, s.shoot_type
+    SELECT v.shoot_date, v.invoice_data, s.client_name, s.location, s.selected_package, s.shoot_type
     FROM vaults v
     LEFT JOIN shoots s ON s.id = v.shoot_id
     WHERE v.id = ${vaultId} AND v.contract_signed = false AND v.countersigned_at IS NULL
@@ -36,7 +35,7 @@ export async function refreshStaleContract(vaultId: string): Promise<string | nu
     clientName: row.invoice_data.clientName || row.client_name || "Client",
     shootDate: row.shoot_date ? new Date(row.shoot_date).toISOString() : null,
     location: row.location,
-    packageName: row.invoice_data.packageName || row.selected_package || row.package_tier || row.shoot_type || "Session",
+    packageName: row.invoice_data.packageName || row.selected_package || row.shoot_type || "Session",
     invoice: row.invoice_data,
   })
 

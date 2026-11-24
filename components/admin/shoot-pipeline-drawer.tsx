@@ -1,7 +1,7 @@
 "use client"
 
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import type { Shoot } from "@/app/actions/shoots"
+import type { ServicePackage } from "@/lib/packages"
 import { ClientDetailSheet } from "@/components/admin/client-detail-sheet"
 import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
 
@@ -12,8 +12,7 @@ import { ShootDetailSheet } from "@/components/admin/shoot-detail-sheet"
  */
 export function ShootPipelineDrawer({
   shoot,
-  bookingTiers,
-  bookingAddons,
+  packages,
   onClose,
   onUpdated,
   onFinalized,
@@ -21,8 +20,7 @@ export function ShootPipelineDrawer({
   onDeleteRequested,
 }: {
   shoot: Shoot | null
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
+  packages: ServicePackage[]
   onClose: () => void
   onUpdated: (shoot: Shoot) => void
   onFinalized: (shoot: Shoot) => void
@@ -35,16 +33,13 @@ export function ShootPipelineDrawer({
     <>
       <ClientDetailSheet
         shoot={isNewInquiry ? shoot : null}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
+        packages={packages}
         onOpenChange={(open) => !open && onClose()}
         onFinalized={onFinalized}
       />
 
       <ShootDetailSheet
         shoot={isNewInquiry ? null : shoot}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
         onOpenChange={(open) => !open && onClose()}
         onUpdated={onUpdated}
         onDeclined={onDeclined}

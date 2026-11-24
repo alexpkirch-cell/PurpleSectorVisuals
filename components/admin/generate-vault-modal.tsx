@@ -4,8 +4,6 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -15,11 +13,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { generateVaultAndAdvance, type Shoot } from "@/app/actions/shoots"
-import { BALANCE_PERCENT_LABEL, DEPOSIT_PERCENT_LABEL, splitTotal } from "@/lib/payment-terms"
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
-}
+const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 })
 
 export function GenerateVaultModal({
   shoot,
@@ -30,27 +25,17 @@ export function GenerateVaultModal({
   onOpenChange: (open: boolean) => void
   onGenerated: (shoot: Shoot) => void
 }) {
-  const [totalQuote, setTotalQuote] = useState("0")
   const [isSaving, setIsSaving] = useState(false)
-
-  const [syncedShoot, setSyncedShoot] = useState<Shoot | null>(null)
-  if (shoot !== syncedShoot) {
-    setSyncedShoot(shoot)
-    if (shoot) {
-      const current = Number(shoot.base_price) + Number(shoot.travel_fee)
-      setTotalQuote(current > 0 ? String(current) : "0")
-    }
-  }
-
-  const total = Number(totalQuote) || 0
-  const isComped = total === 0
-  const { deposit: depositAmount, balance: balanceAmount } = splitTotal(total)
+  const hasCatalogPrice = Boolean(shoot?.package_id || shoot?.is_custom_package)
+  const total = shoot?.is_comped ? 0 : Number(shoot?.total_price) || 0
+  const deposit = shoot?.is_comped ? 0 : Number(shoot?.deposit_amount) || 0
+  const balance = shoot?.is_comped ? 0 : Math.max(total - deposit, 0)
 
   async function handleConfirm() {
     if (!shoot) return
     setIsSaving(true)
     try {
-      const updated = await generateVaultAndAdvance(shoot.id, { totalQuote: total })
+      const updated = await generateVaultAndAdvance(shoot.id)
       toast.success("Vault generated — shoot moved to Awaiting Retainer")
       onGenerated(updated)
     } catch (error) {
@@ -68,45 +53,34 @@ export function GenerateVaultModal({
             <DialogHeader>
               <DialogTitle>Generate Vault — {shoot.client_name}</DialogTitle>
               <DialogDescription>
-                Confirm the final total quote to create the client vault and send the retainer request.
-                This splits the total into a {DEPOSIT_PERCENT_LABEL} deposit and {BALANCE_PERCENT_LABEL} balance.
+                The quote is calculated from the selected catalog package, its add-ons, and discount. The server validates the same price before creating the vault.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="totalQuote">Total quote</Label>
-                <Input
-                  id="totalQuote"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={totalQuote}
-                  onChange={(e) => setTotalQuote(e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Deposit due now ({DEPOSIT_PERCENT_LABEL})</span>
-                  <span className="font-medium text-foreground">
-                    {isComped ? "$0.00 (Waived)" : formatCurrency(depositAmount)}
-                  </span>
+            {hasCatalogPrice ? (
+              <div className="flex flex-col gap-3 rounded-md border border-border p-4">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-muted-foreground">{shoot.selected_package || "Custom package"}</span>
+                  <span className="font-semibold text-foreground">{currency.format(total)}</span>
                 </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Balance due later ({BALANCE_PERCENT_LABEL})</span>
-                  <span className="font-medium text-foreground">
-                    {isComped ? "$0.00 (Waived)" : formatCurrency(balanceAmount)}
-                  </span>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Retainer</span><span>{currency.format(deposit)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Remaining balance</span><span>{currency.format(balance)}</span>
                 </div>
               </div>
-            </div>
+            ) : (
+              <p role="status" className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
+                Select a current package or enter a custom amount in the client details before generating this vault.
+              </p>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={isSaving || total < 0}>
+              <Button type="button" onClick={handleConfirm} disabled={isSaving || !hasCatalogPrice}>
                 {isSaving ? "Generating…" : "Generate vault & advance"}
               </Button>
             </DialogFooter>

@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { declineShoot, deleteShoot, moveShootStage, type Shoot } from "@/app/actions/shoots"
-import type { BookingAddon, BookingTier } from "@/app/actions/booking-config"
 import { GenerateVaultModal } from "@/components/admin/generate-vault-modal"
 import { SettlementModal } from "@/components/admin/settlement-modal"
 import { ShootPipelineDrawer } from "@/components/admin/shoot-pipeline-drawer"
@@ -27,11 +26,11 @@ import { ManualBookingDialog } from "@/components/admin/operations/manual-bookin
 import { PipelineBoard } from "@/components/admin/operations/pipeline-board"
 import { RollingCalendar } from "@/components/admin/operations/rolling-calendar"
 import { computeKpis, stageForStatus, type PipelineStage } from "@/lib/operations"
+import type { ServicePackage } from "@/lib/packages"
 
 interface OperationsDashboardProps {
   initialShoots: Shoot[]
-  bookingTiers: BookingTier[]
-  bookingAddons: BookingAddon[]
+  packages: ServicePackage[]
   /** "YYYY-MM" and "YYYY-MM-DD" computed on the server so SSR and hydration agree. */
   monthKey: string
   monthLabel: string
@@ -42,8 +41,7 @@ interface OperationsDashboardProps {
 
 export function OperationsDashboard({
   initialShoots,
-  bookingTiers,
-  bookingAddons,
+  packages,
   monthKey,
   monthLabel,
   todayKey,
@@ -184,8 +182,7 @@ export function OperationsDashboard({
 
       <ShootPipelineDrawer
         shoot={selectedShoot}
-        bookingTiers={bookingTiers}
-        bookingAddons={bookingAddons}
+        packages={packages}
         onClose={() => setSelectedShoot(null)}
         onFinalized={(updated) => {
           replaceShoot(updated)

@@ -54,7 +54,9 @@ export interface Shoot {
   is_paid: boolean
   notes: string | null
   admin_notes: string | null
-  package_tier: string | null
+  package_id?: string | null
+  is_custom_package?: boolean
+  selected_add_on_ids?: string[]
   selected_addons: SettlementItem[] | null
   vault_access_code: string
   created_at: string
@@ -627,12 +629,7 @@ export async function moveShootStage(id: string, status: ShootStatus): Promise<S
       throw new Error("Shoot not found")
     }
 
-    const total = contractTotalOf(shoot)
-    if (total <= 0 && !shoot.is_comped) {
-      throw new Error("Set the total price (or comp the shoot) before moving to Awaiting Signature & Retainer")
-    }
-
-    return generateVaultAndAdvance(id, { totalQuote: total, isComped: Boolean(shoot.is_comped) })
+    return generateVaultAndAdvance(id)
   }
 
   if (status === "delivered_settled") {
@@ -676,7 +673,7 @@ async function saveVaultDocuments(shootId: string) {
   const defaultSplit = splitTotal(total)
   const deposit = isComped ? 0 : Number(shoot.deposit_amount ?? defaultSplit.deposit)
   const balance = isComped ? 0 : Number(shoot.balance_amount ?? Math.max(total - deposit, 0))
-  const packageName = shoot.selected_package || shoot.package_tier || shoot.shoot_type
+  const packageName = shoot.selected_package || shoot.shoot_type
   const addons = (shoot.selected_addons ?? []).map((item) => ({ label: item.label, amount: Number(item.amount) || 0 }))
 
   const invoice = buildInvoiceData({
@@ -755,27 +752,53 @@ async function syncShootPaymentAmounts(shootId: string) {
  * (or updates) its client vault with the standard 50% retainer / 50% balance
  * split (or preserves a retainer explicitly entered in Manual Booking), and advances the shoot into Awaiting Retainer.
  */
-export async function generateVaultAndAdvance(
-  id: string,
-  input: { totalQuote: number; isComped?: boolean },
-): Promise<Shoot> {
+export async function generateVaultAndAdvance(id: string): Promise<Shoot> {
   await requireAdmin()
 
-  if (!Number.isFinite(input.totalQuote) || input.totalQuote < 0) {
-  throw new Error("Enter a valid total quote before generating the vault")
-  }
-  
-  // A $0 total has nothing to charge, so it takes the comped path.
-  const isComped = Boolean(input.isComped) || input.totalQuote === 0
-  const totalQuote = isComped ? 0 : input.totalQuote
-  
   const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
   const shoot = shootRows[0]
-  if (!shoot) {
-    throw new Error("Shoot not found")
+  if (!shoot) throw new Error("Shoot not found")
+  if (shoot.status !== "new_inquiry" && shoot.status !== "in_discussion") {
+    throw new Error("Only New Inquiry or Call / In Discussion shoots can generate a vault from this action")
   }
 
-  // A retainer recorded in Manual Booking stays fixed; otherwise the standard split is applied.
+  let packageId = shoot.package_id ?? null
+  let packageName = shoot.selected_package?.trim() ?? ""
+  let packagePrice = Number(shoot.package_price) || 0
+  let addOnIds = shoot.selected_add_on_ids ?? []
+  let selectedAddons = shoot.selected_addons ?? []
+  let quote: ReturnType<typeof computeQuote>
+
+  if (packageId) {
+    const resolved = await resolveCanonicalPackageQuote({
+      packageId,
+      addOnIds,
+      discountType: shoot.discount_type ?? "fixed",
+      discountValue: Number(shoot.discount_value) || 0,
+    })
+    packageId = resolved.package.id
+    packageName = resolved.package.title
+    packagePrice = Number(resolved.package.base_price)
+    addOnIds = resolved.selectedAddOnIds
+    selectedAddons = resolved.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price }))
+    quote = resolved.quote
+  } else if (shoot.is_custom_package) {
+    if (!Number.isFinite(packagePrice) || packagePrice < 0) throw new Error("Enter a valid custom package amount.")
+    quote = computeQuote({
+      basePrice: packagePrice,
+      addons: [],
+      discountType: shoot.discount_type ?? "fixed",
+      discountValue: Number(shoot.discount_value) || 0,
+    })
+    packageName ||= "Custom"
+    addOnIds = []
+    selectedAddons = []
+  } else {
+    throw new Error("Choose a current catalog package or enter a custom amount before generating the vault.")
+  }
+
+  const totalQuote = quote.total
+  const isComped = quote.isComped
   const standardSplit = isComped ? { deposit: 0, balance: 0 } : splitTotal(totalQuote)
   const manualDeposit = Number(shoot.deposit_amount ?? 0)
   const depositAmount = isComped
@@ -788,7 +811,6 @@ export async function generateVaultAndAdvance(
   const { rows: existingVaultRows } = await sql<{ id: string; countersigned_at: string | null }>`
     SELECT id, countersigned_at FROM vaults WHERE shoot_id = ${id}
   `
-
   if (existingVaultRows[0]?.countersigned_at) {
     throw new Error("This agreement is countersigned and locked, so its vault can't be regenerated.")
   }
@@ -799,23 +821,39 @@ export async function generateVaultAndAdvance(
         deposit_amount = ${depositAmount},
         balance_amount = ${balanceAmount},
         final_quoted_fee = ${totalQuote},
-        shoot_date = COALESCE(shoot_date, ${shoot.shoot_date})
+        shoot_date = COALESCE(shoot_date, ${shoot.shoot_date}),
+        deposit_paid = CASE WHEN ${isComped} THEN true ELSE deposit_paid END,
+        deposit_paid_at = CASE WHEN ${isComped} THEN COALESCE(deposit_paid_at, now()) ELSE deposit_paid_at END,
+        deposit_payment_method = CASE WHEN ${isComped} THEN 'none' ELSE deposit_payment_method END,
+        balance_paid = CASE WHEN ${isComped} THEN true ELSE balance_paid END,
+        balance_paid_at = CASE WHEN ${isComped} THEN COALESCE(balance_paid_at, now()) ELSE balance_paid_at END
       WHERE shoot_id = ${id}
     `
   } else {
     const pinCode = await allocateVaultPin()
-
     await sql`
-      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
-      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${totalQuote}, ${shoot.shoot_date})
+      INSERT INTO vaults (
+        shoot_id, pin_code, status, deposit_paid, deposit_paid_at, deposit_payment_method,
+        balance_paid, balance_paid_at, deposit_amount, balance_amount, final_quoted_fee, shoot_date, client_name
+      ) VALUES (
+        ${id}, ${pinCode}, 'Onboarding', ${isComped}, CASE WHEN ${isComped} THEN now() ELSE NULL END,
+        CASE WHEN ${isComped} THEN 'none' ELSE NULL END, ${isComped}, CASE WHEN ${isComped} THEN now() ELSE NULL END,
+        ${depositAmount}, ${balanceAmount}, ${totalQuote}, ${shoot.shoot_date}, ${shoot.client_name}
+      )
     `
   }
 
   await sql`
     UPDATE shoots SET
       status = 'awaiting_signature',
-      base_price = ${totalQuote},
+      package_id = ${packageId},
+      is_custom_package = ${Boolean(shoot.is_custom_package)},
+      selected_package = ${packageName},
+      package_price = ${packagePrice},
+      selected_add_on_ids = ${addOnIds}::text[],
+      selected_addons = ${JSON.stringify(selectedAddons)},
       total_price = ${totalQuote},
+      base_price = ${totalQuote},
       is_comped = ${isComped},
       deposit_amount = ${depositAmount},
       balance_amount = ${balanceAmount},
@@ -824,41 +862,24 @@ export async function generateVaultAndAdvance(
   `
 
   await saveVaultDocuments(id)
-
   revalidatePath("/admin")
+  revalidatePath("/admin/operations")
 
   const { rows } = await sql<Shoot>`
-    SELECT
-      s.*,
-      v.pin_code AS vault_pin,
-      v.status AS vault_status,
-      v.contract_signed AS vault_contract_signed,
-      v.deposit_paid AS vault_deposit_paid,
-      v.deposit_paid_at AS vault_deposit_paid_at,
-      v.deposit_payment_method AS vault_deposit_payment_method,
-      v.must_have_shots AS vault_must_have_shots,
-      v.mood_board_links AS vault_mood_board_links,
-      v.prep_submitted_at AS vault_prep_submitted_at,
-      v.deposit_amount AS vault_deposit_amount,
-      v.balance_paid AS vault_balance_paid,
-      v.balance_payment_method AS vault_balance_payment_method,
-      v.balance_paid_at AS vault_balance_paid_at,
-      v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at,
-      v.is_minor AS vault_is_minor,
-      v.guardian_name AS vault_guardian_name,
-      v.guardian_relationship AS vault_guardian_relationship,
-      v.guardian_phone AS vault_guardian_phone,
-      v.guardian_email AS vault_guardian_email,
-      v.id AS vault_id,
-      v.requires_countersign AS vault_requires_countersign,
-      v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at,
-      v.countersignature AS vault_countersignature,
-      v.client_signed_ip AS vault_client_signed_ip
-    FROM shoots s
-    LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE s.id = ${id}
+    SELECT s.*, v.pin_code AS vault_pin, v.status AS vault_status,
+      v.contract_signed AS vault_contract_signed, v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at, v.deposit_payment_method AS vault_deposit_payment_method,
+      v.must_have_shots AS vault_must_have_shots, v.mood_board_links AS vault_mood_board_links,
+      v.prep_submitted_at AS vault_prep_submitted_at, v.deposit_amount AS vault_deposit_amount,
+      v.balance_paid AS vault_balance_paid, v.balance_payment_method AS vault_balance_payment_method,
+      v.balance_paid_at AS vault_balance_paid_at, v.balance_amount AS vault_balance_amount,
+      v.expires_at AS vault_expires_at, v.is_minor AS vault_is_minor,
+      v.guardian_name AS vault_guardian_name, v.guardian_relationship AS vault_guardian_relationship,
+      v.guardian_phone AS vault_guardian_phone, v.guardian_email AS vault_guardian_email,
+      v.id AS vault_id, v.requires_countersign AS vault_requires_countersign,
+      v.client_signed_at AS vault_client_signed_at, v.countersigned_at AS vault_countersigned_at,
+      v.countersignature AS vault_countersignature, v.client_signed_ip AS vault_client_signed_ip
+    FROM shoots s LEFT JOIN vaults v ON v.shoot_id = s.id WHERE s.id = ${id}
   `
   return rows[0]
 }
@@ -907,146 +928,6 @@ export async function finalizeSettlement(
   revalidatePath("/admin/financials")
 
   const { rows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
-  return rows[0]
-}
-
-/**
- * Finalizes the Admin Client Detail Sheet's intake form for a "New Inquiry"
- * lead: persists the CRM fields (admin notes, package/add-on selection,
- * confirmed logistics, team assignment, and any manual price override),
- * generates the client vault with a 50%/50% deposit split, and advances the
- * shoot to Awaiting Retainer. Sending the retainer email + Stripe link is
- * stubbed to a console log until email/Stripe delivery is wired up.
- */
-export async function finalizeBooking(
-  id: string,
-  input: {
-    adminNotes: string | null
-    packageTier: "Base" | "Standard"
-    selectedAddons: SettlementItem[]
-    confirmedDate: string | null
-    confirmedTime: string | null
-    confirmedLocation: string | null
-    totalPrice: number
-    isComped?: boolean
-    assignedShooters: AssignedShooter[]
-    assignedEditors: string[]
-  },
-): Promise<Shoot> {
-  await requireAdmin()
-
-  const assignedShooters = input.assignedShooters.filter((shooter) => shooter.name.trim())
-  const assignedEditors = input.assignedEditors.filter((name) => name.trim())
-  const isComped = Boolean(input.isComped)
-  const totalPrice = isComped ? 0 : input.totalPrice
-
-  if (!isComped && (!Number.isFinite(totalPrice) || totalPrice <= 0)) {
-    throw new Error("Enter a valid total price before finalizing the booking")
-  }
-
-  const { rows: shootRows } = await sql<Shoot>`SELECT * FROM shoots WHERE id = ${id}`
-  const shoot = shootRows[0]
-  if (!shoot) {
-    throw new Error("Shoot not found")
-  }
-
-  const shootDate =
-    input.confirmedDate ? `${input.confirmedDate}T${input.confirmedTime || "00:00"}:00` : shoot.shoot_date
-
-  await sql`
-    UPDATE shoots SET
-      admin_notes = ${input.adminNotes},
-      package_tier = ${input.packageTier},
-      selected_addons = ${JSON.stringify(input.selectedAddons)},
-      location = COALESCE(${input.confirmedLocation}, location),
-      shoot_date = ${shootDate},
-      base_price = ${totalPrice},
-      total_price = ${totalPrice},
-      is_comped = ${isComped},
-      deposit_amount_custom = false,
-      travel_fee = 0,
-      assigned_shooters = ${JSON.stringify(assignedShooters)},
-      assigned_editors = ${JSON.stringify(assignedEditors)},
-      status = 'awaiting_signature'
-    WHERE id = ${id}
-  `
-
-  const { deposit: depositAmount, balance: balanceAmount } = isComped
-    ? { deposit: 0, balance: 0 }
-    : splitTotal(totalPrice)
-
-  await sql`UPDATE shoots SET deposit_amount = ${depositAmount}, balance_amount = ${balanceAmount} WHERE id = ${id}`
-
-  const { rows: existingVaultRows } = await sql<{ id: string }>`
-    SELECT id FROM vaults WHERE shoot_id = ${id}
-  `
-
-  let pinCode = ""
-  if (existingVaultRows.length > 0) {
-    await sql`
-      UPDATE vaults SET
-        deposit_amount = ${depositAmount},
-        balance_amount = ${balanceAmount},
-        final_quoted_fee = ${totalPrice},
-        shoot_date = COALESCE(${shootDate}, shoot_date)
-      WHERE shoot_id = ${id}
-    `
-    const { rows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
-    pinCode = rows[0].pin_code
-  } else {
-    pinCode = await allocateVaultPin()
-
-    await sql`
-      INSERT INTO vaults (shoot_id, pin_code, status, deposit_amount, balance_amount, final_quoted_fee, shoot_date)
-      VALUES (${id}, ${pinCode}, 'Onboarding', ${depositAmount}, ${balanceAmount}, ${totalPrice}, ${shootDate})
-    `
-  }
-
-  await saveVaultDocuments(id)
-
-  // TODO: wire up real delivery once email + Stripe are connected.
-  console.log("[v0] Sending confirmation email to", shoot.client_email, {
-    vaultAccessCode: shoot.vault_access_code,
-    vaultPin: pinCode,
-    depositAmount,
-    stripeRetainerLink: `https://checkout.stripe.com/pay/retainer_${id}`,
-  })
-
-  revalidatePath("/admin")
-
-  const { rows } = await sql<Shoot>`
-    SELECT
-      s.*,
-      v.pin_code AS vault_pin,
-      v.status AS vault_status,
-      v.contract_signed AS vault_contract_signed,
-      v.deposit_paid AS vault_deposit_paid,
-      v.deposit_paid_at AS vault_deposit_paid_at,
-      v.deposit_payment_method AS vault_deposit_payment_method,
-      v.must_have_shots AS vault_must_have_shots,
-      v.mood_board_links AS vault_mood_board_links,
-      v.prep_submitted_at AS vault_prep_submitted_at,
-      v.deposit_amount AS vault_deposit_amount,
-      v.balance_paid AS vault_balance_paid,
-      v.balance_payment_method AS vault_balance_payment_method,
-      v.balance_paid_at AS vault_balance_paid_at,
-      v.balance_amount AS vault_balance_amount,
-      v.expires_at AS vault_expires_at,
-      v.is_minor AS vault_is_minor,
-      v.guardian_name AS vault_guardian_name,
-      v.guardian_relationship AS vault_guardian_relationship,
-      v.guardian_phone AS vault_guardian_phone,
-      v.guardian_email AS vault_guardian_email,
-      v.id AS vault_id,
-      v.requires_countersign AS vault_requires_countersign,
-      v.client_signed_at AS vault_client_signed_at,
-      v.countersigned_at AS vault_countersigned_at,
-      v.countersignature AS vault_countersignature,
-      v.client_signed_ip AS vault_client_signed_ip
-    FROM shoots s
-    LEFT JOIN vaults v ON v.shoot_id = s.id
-    WHERE s.id = ${id}
-  `
   return rows[0]
 }
 

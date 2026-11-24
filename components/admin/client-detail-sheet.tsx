@@ -5,7 +5,7 @@ import { CheckCircle2, Mail, Phone, Send } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
- import { Input } from "@/components/ui/input"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -299,46 +299,62 @@ export function ClientDetailSheet({
                 <span className="text-xs font-medium text-zinc-300">Booking configuration</span>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-zinc-300">Package</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {bookingTiers.map((tier) => (
-                      <button
-                        key={tier.tier_key}
-                        type="button"
-                        onClick={() => setPackageTier(tier.tier_key as PackageTier)}
-                        className={
-                          "rounded-md border px-3 py-2 text-left text-sm transition-colors " +
-                          (packageTier === tier.tier_key
-                            ? "border-[#9D00FF] bg-[#9D00FF]/10 text-zinc-50"
-                            : "border-white/10 text-zinc-400 hover:bg-white/5")
-                        }
-                      >
-                        <span className="block font-medium">{tier.tier_key}</span>
-                        <span className="text-xs text-zinc-500">{formatCurrency(tier.price)}</span>
-                      </button>
+                  <Label htmlFor="catalogPackage" className="text-zinc-300">Canonical package</Label>
+                  <select
+                    id="catalogPackage"
+                    value={packageId}
+                    onChange={(event) => {
+                      setPackageId(event.target.value)
+                      setAddonIds([])
+                    }}
+                    className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                  >
+                    <option value="">Select a package</option>
+                    {[...new Set(packages.map((pkg) => pkg.category))].map((category) => (
+                      <optgroup key={category} label={category}>
+                        {packages.filter((pkg) => pkg.category === category).map((pkg) => (
+                          <option key={pkg.id} value={pkg.id}>
+                            {pkg.title} — {formatCurrency(Number(pkg.base_price))}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
-                  </div>
+                    <option value="custom">Custom — enter an exact amount</option>
+                  </select>
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-zinc-300">Add-ons</Label>
-                  <div className="flex flex-col gap-2">
-                    {bookingAddons.map((addon) => (
-                      <label
-                        key={addon.id}
-                        className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-zinc-300"
-                      >
-                        <span className="flex items-center gap-2">
-                          <Checkbox
-                            checked={addonIds.includes(addon.id)}
-                            onCheckedChange={() => toggleAddon(addon.id)}
-                          />
-                          {addon.name}
-                        </span>
-                        <span className="text-xs text-zinc-500">+{formatCurrency(addon.price)}</span>
-                      </label>
-                    ))}
+                {isCustomPackage ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="customPackagePrice" className="text-zinc-300">Custom package total ($)</Label>
+                    <Input
+                      id="customPackagePrice"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={customPrice}
+                      onChange={(event) => setCustomPrice(event.target.value)}
+                      className="border-white/10 bg-black/40 text-zinc-100"
+                    />
                   </div>
+                ) : null}
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-zinc-300">Package add-ons</Label>
+                  {selectedPackage?.add_ons.length ? (
+                    <div className="flex flex-col gap-2">
+                      {selectedPackage.add_ons.map((addon) => (
+                        <label key={addon.id} className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-zinc-300">
+                          <span className="flex items-center gap-2">
+                            <Checkbox checked={addonIds.includes(addon.id)} onCheckedChange={() => toggleAddon(addon.id)} />
+                            {addon.name}
+                          </span>
+                          <span className="text-xs text-zinc-500">+{formatCurrency(Number(addon.price) || 0)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-500">{isCustomPackage ? "Custom quotes have no catalog add-ons." : "Select a package to see its add-ons."}</p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -381,46 +397,55 @@ export function ClientDetailSheet({
                   />
                 </div>
 
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="totalPrice" className="text-zinc-300">
-                      Total price
-                    </Label>
-                    {isPriceOverridden && (
-                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-400">
-                        Override active
-                      </Badge>
-                    )}
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="discountType" className="text-zinc-300">Discount type</Label>
+                    <select
+                      id="discountType"
+                      value={discountType}
+                      onChange={(event) => setDiscountType(event.target.value as DiscountType)}
+                      className="h-9 rounded-md border border-white/10 bg-black/40 px-2 text-sm text-zinc-100"
+                    >
+                      <option value="fixed">Fixed amount</option>
+                      <option value="percent">Percent</option>
+                    </select>
                   </div>
-                  <Input
-                    id="totalPrice"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={totalPrice}
-                    onChange={(e) => {
-                      setPriceTouched(true)
-                      setTotalPrice(e.target.value)
-                    }}
-                    className="border-white/10 bg-black/40 font-medium text-zinc-100"
-                  />
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[0.65rem] text-zinc-500">
-                      Auto-calculated from package + add-ons. Edit directly to apply a custom discount or charge.
-                    </p>
-                    {isPriceOverridden && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPriceTouched(false)
-                          setTotalPrice(String(calculatedTotal))
-                        }}
-                        className="shrink-0 text-[0.65rem] font-medium text-primary hover:underline"
-                      >
-                        Reset to calculated
-                      </button>
-                    )}
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="discountValue" className="text-zinc-300">Discount</Label>
+                    <Input
+                      id="discountValue"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={discountValue}
+                      onChange={(event) => setDiscountValue(event.target.value)}
+                      className="border-white/10 bg-black/40 text-zinc-100"
+                    />
                   </div>
+                </div>
+
+                <div aria-live="polite" className="flex flex-col gap-2 rounded-md border border-white/10 bg-white/5 p-3">
+                  <div className="flex justify-between gap-3 text-sm text-zinc-400">
+                    <span>Package</span><span>{formatCurrency(packageBasePrice)}</span>
+                  </div>
+                  {selectedAddons.map((addon) => (
+                    <div key={addon.label} className="flex justify-between gap-3 text-xs text-zinc-500">
+                      <span>{addon.label}</span><span>{formatCurrency(addon.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between gap-3 text-xs text-zinc-500">
+                    <span>Discount</span><span>−{formatCurrency(quote.discountAmount)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-sm font-semibold text-zinc-50">
+                    <span>Exact quote total</span><span>{formatCurrency(calculatedTotal)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-xs text-zinc-400">
+                    <span>50% retainer</span><span>{formatCurrency(quote.deposit)}</span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-xs text-zinc-400">
+                    <span>Remaining balance</span><span>{formatCurrency(quote.balance)}</span>
+                  </div>
+                  <p className="text-[0.65rem] text-zinc-500">Package price + selected catalog add-ons − discount. No base fee is added.</p>
                 </div>
               </div>
 
