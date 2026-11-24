@@ -31,13 +31,30 @@ import { cn } from "@/lib/utils"
 const CUSTOM_PACKAGE = "custom"
 
 const SHOOT_TYPES = [
-  { label: "Senior Portraits", categories: ["Portraits"] },
-  { label: "Automotive / Rollers", categories: ["Automotive"] },
-  { label: "Sports / Athletics", categories: ["Athletics"] },
-  { label: "Individual / Creative Portraits", categories: ["Portraits"] },
-  { label: "Events / Commercial", categories: ["Events", "Commercial"] },
-  { label: "Other / Custom", categories: [] as string[] },
+  { label: "Portraits", categories: ["Portraits"] },
+  { label: "Athletics", categories: ["Athletics"] },
+  { label: "Automotive", categories: ["Automotive"] },
+  { label: "Events", categories: ["Events"] },
+  { label: "Commercial", categories: ["Commercial"] },
+  { label: "Custom", categories: [] as string[] },
 ] as const
+
+const STARTING_STAGES = [
+  { value: "new_inquiry", label: "New Inquiry" },
+  { value: "booked", label: "Booked" },
+  { value: "color_grading", label: "Editing" },
+  { value: "ready_for_delivery", label: "Ready for Delivery" },
+] as const
+
+const RETAINER_METHODS = [
+  { value: "none", label: "None" },
+  { value: "cash", label: "Cash" },
+  { value: "venmo_zelle", label: "Venmo / Zelle" },
+  { value: "check", label: "Check" },
+] as const
+
+type StartingStage = (typeof STARTING_STAGES)[number]["value"]
+type RetainerMethod = (typeof RETAINER_METHODS)[number]["value"]
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -70,6 +87,10 @@ export function ManualBookingDialog({
   const [shooters, setShooters] = useState<AssignedShooter[]>([])
   const [editors, setEditors] = useState<string[]>([])
   const [driverReimbursement, setDriverReimbursement] = useState("")
+  const [startingStage, setStartingStage] = useState<StartingStage>("new_inquiry")
+  const [retainerOverride, setRetainerOverride] = useState<string | null>(null)
+  const [retainerStatus, setRetainerStatus] = useState<"pending" | "paid">("pending")
+  const [retainerMethod, setRetainerMethod] = useState<RetainerMethod>("none")
   const [isSaving, setIsSaving] = useState(false)
 
   const suggestedCategories: readonly string[] = SHOOT_TYPES.find((type) => type.label === shootType)?.categories ?? []
@@ -105,7 +126,13 @@ export function ManualBookingDialog({
     discountType,
     discountValue: Number(discountValue) || 0,
   })
-  const hasPricing = packageId !== "" && (packagePrice > 0 || selectedAddons.length > 0)
+  const hasPricing = packageId !== ""
+  const defaultRetainer = quote.isComped ? 0 : Math.round(quote.total * 50) / 100
+  const retainerAmount = quote.isComped
+    ? 0
+    : retainerOverride === null ? defaultRetainer : Math.max(0, Number(retainerOverride) || 0)
+  const remainingBalance = Math.max(0, Math.round((quote.total - retainerAmount) * 100) / 100)
+  const retainerPaid = quote.isComped || retainerAmount === 0 || retainerStatus === "paid"
 
   function resetForm() {
     setShootType("")
@@ -120,6 +147,10 @@ export function ManualBookingDialog({
     setShooters([])
     setEditors([])
     setDriverReimbursement("")
+    setStartingStage("new_inquiry")
+    setRetainerOverride(null)
+    setRetainerStatus("pending")
+    setRetainerMethod("none")
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -146,13 +177,17 @@ export function ManualBookingDialog({
         assignedShooters: shooters,
         assignedEditors: editors,
         driverReimbursement: Number(driverReimbursement) || 0,
+        startingStage,
+        retainerAmount,
+        retainerPaid,
+        retainerMethod,
         notes: text("notes"),
       })
       onCreated(shoot)
       form.reset()
       resetForm()
       onOpenChange(false)
-      toast.success(`${shoot.client_name} added to New Inquiry`)
+      toast.success(`${shoot.client_name} added to ${STARTING_STAGES.find((stage) => stage.value === startingStage)?.label ?? "the pipeline"}`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create booking")
     } finally {
@@ -166,7 +201,7 @@ export function ManualBookingDialog({
         <DialogHeader>
           <DialogTitle>Manual Booking</DialogTitle>
           <DialogDescription>
-            Add a lead that came in outside the website. It lands in New Inquiry with the quote already built.
+            Log an upcoming lead or an already-shot session. Choose its starting stage and payment schedule.
           </DialogDescription>
         </DialogHeader>
 
@@ -210,7 +245,18 @@ export function ManualBookingDialog({
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="mb-shoot-date">Tentative date</Label>
+                <Label htmlFor="mb-starting-stage">Starting Pipeline Stage</Label>
+                <select
+                  id="mb-starting-stage"
+                  value={startingStage}
+                  onChange={(event) => setStartingStage(event.target.value as StartingStage)}
+                  className={selectClass}
+                >
+                  {STARTING_STAGES.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="mb-shoot-date">Shoot Date</Label>
                 <Input id="mb-shoot-date" name="shootDate" type="date" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -233,7 +279,7 @@ export function ManualBookingDialog({
           </fieldset>
 
           <fieldset className="flex flex-col gap-3">
-            <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Quote</legend>
+            <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Quote / Payment Schedule</legend>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-package">Base package</Label>
@@ -280,7 +326,7 @@ export function ManualBookingDialog({
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="mb-custom-price">Price</Label>
+                    <Label htmlFor="mb-custom-price">Custom Total Price ($)</Label>
                     <Input
                       id="mb-custom-price"
                       type="number"
@@ -350,8 +396,60 @@ export function ManualBookingDialog({
                 />
               </div>
               <p className="text-[0.65rem] text-muted-foreground">
-                100% off (or a fixed amount covering the full price) comps the shoot at $0.00 and waives the deposit.
+                100% off (or a fixed amount covering the full price) comps the shoot at $0.00 and waives all payment.
               </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="mb-retainer-amount">Retainer / Deposit Amount ($)</Label>
+                <Input
+                  id="mb-retainer-amount"
+                  type="number"
+                  min="0"
+                  max={quote.total}
+                  step="0.01"
+                  inputMode="decimal"
+                  value={retainerOverride ?? defaultRetainer.toFixed(2)}
+                  onChange={(event) => setRetainerOverride(event.target.value)}
+                  disabled={!hasPricing || quote.isComped}
+                />
+                <p className="text-[0.65rem] text-muted-foreground">Defaults to 50% of the quote. Enter $0.00 for no retainer.</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="mb-balance-due">Remaining Balance Due at Delivery ($)</Label>
+                <Input id="mb-balance-due" readOnly value={formatCurrency(remainingBalance)} aria-readonly="true" />
+                <p className="text-[0.65rem] text-muted-foreground">Total minus the retainer / deposit amount.</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="mb-retainer-status">Retainer Status</Label>
+                <select
+                  id="mb-retainer-status"
+                  value={retainerPaid ? "paid" : "pending"}
+                  onChange={(event) => setRetainerStatus(event.target.value as "pending" | "paid")}
+                  disabled={!hasPricing || retainerAmount === 0 || quote.isComped}
+                  className={selectClass}
+                >
+                  <option value="pending">Pending via Portal</option>
+                  <option value="paid">Paid / Waived ($0)</option>
+                </select>
+                {retainerPaid && retainerAmount > 0 ? (
+                  <p className="text-[0.65rem] text-muted-foreground">Offline retainer; the portal will only ask for the remaining balance.</p>
+                ) : null}
+              </div>
+              {retainerPaid && retainerAmount > 0 ? (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="mb-retainer-method">Offline Payment Method (optional)</Label>
+                  <select
+                    id="mb-retainer-method"
+                    value={retainerMethod}
+                    onChange={(event) => setRetainerMethod(event.target.value as RetainerMethod)}
+                    className={selectClass}
+                  >
+                    {RETAINER_METHODS.map((method) => <option key={method.value} value={method.value}>{method.label}</option>)}
+                  </select>
+                </div>
+              ) : null}
             </div>
 
             <div
@@ -383,15 +481,11 @@ export function ManualBookingDialog({
                     <span>{formatCurrency(quote.total)}</span>
                   </div>
                   <QuoteRow
-                    label="Deposit"
-                    value={quote.isComped ? "$0.00 (Waived)" : formatCurrency(quote.deposit)}
+                    label="Retainer / Deposit"
+                    value={retainerPaid && retainerAmount === 0 ? "$0.00 (Waived)" : formatCurrency(retainerAmount)}
                     muted
                   />
-                  <QuoteRow
-                    label="Balance"
-                    value={quote.isComped ? "$0.00 (Waived)" : formatCurrency(quote.balance)}
-                    muted
-                  />
+                  <QuoteRow label="Due at Delivery" value={formatCurrency(remainingBalance)} muted />
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">Pick a package to see the estimated price.</p>

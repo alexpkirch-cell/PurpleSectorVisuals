@@ -34,7 +34,7 @@ export const TRACKER_NODES: readonly TrackerNode[] = [
     id: "delivered",
     label: "Delivered",
     headline: "Your gallery is ready",
-    detail: "Everything is finished. Head to the Final Delivery tab to view your gallery.",
+    detail: "Your photos are ready. Head to Final Delivery for watermarked proofs and any balance due.",
   },
 ]
 
@@ -45,12 +45,14 @@ export const TRACKER_NODES: readonly TrackerNode[] = [
  */
 export function trackerIndex(shootStatus: string | null, photoCount: number): number {
   switch (shootStatus) {
+    case "booked":
     case "booked_paid":
       return 0
     case "culling":
       return 1
     case "color_grading":
       return photoCount > 0 ? 3 : 2
+    case "ready_for_delivery":
     case "delivered_settled":
       return TRACKER_NODES.length - 1
     default:
@@ -59,5 +61,5 @@ export function trackerIndex(shootStatus: string | null, photoCount: number): nu
 }
 
 export function isDeliveredStatus(shootStatus: string | null) {
-  return shootStatus === "delivered_settled"
+  return shootStatus === "ready_for_delivery" || shootStatus === "delivered_settled"
 }

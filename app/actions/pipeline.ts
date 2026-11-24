@@ -144,6 +144,8 @@ export async function generateVaultAndSendLink(
       v.status AS vault_status,
       v.contract_signed AS vault_contract_signed,
       v.deposit_paid AS vault_deposit_paid,
+      v.deposit_paid_at AS vault_deposit_paid_at,
+      v.deposit_payment_method AS vault_deposit_payment_method,
       v.must_have_shots AS vault_must_have_shots,
       v.mood_board_links AS vault_mood_board_links,
       v.prep_submitted_at AS vault_prep_submitted_at,
