@@ -18,6 +18,7 @@ export type RosterCheckoutResult =
 export async function startRosterGalleryCheckout(playerId: string): Promise<RosterCheckoutResult> {
   const parentSession = await getRosterVaultSession()
   if (!parentSession) return { success: false, error: "Your team session expired. Sign in again to continue." }
+  if (parentSession.player_id) return { success: false, error: "Player accounts can view their own gallery but cannot start purchases." }
 
   const billing = await getRosterTeamBilling(parentSession.team_id)
   if (billing.mode === "all_inclusive") {
@@ -160,7 +161,7 @@ export async function startRosterGalleryCheckout(playerId: string): Promise<Rost
 /** Validates Stripe's completed session on the success route before granting gallery access. */
 export async function confirmRosterGalleryCheckout(playerId: string, checkoutSessionId: string) {
   const parentSession = await getRosterVaultSession()
-  if (!parentSession || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return false
+  if (!parentSession || parentSession.player_id || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return false
 
   try {
     const checkout = await getStripeClient().checkout.sessions.retrieve(checkoutSessionId)
@@ -188,6 +189,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export async function startRosterPhotoCheckout(input: { photoKind: "player" | "team"; photoId: string }): Promise<RosterCheckoutResult> {
   const parentSession = await getRosterVaultSession()
   if (!parentSession) return { success: false, error: "Your team session expired. Sign in again to continue." }
+  if (parentSession.player_id) return { success: false, error: "Player accounts cannot start purchases." }
   if ((input.photoKind !== "player" && input.photoKind !== "team") || !UUID_PATTERN.test(input.photoId)) {
     return { success: false, error: "That photo is not available." }
   }
@@ -312,7 +314,7 @@ export async function startRosterPhotoCheckout(input: { photoKind: "player" | "t
 /** Confirms a returned single-photo Checkout so the download unlocks even if the webhook has not landed yet. */
 export async function confirmRosterPhotoCheckout(checkoutSessionId: string) {
   const parentSession = await getRosterVaultSession()
-  if (!parentSession || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return false
+  if (!parentSession || parentSession.player_id || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return false
 
   try {
     const checkout = await getStripeClient().checkout.sessions.retrieve(checkoutSessionId)

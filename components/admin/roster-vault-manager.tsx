@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { ImagePlus, Images, Pencil, Plus, ShieldCheck, Trash2, Users } from "lucide-react"
+import { Copy, ImagePlus, Images, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -15,6 +15,7 @@ import {
   listRosterVaultPhotosAdmin,
   listRosterVaultPrintProducts,
   listRosterVaultTiers,
+  rotateRosterVaultPlayerPasscode,
   updateRosterVaultGalleryTier,
   updateRosterVaultPlayer,
   updateRosterVaultTeam,
@@ -252,6 +253,27 @@ export function RosterVaultManager({
     })
   }
 
+  async function copyPlayerCredential(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(`${label} copied`)
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}`)
+    }
+  }
+
+  async function handleRotatePlayerPasscode(player: RosterVaultPlayer) {
+    startTransition(async () => {
+      try {
+        const result = await rotateRosterVaultPlayerPasscode(player.id)
+        setPlayers((current) => current.map((item) => item.id === player.id ? { ...item, passcode_display: result.passcode } : item))
+        toast.success(`New passcode issued for ${player.display_name}`)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not rotate passcode")
+      }
+    })
+  }
+
   return (
     <div className="grid gap-5 xl:grid-cols-[17rem_minmax(0,1fr)]">
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4" aria-labelledby="roster-vault-teams-heading">
@@ -422,26 +444,52 @@ export function RosterVaultManager({
                         <div className="flex gap-2"><Button type="submit" size="sm" disabled={pending}>Save</Button><Button type="button" variant="ghost" size="sm" onClick={() => setEditingPlayer(null)}>Cancel</Button></div>
                       </form>
                     ) : (
-                      <div className="flex items-center gap-3">
-                        <div className="relative size-14 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
-                          {player.cover_image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- admin roster thumbnail URL
-                            <img src={player.cover_image_url} alt="" className="size-full object-cover" />
-                          ) : (
-                            <span className="flex size-full items-center justify-center font-heading text-xl font-bold text-muted-foreground">{player.jersey_number}</span>
-                          )}
+                      <div className="grid gap-4 lg:grid-cols-[minmax(12rem,1fr)_minmax(18rem,1.2fr)_auto] lg:items-center">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="relative size-14 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
+                            {player.cover_image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- admin roster thumbnail URL
+                              <img src={player.cover_image_url} alt="" className="size-full object-cover" />
+                            ) : (
+                              <span className="flex size-full items-center justify-center font-heading text-xl font-bold text-muted-foreground">{player.jersey_number}</span>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">{player.display_name}</p>
+                            <p className="text-xs text-muted-foreground">#{player.jersey_number}{player.is_active ? " · Active" : " · Hidden"}</p>
+                            <p className="text-xs text-muted-foreground">{player.tier_name ? `${player.tier_name} · $${((player.tier_price_cents ?? 0) / 100).toFixed(2)}` : "No gallery tier"}</p>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-foreground">{player.display_name}</p>
-                          <p className="text-xs text-muted-foreground">#{player.jersey_number}{player.is_active ? " · Active" : " · Hidden"}</p>
-                          <p className="text-xs text-muted-foreground">{player.tier_name ? `${player.tier_name} · $${((player.tier_price_cents ?? 0) / 100).toFixed(2)}` : "No gallery tier"}</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="min-w-0 rounded-md border border-border bg-card p-2">
+                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Username</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <code className="min-w-0 truncate text-xs text-foreground">{player.display_name}</code>
+                              <Button type="button" variant="ghost" size="icon-xs" onClick={() => void copyPlayerCredential(player.display_name, "Username")} aria-label={`Copy ${player.display_name} username`}>
+                                <Copy className="size-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="min-w-0 rounded-md border border-border bg-card p-2">
+                            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">6-digit passcode</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <code className="font-mono text-xs tracking-[0.22em] text-foreground">{player.passcode_display ?? "Generating…"}</code>
+                              <Button type="button" variant="ghost" size="icon-xs" onClick={() => player.passcode_display && void copyPlayerCredential(player.passcode_display, "Passcode")} aria-label={`Copy ${player.display_name} passcode`} disabled={!player.passcode_display}>
+                                <Copy className="size-3.5" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <Button type="button" variant={photosFor === player.id ? "secondary" : "outline"} size="sm" onClick={() => void openPlayerPhotos(player.id)} aria-pressed={photosFor === player.id}>
-                          <Images className="size-4" aria-hidden="true" />
-                          <span className="hidden sm:inline">Photos</span>
-                        </Button>
-                        <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditingPlayer(player.id)} aria-label={`Edit ${player.display_name}`}><Pencil className="size-4" aria-hidden="true" /></Button>
-                        <Button type="button" variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={() => void handleDeletePlayer(player)} aria-label={`Delete ${player.display_name}`}><Trash2 className="size-4" aria-hidden="true" /></Button>
+                        <div className="flex items-center gap-1">
+                          <Button type="button" variant="outline" size="sm" onClick={() => void handleRotatePlayerPasscode(player)} disabled={pending} aria-label={`Generate a new passcode for ${player.display_name}`}>
+                            <RefreshCw className="size-3.5" aria-hidden="true" /> New code
+                          </Button>
+                          <Button type="button" variant={photosFor === player.id ? "secondary" : "outline"} size="icon-sm" onClick={() => void openPlayerPhotos(player.id)} aria-pressed={photosFor === player.id} aria-label={`Photos for ${player.display_name}`}>
+                            <Images className="size-4" aria-hidden="true" />
+                          </Button>
+                          <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditingPlayer(player.id)} aria-label={`Edit ${player.display_name}`}><Pencil className="size-4" aria-hidden="true" /></Button>
+                          <Button type="button" variant="ghost" size="icon-sm" className="text-destructive hover:text-destructive" onClick={() => void handleDeletePlayer(player)} aria-label={`Delete ${player.display_name}`}><Trash2 className="size-4" aria-hidden="true" /></Button>
+                        </div>
                       </div>
                     )}
                     {photosFor === player.id ? (

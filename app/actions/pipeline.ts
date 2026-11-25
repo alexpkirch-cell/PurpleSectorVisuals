@@ -128,12 +128,15 @@ export async function generateVaultAndSendLink(
     WHERE id = ${id}
   `
 
-  const { rows: existingVaultRows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE shoot_id = ${id}`
-  let pinCode = ""
+  const { rows: existingVaultRows } = await sql<{ id: string; pin_code: string }>`SELECT id, pin_code FROM vaults WHERE shoot_id = ${id}`
+  const existingPin = existingVaultRows[0]?.pin_code
+  const pinCode = existingPin && /^\d{6}$/.test(existingPin)
+    ? existingPin
+    : /^\d{6}$/.test(shoot.vault_access_code ?? "")
+      ? shoot.vault_access_code
+      : await allocateVaultPin()
 
   if (existingVaultRows.length > 0) {
-    const { rows: pinRows } = await sql<{ pin_code: string }>`SELECT pin_code FROM vaults WHERE shoot_id = ${id}`
-    pinCode = /^\d{6}$/.test(pinRows[0]?.pin_code ?? "") ? pinRows[0].pin_code : await allocateVaultPin()
     await sql`
       UPDATE vaults SET
         pin_code = ${pinCode},
@@ -150,7 +153,6 @@ export async function generateVaultAndSendLink(
       WHERE shoot_id = ${id}
     `
   } else {
-    pinCode = await allocateVaultPin()
     await sql`
       INSERT INTO vaults (
         shoot_id, pin_code, status, is_unlocked, deposit_paid, deposit_paid_at, deposit_payment_method,
@@ -164,6 +166,8 @@ export async function generateVaultAndSendLink(
       )
     `
   }
+
+  await sql`UPDATE shoots SET vault_access_code = ${pinCode} WHERE id = ${id}`
 
   console.log("[v0] Sending vault link to", shoot.client_email, { pinCode, depositAmount })
   revalidatePath("/admin")
