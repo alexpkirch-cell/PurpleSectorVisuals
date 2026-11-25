@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, ExternalLink, Upload } from "lucide-react"
 
 import type { DraftVault } from "@/app/actions/crm"
+import { adminVaultPreviewUrl } from "@/lib/site-url"
 import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -30,7 +31,7 @@ export function DraftVaultWorkspace({ vault }: { vault: DraftVault }) {
             Upload Client Photos
           </Button>
           <Link
-            href={`/vault/${vault.pinCode}`}
+            href={adminVaultPreviewUrl(vault.pinCode)}
             target="_blank"
             rel="noopener noreferrer"
             className={buttonVariants({ variant: "outline", size: "sm" })}

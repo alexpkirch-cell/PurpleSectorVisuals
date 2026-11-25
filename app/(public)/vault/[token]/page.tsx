@@ -6,9 +6,8 @@ import { lookupVaultByPin } from "@/app/actions/vault-pin"
 import { confirmStandardVaultPrintCheckout } from "@/app/actions/standard-vault-print"
 import { BlooperReel } from "@/components/vault/blooper-reel"
 import { VaultPortal } from "@/components/vault/portal/vault-portal"
-import { VaultGate } from "@/components/vault/vault-gate"
 import { formatShootDate } from "@/lib/operations"
-import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
+import { isAdminViewer } from "@/lib/vault-session"
 
 export const metadata: Metadata = {
   title: "Client Vault | Purple Sector Visuals",
@@ -38,16 +37,11 @@ function isPin(token: string) {
 export default async function VaultTokenPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ print_session_id?: string; print_cancelled?: string }> }) {
   const [{ token }, query] = await Promise.all([params, searchParams])
 
-  if (!isPin(token)) {
-    redirect("/vault")
-  }
+  if (!isPin(token)) redirect("/vault")
+  if (!(await isAdminViewer())) redirect("/vault")
 
   const result = await lookupVaultByPin(token)
-
-  // Unknown codes and signed-out visitors see the exact same sign-in, so codes can't be probed via the URL.
-  if (!result.found) {
-    return <VaultGate code={token} />
-  }
+  if (!result.found) redirect("/admin/operations")
 
   if (result.secret) {
     return (
@@ -58,12 +52,6 @@ export default async function VaultTokenPage({ params, searchParams }: { params:
   }
 
   const { vault } = result
-
-  // The code alone is never enough: the client must have signed in with their email + access code.
-  const hasAccess = (await hasVaultSession(vault.id)) || (await isAdminViewer())
-  if (!hasAccess) {
-    return <VaultGate code={token} />
-  }
 
   if (vault.status === "Expired") {
     return (

@@ -6,6 +6,7 @@ import { Pool } from "pg"
 import { isStaleContract, refreshStaleContract } from "@/lib/vault-contract"
 import type { InvoiceData } from "@/lib/vault-documents"
 import { vaultCookieName } from "@/lib/vault"
+import { getVaultSessionId } from "@/lib/vault-session"
 
 const GALLERY_LIFESPAN_DAYS = 180
 
@@ -103,6 +104,20 @@ export async function establishVaultSession(pin: string, galleryId: string) {
   } finally {
     await pool.end()
   }
+}
+
+export async function lookupVaultForCurrentSession(): Promise<{ found: false } | { found: true; secret: true } | { found: true; secret: false; vault: VaultRecord }> {
+  const vaultId = await getVaultSessionId()
+  if (!vaultId) return { found: false }
+  const pool = getPool()
+  let pin: string | null = null
+  try {
+    const result = await pool.query(`SELECT pin_code FROM vaults WHERE id = $1 LIMIT 1`, [vaultId])
+    pin = result.rows[0]?.pin_code ?? null
+  } finally {
+    await pool.end()
+  }
+  return pin ? lookupVaultByPin(pin) : { found: false }
 }
 
 export async function lookupVaultByPin(

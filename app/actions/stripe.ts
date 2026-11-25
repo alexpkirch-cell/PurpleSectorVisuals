@@ -3,7 +3,7 @@
 import { Pool } from "pg"
 
 import { getStripeClient, logStripeError } from "@/lib/stripe"
-import { recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
+import { chargeBalanceOffSession, recordBalancePayment, recordDepositPayment } from "@/lib/vault-payments"
 import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 function getPool() {
@@ -115,6 +115,16 @@ export async function checkDepositStatus(vaultId: string) {
   } finally {
     await pool.end()
   }
+}
+
+export async function chargeBalanceWithSavedCard(vaultId: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vaultId)) {
+    return { success: false as const, error: "Vault not found." }
+  }
+  if (!(await hasVaultSession(vaultId)) && !(await isAdminViewer())) {
+    return { success: false as const, error: "Please sign in to your vault to pay the remaining balance." }
+  }
+  return chargeBalanceOffSession(vaultId)
 }
 
 export async function startBalanceCheckout(vaultId: string) {

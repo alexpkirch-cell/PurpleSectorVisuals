@@ -48,7 +48,7 @@ import { LocationAutocomplete } from "@/components/admin/location-autocomplete"
 import { MarkBalancePaid } from "@/components/admin/mark-balance-paid"
 import { buildGoogleCalendarUrl } from "@/lib/calendar-event"
 import { mapsUrlFor } from "@/lib/maps"
-import { clientVaultUrl, PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
+import { adminVaultPreviewUrl, PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { SettlementLedger } from "@/components/admin/operations/settlement-ledger"
 import { TeamAssignment } from "@/components/admin/operations/team-assignment"
 import { VaultDeliveryUploader } from "@/components/admin/operations/vault-delivery-uploader"
@@ -202,7 +202,7 @@ export function ShootDetailSheet({
   const [isSaving, setIsSaving] = useState(false)
   const [isConfirmingLead, setIsConfirmingLead] = useState(false)
   const [isCountersigning, setIsCountersigning] = useState(false)
-  const [copied, setCopied] = useState<"code" | "link" | null>(null)
+  const [copied, setCopied] = useState<"code" | "link" | "username" | null>(null)
   const [postProductionProgress, setPostProductionProgress] = useState<Record<string, boolean>>({})
 
   const contractTotal = shoot
@@ -246,7 +246,7 @@ export function ShootDetailSheet({
     : ""
 
   const legacyVaultLink = `${PUBLIC_SITE_ORIGIN}/shoot-vault`
-  const vaultLink = shoot?.vault_pin ? clientVaultUrl(shoot.vault_pin) : null
+  const vaultLink = shoot?.vault_pin ? adminVaultPreviewUrl(shoot.vault_pin) : null
 
   async function handleSave() {
     if (!shoot) return
@@ -335,7 +335,7 @@ export function ShootDetailSheet({
     }
   }
 
-  async function copyToClipboard(value: string, kind: "code" | "link") {
+  async function copyToClipboard(value: string, kind: "code" | "link" | "username") {
     await navigator.clipboard.writeText(value)
     setCopied(kind)
     setTimeout(() => setCopied(null), 1500)
@@ -703,19 +703,24 @@ export function ShootDetailSheet({
                         </Badge>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Vault PIN</Label>
-                        <div className="flex items-center gap-2">
-                          <Input readOnly value={shoot.vault_pin} className="font-mono" />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => copyToClipboard(shoot.vault_pin!, "code")}
-                            aria-label="Copy vault PIN"
-                          >
-                            {copied === "code" ? <Check className="size-4" /> : <Copy className="size-4" />}
-                          </Button>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Username</Label>
+                          <div className="flex items-center gap-2">
+                            <Input readOnly value={shoot.client_name} />
+                            <Button type="button" variant="outline" size="icon" onClick={() => copyToClipboard(shoot.client_name, "username")} aria-label="Copy vault username">
+                              {copied === "username" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label>6-digit passcode</Label>
+                          <div className="flex items-center gap-2">
+                            <Input readOnly value={shoot.vault_pin} className="font-mono tracking-widest" />
+                            <Button type="button" variant="outline" size="icon" onClick={() => copyToClipboard(shoot.vault_pin!, "code")} aria-label="Copy vault passcode">
+                              {copied === "code" ? <Check className="size-4" /> : <Copy className="size-4" />}
+                            </Button>
+                          </div>
                         </div>
                       </div>
 

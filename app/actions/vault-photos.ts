@@ -32,9 +32,12 @@ export interface StandardVaultPrintProduct {
 
 export interface VaultDeliveryData {
   photos: VaultPhotoView[]
+  photoCount: number
   printProducts: StandardVaultPrintProduct[]
   /** The second 50% payment is outstanding: photos are watermarked previews with no download or print access. */
   locked: boolean
+  /** Whether a payment method was saved during retainer checkout. */
+  hasSavedCard: boolean
   /** Dollars owed to unlock; 0 when unlocked. */
   balanceDue: number
 }
@@ -234,9 +237,11 @@ export async function getDeliveryPhotos(vaultId: string): Promise<VaultDeliveryD
     getDeliveryBalanceState(vaultId),
   ])
   return {
-    photos: await toPhotoViews(photoRows, balance.locked ? { watermarkedForVaultId: vaultId } : undefined),
+    photos: balance.locked ? [] : await toPhotoViews(photoRows),
+    photoCount: photoRows.length,
     printProducts: balance.locked ? [] : printProducts,
     locked: balance.locked,
+    hasSavedCard: balance.hasSavedCard,
     balanceDue: balance.balanceDue,
   }
 }

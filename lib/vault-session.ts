@@ -27,23 +27,27 @@ export async function grantVaultSession(vaultId: string) {
   })
 }
 
-export async function hasVaultSession(vaultId: string): Promise<boolean> {
+export async function getVaultSessionId(): Promise<string | null> {
   const cookieStore = await cookies()
   const value = cookieStore.get(SESSION_COOKIE)?.value
-  if (!value) return false
+  if (!value) return null
 
   const separator = value.lastIndexOf(".")
-  if (separator === -1) return false
+  if (separator === -1) return null
 
-  const cookieVaultId = value.slice(0, separator)
-  const cookieSignature = Buffer.from(value.slice(separator + 1))
+  const vaultId = value.slice(0, separator)
+  const signature = value.slice(separator + 1)
+  if (!/^[0-9a-f-]{36}$/i.test(vaultId) || !/^[0-9a-f]{64}$/i.test(signature)) return null
+
+  const cookieSignature = Buffer.from(signature)
   const expectedSignature = Buffer.from(sign(vaultId))
+  return cookieSignature.length === expectedSignature.length && timingSafeEqual(cookieSignature, expectedSignature)
+    ? vaultId
+    : null
+}
 
-  return (
-    cookieVaultId === vaultId &&
-    cookieSignature.length === expectedSignature.length &&
-    timingSafeEqual(cookieSignature, expectedSignature)
-  )
+export async function hasVaultSession(vaultId: string): Promise<boolean> {
+  return (await getVaultSessionId()) === vaultId
 }
 
 /** Admins can open any vault to preview what a client sees. */

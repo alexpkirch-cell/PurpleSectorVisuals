@@ -273,8 +273,8 @@ export async function startStandardVaultPrintCheckout(input: {
       })),
       shipping_address_collection: { allowed_countries: ["US"] },
       client_reference_id: orderId,
-      success_url: `${PUBLIC_SITE_ORIGIN}/vault/${encodeURIComponent(vault.pin_code)}?print_session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${PUBLIC_SITE_ORIGIN}/vault/${encodeURIComponent(vault.pin_code)}?print_cancelled=1`,
+      success_url: `${PUBLIC_SITE_ORIGIN}/vault?print_session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${PUBLIC_SITE_ORIGIN}/vault?print_cancelled=1`,
       metadata: { kind: "standard_vault_print", standardPrintOrderId: orderId, vaultId: vault.id },
       payment_intent_data: {
         metadata: { kind: "standard_vault_print", standardPrintOrderId: orderId, vaultId: vault.id },
