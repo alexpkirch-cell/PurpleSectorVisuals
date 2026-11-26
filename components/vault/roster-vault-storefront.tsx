@@ -63,9 +63,9 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800 pb-6">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.24em] text-fuchsia-400">
-              <ShieldCheck className="size-4" aria-hidden="true" /> Private team access
+              <ShieldCheck className="size-4" aria-hidden="true" /> Private access
             </div>
-            <p className="text-sm text-zinc-500">PURPLE SECTOR VISUALS <span className="px-1.5 text-zinc-700">/</span> MEDIA DAY</p>
+            <p className="text-sm text-zinc-500">PURPLE SECTOR VISUALS <span className="px-1.5 text-zinc-700">/</span> EVENT GALLERY</p>
             <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{data.teamName}</h1>
             <p className="text-sm text-zinc-400">{firstName ? `Welcome, ${firstName}. ` : `Welcome to ${data.teamName}. `}{modeSummary}</p>
           </div>
@@ -96,23 +96,17 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
           </Link>
         ) : null}
 
+        {data.players.length > 0 ? (
         <section className="flex flex-col gap-5" aria-labelledby="players-heading">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Media day roster</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Roster</p>
               <h2 id="players-heading" className="mt-1 font-heading text-xl font-semibold text-white">Select a player</h2>
             </div>
             <p className="flex items-center gap-1.5 text-xs text-zinc-500"><Users className="size-3.5" aria-hidden="true" />{data.players.length} player{data.players.length === 1 ? "" : "s"}</p>
           </div>
 
-          {data.players.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 px-6 text-center">
-              <Users className="size-8 text-zinc-600" aria-hidden="true" />
-              <h3 className="font-heading text-lg font-semibold text-white">Roster coming soon</h3>
-              <p className="max-w-sm text-sm leading-relaxed text-zinc-500">Your team organizer is still adding player cards. Please check back later.</p>
-            </div>
-          ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
               {data.players.map((player) => (
                 <li key={player.id} className="group min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-[#111114] transition-colors hover:border-zinc-700">
                   <article className="flex h-full flex-col">
@@ -166,11 +160,11 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
                   </article>
                 </li>
               ))}
-            </ul>
-          )}
+          </ul>
         </section>
+        ) : null}
 
-        <footer className="border-t border-zinc-900 pt-5 text-center text-xs text-zinc-600">Private access for {data.teamName} families</footer>
+        <footer className="border-t border-zinc-900 pt-5 text-center text-xs text-zinc-600">Private access for {data.teamName}</footer>
       </div>
     </div>
   )

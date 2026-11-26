@@ -309,7 +309,7 @@ export function RosterVaultManager({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 id="roster-vault-teams-heading" className="font-heading text-base font-semibold text-foreground">Teams</h2>
-            <p className="text-xs text-muted-foreground">{teams.length} media day{teams.length === 1 ? "" : "s"}</p>
+            <p className="text-xs text-muted-foreground">{teams.length} vault{teams.length === 1 ? "" : "s"}</p>
           </div>
           <Button type="button" size="icon-sm" onClick={openCreateTeam} aria-label="Create team or event vault">
             <Plus className="size-4" aria-hidden="true" />
@@ -319,7 +319,7 @@ export function RosterVaultManager({
         {teams.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-6 text-center">
             <Users className="mx-auto mb-2 size-5 text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">No teams yet. Create a media day to begin.</p>
+            <p className="text-sm text-muted-foreground">No team or event vaults yet. Create one to begin.</p>
           </div>
         ) : (
           <ul className="flex flex-col gap-1.5">

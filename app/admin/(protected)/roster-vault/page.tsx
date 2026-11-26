@@ -21,7 +21,7 @@ export default async function RosterVaultAdminPage() {
   return (
     <div className="flex flex-col gap-6">
       <header>
-        <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Team media days</p>
+        <p className="font-mono text-xs uppercase tracking-[0.2em] text-primary">Team &amp; event vaults</p>
         <h1 className="mt-2 font-heading text-2xl font-medium text-foreground">Roster Vault</h1>
         <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
           Create secure team access, manage player cards and prepare each roster for gallery unlocks.

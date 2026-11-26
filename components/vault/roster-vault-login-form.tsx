@@ -43,7 +43,7 @@ export function RosterVaultLoginForm() {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="roster-player-passcode" className="text-sm font-medium text-zinc-200">6-digit player passcode</Label>
-            <Input id="roster-player-passcode" name="playerPasscode" type="text" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} placeholder="Provided by your team organizer" required className={`${fieldClass} font-mono tracking-[0.35em]`} />
+            <Input id="roster-player-passcode" name="playerPasscode" type="text" inputMode="numeric" pattern="[0-9]{6}" autoComplete="one-time-code" maxLength={6} placeholder="Provided by your organizer" required className={`${fieldClass} font-mono tracking-[0.35em]`} />
           </div>
         </>
       ) : (

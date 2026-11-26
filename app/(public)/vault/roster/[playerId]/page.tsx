@@ -25,13 +25,13 @@ export default async function RosterPlayerGalleryPage({ params, searchParams }: 
     const paid = await confirmRosterGalleryCheckout(playerId, query.session_id)
     notice = paid
       ? "Payment received. Your full gallery is unlocked."
-      : "We couldn’t verify that payment yet. If you were charged, refresh in a moment or contact your team organizer."
+      : "We couldn’t verify that payment yet. If you were charged, refresh in a moment or contact your organizer."
   } else if (query.print_session_id) {
     const result = await confirmRosterPrintCheckout(playerId, query.print_session_id)
     if (result === "submitted") notice = "Your print order has been submitted to WHCC. A shipping update will be sent to the email you used at checkout."
     else if (result === "test_paid") notice = "Test payment confirmed. No print order was sent to WHCC."
     else if (result === "processing") notice = "Payment received. Your print order is being processed and will be submitted to WHCC shortly."
-    else notice = "We couldn’t verify that print checkout. If you were charged, contact your team organizer."
+    else notice = "We couldn’t verify that print checkout. If you were charged, contact your organizer."
   } else if (query.print_cancelled === "1") {
     notice = "Checkout was canceled. No payment was taken."
   }

@@ -45,7 +45,7 @@ export async function startRosterGalleryCheckout(playerId: string): Promise<Rost
     const player = rows[0]
     if (!player || !player.is_active) return { success: false, error: "That player is not available in this team roster." }
     if (!player.tier_id || !player.tier_active || !player.tier_name || !player.price_cents || player.price_cents < 100) {
-      return { success: false, error: "This gallery is not available for purchase yet. Please contact your team organizer." }
+      return { success: false, error: "This gallery is not available for purchase yet. Please contact your organizer." }
     }
 
     const { rows: existingRows } = await sql<{
