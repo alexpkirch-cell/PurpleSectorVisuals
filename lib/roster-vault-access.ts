@@ -27,7 +27,7 @@ export async function getRosterTeamBilling(teamId: string): Promise<RosterTeamBi
   }
 }
 
-/** All-Inclusive Team Buyout: once the team's balance is paid, every original is free for anyone signed in with the team code. */
+/** All-Inclusive Team Buyout: once the team's balance is paid, every original is free for anyone signed in with the master team username and passcode. */
 export function teamDownloadsIncluded(billing: RosterTeamBilling) {
   return billing.mode === "all_inclusive" && billing.balancePaid
 }

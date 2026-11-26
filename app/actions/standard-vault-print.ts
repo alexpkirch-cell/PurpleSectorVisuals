@@ -1,6 +1,6 @@
 "use server"
 
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 
 import type { StandardVaultPrintProduct } from "@/app/actions/vault-photos"
@@ -10,7 +10,12 @@ import { hasVaultSession } from "@/lib/vault-session"
 import { canDownloadDelivery, canViewDelivery } from "@/lib/vault-delivery"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
-import { createWhccConfiguredProducts, getWhccConfiguredProductStatuses } from "@/lib/whcc"
+import {
+  createWhccConfiguredProducts,
+  fetchWhccCatalogProducts,
+  getWhccConfiguredProductStatuses,
+  type WhccCatalogProduct,
+} from "@/lib/whcc"
 import { PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { recordAndSubmitStandardVaultPrintOrder } from "@/lib/standard-vault-print-orders"
 
@@ -21,15 +26,43 @@ const CONFIGURE_POLL_ATTEMPTS = 6
 const CONFIGURE_POLL_DELAY_MS = 1_500
 
 export type StandardVaultPrintProductAdmin = StandardVaultPrintProduct & {
-  whcc_product_id: string
   whcc_selections: Record<string, unknown>
   is_active: boolean
   sort_order: number
+  catalog_available: boolean
+}
+
+export type WhccCatalogProductAdmin = WhccCatalogProduct & {
+  is_available: boolean
+  synced_at: string
+}
+
+export type WhccCatalogProductSummaryAdmin = {
+  ref: string
+  name: string
+  completion: string
+  category: { ref: string; name: string }
+  kind?: string
+  description?: string
+  is_available: boolean
+  synced_at: string
 }
 
 type VaultPrintSelection = { photoId: string; productId: string; quantity: number }
-
 type CheckoutResult = { success: true; url: string } | { success: false; error: string }
+type CatalogVariantMetadata = {
+  name: string
+  categoryRef: string
+  categoryName: string
+  clientCategory: StandardVaultPrintProduct["client_category"]
+  catalogProductName: string
+  sizeValue: string
+  sizeLabel: string
+  surfaceValue: string
+  surfaceLabel: string
+  printWidth: number | null
+  printHeight: number | null
+}
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -45,6 +78,117 @@ function validateSelections(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
+function catalogCategoryTab(categoryRef: string, categoryName: string, kind: string | undefined): StandardVaultPrintProduct["client_category"] {
+  const label = `${categoryRef} ${categoryName} ${kind ?? ""}`.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").toLowerCase()
+  if (/fine.?art|giclee|rag|baryta/.test(label)) return "fine_art"
+  if (/canvas|wall|metal|acrylic|fram/.test(label)) return "canvas_wall"
+  if (/display|stand|box|snapshot|proof|keepsake/.test(label)) return "displays"
+  return "photographic"
+}
+
+function decodeCatalogProduct(value: unknown): WhccCatalogProduct | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null
+  const product = value as WhccCatalogProduct
+  return typeof product.ref === "string" && typeof product.name === "string" && product.category && typeof product.category.name === "string"
+    ? product
+    : null
+}
+
+function validateCatalogSelections(product: WhccCatalogProduct, value: unknown): Record<string, unknown> {
+  const selections = validateSelections(value)
+  const fields = product.configuration?.fields ?? []
+  if (fields.length === 0) {
+    if (Object.keys(selections).length > 0) throw new Error("This WHCC product does not accept selections.")
+    return selections
+  }
+
+  const dimensionField = fields.find((field) => field.kind === "dimension")
+  for (const [key, selected] of Object.entries(selections)) {
+    if (key === "dimensions") {
+      if (!dimensionField || !selected || typeof selected !== "object" || Array.isArray(selected)) {
+        throw new Error("The custom size is not valid for this WHCC product.")
+      }
+      const dimensions = selected as Record<string, unknown>
+      for (const axis of ["width", "height"] as const) {
+        const measure = dimensions[axis]
+        if (typeof measure !== "number" || !Number.isFinite(measure) || measure <= 0) {
+          throw new Error("Enter a positive width and height for the custom print size.")
+        }
+        const axisRules = dimensionField.constraints?.[axis]
+        if (axisRules && typeof axisRules === "object") {
+          const rules = axisRules as Record<string, unknown>
+          if (typeof rules.min === "number" && measure < rules.min) throw new Error(`The custom ${axis} is below WHCC's minimum.`)
+          if (typeof rules.max === "number" && measure > rules.max) throw new Error(`The custom ${axis} exceeds WHCC's maximum.`)
+        }
+      }
+      continue
+    }
+
+    const field = fields.find((entry) => entry.field === key)
+    if (!field) throw new Error("The selected WHCC option is no longer supported.")
+    if (field.kind === "dimension") {
+      if (selected !== "custom" || !selections.dimensions) throw new Error("Enter the custom print dimensions.")
+      continue
+    }
+    if (field.kind !== "enum") throw new Error("The selected WHCC option is no longer supported.")
+    if (typeof selected !== "string" || !field.values?.some((option) => option.id === selected && option.enabled !== false)) {
+      throw new Error(`Choose a valid ${field.name.toLowerCase()} option.`)
+    }
+  }
+
+  for (const field of fields) {
+    if (field.kind === "enum" && field.required && typeof selections[field.field] !== "string") {
+      throw new Error(`Choose a ${field.name.toLowerCase()} option.`)
+    }
+    if (field.kind === "dimension" && field.required && (selections[field.field] !== "custom" || !selections.dimensions)) {
+      throw new Error("Enter the custom print dimensions.")
+    }
+    if (field.kind !== "enum" && field.kind !== "dimension") {
+      throw new Error(`WHCC's ${field.name} option cannot yet be configured by the API.`)
+    }
+  }
+  return selections
+}
+
+function variantMetadata(product: WhccCatalogProduct, selections: Record<string, unknown>): CatalogVariantMetadata {
+  const fields = product.configuration?.fields ?? []
+  const sizeField = fields.find((field) => field.field.toLowerCase() === "size" || field.name.toLowerCase().includes("size"))
+  const sizeRaw = sizeField ? selections[sizeField.field] : undefined
+  const sizeValue = typeof sizeRaw === "string" ? sizeRaw : "standard"
+  const sizeOption = sizeField?.values?.find((value) => value.id === sizeValue)
+  const dimensions = selections.dimensions && typeof selections.dimensions === "object" ? selections.dimensions as Record<string, unknown> : null
+  const printWidth = sizeOption?.width ?? (typeof dimensions?.width === "number" ? dimensions.width : product.width ?? null)
+  const printHeight = sizeOption?.height ?? (typeof dimensions?.height === "number" ? dimensions.height : product.height ?? null)
+  const sizeLabel = sizeOption?.name ?? (sizeValue === "custom" && printWidth && printHeight ? `Custom ${printWidth}×${printHeight}` : printWidth && printHeight ? `${printWidth}×${printHeight}` : "Standard")
+  const surfaceParts = fields
+    .filter((field) => field.field !== sizeField?.field && field.kind === "enum")
+    .map((field) => {
+      const selected = selections[field.field]
+      if (typeof selected !== "string") return null
+      const option = field.values?.find((item) => item.id === selected)
+      return option?.name ?? null
+    })
+    .filter((label): label is string => Boolean(label))
+  const surfaceLabel = surfaceParts.length ? surfaceParts.join(" · ") : "Standard"
+  const surfaceSelection = Object.fromEntries(Object.entries(selections).filter(([key]) => key !== sizeField?.field && key !== "dimensions"))
+  const surfaceValue = createHash("sha256").update(JSON.stringify(surfaceSelection)).digest("hex").slice(0, 24)
+  const categoryRef = product.category.ref || "other"
+  const categoryName = product.category.name || "Other"
+  return {
+    name: cleanName([product.name, sizeLabel, surfaceLabel].filter(Boolean).join(" · "), 100),
+    categoryRef,
+    categoryName,
+    clientCategory: catalogCategoryTab(categoryRef, categoryName, product.kind),
+    catalogProductName: product.name,
+    sizeValue,
+    sizeLabel,
+    surfaceValue,
+    surfaceLabel,
+    printWidth,
+    printHeight,
+  }
+}
+
 function sleep(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
@@ -52,65 +196,221 @@ function sleep(milliseconds: number) {
 export async function listStandardPrintProductsAdmin(): Promise<StandardVaultPrintProductAdmin[]> {
   await requireAdmin()
   const { rows } = await sql<StandardVaultPrintProductAdmin>`
-    SELECT id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order
+    SELECT id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order,
+           category_ref, category_name, client_category, catalog_product_name,
+           size_value, size_label, surface_value, surface_label, print_width, print_height,
+           (category_ref IS NULL OR EXISTS (
+             SELECT 1 FROM public.whcc_catalog_products AS catalog
+             WHERE catalog.ref = whcc_print_products.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+           )) AS catalog_available
     FROM public.whcc_print_products
     ORDER BY sort_order ASC, name ASC
   `
   return rows
 }
 
+export async function listWhccCatalogProductsAdmin(): Promise<WhccCatalogProductSummaryAdmin[]> {
+  await requireAdmin()
+  const { rows } = await sql<{
+    ref: string
+    name: string
+    category_ref: string
+    category_name: string
+    completion: string
+    kind: string | null
+    description: string | null
+    is_available: boolean
+    synced_at: string
+  }>`
+    SELECT ref, name, category_ref, category_name, kind, completion, description, is_available, synced_at
+    FROM public.whcc_catalog_products
+    ORDER BY category_name ASC, name ASC
+  `
+  return rows.map((row) => ({
+    ref: row.ref,
+    name: row.name,
+    completion: row.completion,
+    category: { ref: row.category_ref, name: row.category_name },
+    kind: row.kind ?? undefined,
+    description: row.description ?? undefined,
+    is_available: row.is_available,
+    synced_at: row.synced_at,
+  }))
+}
+
+export async function getWhccCatalogProductAdmin(ref: string): Promise<WhccCatalogProductAdmin | null> {
+  await requireAdmin()
+  const catalogRef = typeof ref === "string" ? ref.trim() : ""
+  if (!catalogRef || catalogRef.length > 160) throw new Error("Choose a WHCC catalog product.")
+  const { rows } = await sql<{
+    catalog_json: unknown
+    is_available: boolean
+    synced_at: string
+  }>`
+    SELECT catalog_json, is_available, synced_at
+    FROM public.whcc_catalog_products WHERE ref = ${catalogRef} LIMIT 1
+  `
+  const row = rows[0]
+  const product = row ? decodeCatalogProduct(row.catalog_json) : null
+  return product && row ? { ...product, is_available: row.is_available, synced_at: row.synced_at } : null
+}
+
+export async function syncStandardPrintCatalog() {
+  await requireAdmin()
+  const catalog = await fetchWhccCatalogProducts()
+  if (catalog.length === 0) throw new Error("WHCC returned an empty catalog, so no changes were made.")
+
+  const syncedAt = new Date().toISOString()
+  const records = catalog.map((product) => ({
+    ref: product.ref,
+    name: product.name,
+    category_ref: product.category.ref,
+    category_name: product.category.name,
+    kind: product.kind ?? null,
+    completion: product.completion,
+    description: product.description ?? null,
+    catalog_json: product,
+    is_available: true,
+    synced_at: syncedAt,
+  }))
+
+  for (let start = 0; start < records.length; start += 20) {
+    const chunk = records.slice(start, start + 20)
+    await sql`
+      INSERT INTO public.whcc_catalog_products (
+        ref, name, category_ref, category_name, kind, completion, description, catalog_json, is_available, synced_at
+      )
+      SELECT item.ref, item.name, item.category_ref, item.category_name, item.kind, item.completion,
+             item.description, item.catalog_json, item.is_available, item.synced_at
+      FROM jsonb_to_recordset(${JSON.stringify(chunk)}::jsonb) AS item(
+        ref text, name text, category_ref text, category_name text, kind text, completion text,
+        description text, catalog_json jsonb, is_available boolean, synced_at timestamptz
+      )
+      ON CONFLICT (ref) DO UPDATE SET
+        name = EXCLUDED.name, category_ref = EXCLUDED.category_ref, category_name = EXCLUDED.category_name,
+        kind = EXCLUDED.kind, completion = EXCLUDED.completion, description = EXCLUDED.description,
+        catalog_json = EXCLUDED.catalog_json, is_available = true, synced_at = EXCLUDED.synced_at
+    `
+  }
+
+  await sql`UPDATE public.whcc_catalog_products SET is_available = false WHERE synced_at < ${syncedAt}::timestamptz`
+  await sql`
+    UPDATE public.whcc_print_products AS option SET is_active = false, updated_at = now()
+    WHERE option.category_ref IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM public.whcc_catalog_products AS catalog
+        WHERE catalog.ref = option.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+      )
+  `
+  revalidatePath("/admin/operations")
+  return {
+    total: catalog.length,
+    apiReady: catalog.filter((product) => product.completion === "api").length,
+    editorOnly: catalog.filter((product) => product.completion === "editor").length,
+    syncedAt,
+  }
+}
+
+async function getConfigurableWhccProduct(ref: string) {
+  const { rows } = await sql<{ catalog_json: unknown; is_available: boolean }>`
+    SELECT catalog_json, is_available FROM public.whcc_catalog_products WHERE ref = ${ref} LIMIT 1
+  `
+  const record = rows[0]
+  const product = record ? decodeCatalogProduct(record.catalog_json) : null
+  if (!record?.is_available || !product || product.completion !== "api") {
+    throw new Error("Choose a current WHCC catalog product that supports API ordering.")
+  }
+  return product
+}
+
 export async function createStandardPrintProduct(input: {
-  name: string
   whccProductId: string
   whccSelections: unknown
   priceCents: number
 }) {
   await requireAdmin()
-  const name = cleanName(input.name, 100)
   const whccProductId = cleanName(input.whccProductId, 160)
-  const selections = validateSelections(input.whccSelections)
+  if (!whccProductId) throw new Error("Choose a WHCC catalog product.")
+  const product = await getConfigurableWhccProduct(whccProductId)
+  const selections = validateCatalogSelections(product, input.whccSelections)
+  const variant = variantMetadata(product, selections)
   const priceCents = Math.round(Number(input.priceCents))
-  if (!name || !whccProductId) throw new Error("Enter a print name and WHCC product ID.")
   if (!Number.isInteger(priceCents) || priceCents < 100 || priceCents > 10_000_000) {
     throw new Error("Enter a retail price between $1.00 and $100,000.00.")
   }
   const { rows } = await sql<StandardVaultPrintProductAdmin>`
-    INSERT INTO public.whcc_print_products (name, whcc_product_id, whcc_selections, price_cents, sort_order)
-    VALUES (
-      ${name}, ${whccProductId}, ${JSON.stringify(selections)}::jsonb, ${priceCents},
-      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM public.whcc_print_products)
+    INSERT INTO public.whcc_print_products (
+      name, whcc_product_id, whcc_selections, price_cents, sort_order, category_ref, category_name,
+      client_category, catalog_product_name, size_value, size_label, surface_value, surface_label, print_width, print_height
+    ) VALUES (
+      ${variant.name}, ${product.ref}, ${JSON.stringify(selections)}::jsonb, ${priceCents},
+      (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM public.whcc_print_products),
+      ${variant.categoryRef}, ${variant.categoryName}, ${variant.clientCategory}, ${variant.catalogProductName},
+      ${variant.sizeValue}, ${variant.sizeLabel}, ${variant.surfaceValue}, ${variant.surfaceLabel}, ${variant.printWidth}, ${variant.printHeight}
     )
-    RETURNING id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order
+    RETURNING id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order,
+              category_ref, category_name, client_category, catalog_product_name,
+              size_value, size_label, surface_value, surface_label, print_width, print_height,
+              true AS catalog_available
   `
   revalidatePath("/admin/operations")
   return rows[0]
 }
 
-export async function updateStandardPrintProduct(input: {
-  id: string
-  name: string
-  whccProductId: string
-  whccSelections: unknown
-  priceCents: number
-  isActive: boolean
-}) {
+export async function updateStandardPrintProduct(input: { id: string; priceCents: number; isActive: boolean }) {
   await requireAdmin()
   if (!isUuid(input.id)) throw new Error("Invalid print option.")
-  const name = cleanName(input.name, 100)
-  const whccProductId = cleanName(input.whccProductId, 160)
-  const selections = validateSelections(input.whccSelections)
   const priceCents = Math.round(Number(input.priceCents))
-  if (!name || !whccProductId) throw new Error("Enter a print name and WHCC product ID.")
   if (!Number.isInteger(priceCents) || priceCents < 100 || priceCents > 10_000_000) {
     throw new Error("Enter a retail price between $1.00 and $100,000.00.")
   }
+  if (input.isActive) {
+    const { rows } = await sql<{ available: boolean }>`
+      SELECT category_ref IS NULL OR EXISTS (
+        SELECT 1 FROM public.whcc_catalog_products AS catalog
+        WHERE catalog.ref = whcc_print_products.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+      ) AS available
+      FROM public.whcc_print_products WHERE id = ${input.id} LIMIT 1
+    `
+    if (!rows[0]?.available) throw new Error("This WHCC product is no longer orderable. Sync the catalog before enabling it.")
+  }
   await sql`
     UPDATE public.whcc_print_products
-    SET name = ${name}, whcc_product_id = ${whccProductId}, whcc_selections = ${JSON.stringify(selections)}::jsonb,
-        price_cents = ${priceCents}, is_active = ${input.isActive}, updated_at = now()
+    SET price_cents = ${priceCents}, is_active = ${input.isActive}, updated_at = now()
     WHERE id = ${input.id}
   `
   revalidatePath("/admin/operations")
+}
+
+export async function setAllStandardPrintProductsAvailability(isActive: boolean) {
+  await requireAdmin()
+  const { rowCount } = await sql`
+    UPDATE public.whcc_print_products AS product
+    SET is_active = ${isActive} AND (product.category_ref IS NULL OR EXISTS (
+      SELECT 1 FROM public.whcc_catalog_products AS catalog
+      WHERE catalog.ref = product.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+    )), updated_at = now()
+  `
+  revalidatePath("/admin/operations")
+  return rowCount ?? 0
+}
+
+export async function applyStandardPrintMarkup(percentage: number) {
+  await requireAdmin()
+  if (!Number.isFinite(percentage) || percentage < 0 || percentage > 500) {
+    throw new Error("Markup must be between 0% and 500%.")
+  }
+  const { rows } = await sql<{ count: number }>`
+    SELECT count(*)::int AS count FROM public.whcc_print_products
+    WHERE CEIL(price_cents * (1 + ${percentage} / 100.0)) > 10000000
+  `
+  if ((rows[0]?.count ?? 0) > 0) throw new Error("This markup would push one or more retail prices above $100,000.")
+  const { rowCount } = await sql`
+    UPDATE public.whcc_print_products
+    SET price_cents = CEIL(price_cents * (1 + ${percentage} / 100.0))::int, updated_at = now()
+  `
+  revalidatePath("/admin/operations")
+  return rowCount ?? 0
 }
 
 /** Creates WHCC product configurations and a Stripe Checkout session from server-verified catalog prices. */
@@ -168,8 +468,12 @@ export async function startStandardVaultPrintCheckout(input: {
     const [{ rows: products }, { rows: photos }] = await Promise.all([
       sql<StandardVaultPrintProductAdmin>`
         SELECT id, name, price_cents, whcc_product_id, whcc_selections, is_active, sort_order
-        FROM public.whcc_print_products
-        WHERE is_active = true AND id = ANY(${productIds}::uuid[])
+        FROM public.whcc_print_products AS product
+        WHERE product.is_active = true AND product.id = ANY(${productIds}::uuid[])
+          AND (product.category_ref IS NULL OR EXISTS (
+            SELECT 1 FROM public.whcc_catalog_products AS catalog
+            WHERE catalog.ref = product.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+          ))
       `,
       sql<{ id: string; bucket: string; storage_path: string; file_name: string }>`
         SELECT id, bucket, storage_path, file_name

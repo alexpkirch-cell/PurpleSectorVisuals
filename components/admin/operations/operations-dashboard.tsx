@@ -165,8 +165,6 @@ export function OperationsDashboard({
 
       {printCatalog}
 
-      {printCatalog}
-
       <section aria-labelledby="print-queue-heading" className="flex flex-col gap-3">
         <h2 id="print-queue-heading" className="font-heading text-base font-medium text-foreground">
           Print Fulfillment Queue

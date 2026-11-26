@@ -23,8 +23,6 @@ const ATTEMPT_WINDOW_MINUTES = 15
 const MAX_TEAM_NAME = 100
 const MAX_PLAYER_NAME = 100
 const MAX_JERSEY_NUMBER = 12
-const MIN_CODE_LENGTH = 6
-const MIN_PASSWORD_LENGTH = 10
 const MAX_COVER_URL_LENGTH = 2048
 
 export type RosterBalanceMethod = "stripe" | "cash" | "check" | "external_transfer"
@@ -42,6 +40,7 @@ export type RosterVaultTeam = {
   balance_payment_method: RosterBalanceMethod | null
   /** Parent Pay teams: price of one single-photo download, or null to turn single-photo checkout off. */
   single_photo_price_cents: number | null
+  passcode_display: string | null
 }
 
 export type RosterVaultPlayer = {
@@ -97,10 +96,6 @@ function cleanName(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : ""
 }
 
-function normalizeAccessCode(value: unknown) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, "").toUpperCase() : ""
-}
-
 function hash(value: string) {
   return createHash("sha256").update(value).digest("hex")
 }
@@ -109,6 +104,12 @@ function hashPlayerPasscode(value: string) {
   const key = process.env.SUPABASE_JWT_SECRET
   if (!key) throw new Error("Player passcode verification is not configured.")
   return createHmac("sha256", key).update(`roster-player-passcode:v1:${value}`).digest("hex")
+}
+
+function hashTeamPasscode(value: string) {
+  const key = process.env.SUPABASE_JWT_SECRET
+  if (!key) throw new Error("Team passcode verification is not configured.")
+  return createHmac("sha256", key).update(`roster-team-passcode:v1:${value}`).digest("hex")
 }
 
 function hashCredential(value: string, salt: string) {
@@ -178,7 +179,7 @@ async function generatePlayerPasscode(teamId: string, excludePlayerId?: string) 
 async function issuePasscodesForPlayers(teamId: string) {
   const { rows } = await sql<{ id: string }>`
     SELECT id FROM public.roster_vault_players
-    WHERE team_id = ${teamId} AND passcode_lookup_hash IS NULL
+    WHERE team_id = ${teamId} AND (passcode_lookup_hash IS NULL OR passcode_display IS NULL OR passcode_hash IS NULL OR passcode_salt IS NULL)
     ORDER BY sort_order ASC, display_name ASC
   `
   for (const player of rows) {
@@ -187,17 +188,53 @@ async function issuePasscodesForPlayers(teamId: string) {
       UPDATE public.roster_vault_players SET
         passcode_display = ${credentials.passcode}, passcode_salt = ${credentials.salt},
         passcode_hash = ${credentials.hash}, passcode_lookup_hash = ${credentials.lookupHash}, updated_at = now()
-      WHERE id = ${player.id} AND passcode_lookup_hash IS NULL
+      WHERE id = ${player.id} AND (passcode_lookup_hash IS NULL OR passcode_display IS NULL OR passcode_hash IS NULL OR passcode_salt IS NULL)
     `
   }
 }
 
-/** Called only by the protected admin page. Passwords and code hashes never leave the server. */
+async function generateTeamPasscode(excludeTeamId?: string) {
+  for (let attempt = 0; attempt < 32; attempt += 1) {
+    const passcode = String(randomInt(100_000, 1_000_000))
+    const lookupHash = hashTeamPasscode(passcode)
+    const { rows } = await sql<{ id: string }>`
+      SELECT id FROM public.roster_vault_teams
+      WHERE passcode_lookup_hash = ${lookupHash}
+        AND (${excludeTeamId ?? null}::uuid IS NULL OR id <> ${excludeTeamId ?? null}::uuid)
+      LIMIT 1
+    `
+    if (rows[0]) continue
+    const salt = randomBytes(16).toString("hex")
+    return { passcode, salt, hash: hashCredential(passcode, salt), lookupHash }
+  }
+  throw new Error("Could not generate a unique team passcode. Try again.")
+}
+
+async function issuePasscodesForTeams() {
+  const { rows } = await sql<{ id: string }>`
+    SELECT id FROM public.roster_vault_teams
+    WHERE passcode_lookup_hash IS NULL OR passcode_display IS NULL OR passcode_hash IS NULL OR passcode_salt IS NULL
+    ORDER BY created_at DESC
+  `
+  for (const team of rows) {
+    const credentials = await generateTeamPasscode(team.id)
+    await sql`
+      UPDATE public.roster_vault_teams SET
+        passcode_display = ${credentials.passcode}, passcode_salt = ${credentials.salt},
+        passcode_hash = ${credentials.hash}, passcode_lookup_hash = ${credentials.lookupHash}, updated_at = now()
+      WHERE id = ${team.id} AND (passcode_lookup_hash IS NULL OR passcode_display IS NULL OR passcode_hash IS NULL OR passcode_salt IS NULL)
+    `
+  }
+}
+
+/** Called only by the protected admin page. Passcodes are shown only in that admin view; hashes never leave the server. */
 export async function listRosterVaultTeams(): Promise<RosterVaultTeam[]> {
   await requireAdmin()
+  await issuePasscodesForTeams()
   const { rows } = await sql<RosterVaultTeam>`
     SELECT t.id, t.name, t.is_active, t.created_at, count(p.id)::int AS player_count,
-           t.vault_billing_mode, t.balance_paid, t.balance_paid_at, t.balance_payment_method, t.single_photo_price_cents
+           t.vault_billing_mode, t.balance_paid, t.balance_paid_at, t.balance_payment_method,
+           t.single_photo_price_cents, t.passcode_display
     FROM public.roster_vault_teams t
     LEFT JOIN public.roster_vault_players p ON p.team_id = t.id
     GROUP BY t.id
@@ -479,7 +516,7 @@ const OFFLINE_BALANCE_METHODS = ["cash", "check", "external_transfer"] as const
 
 /**
  * All-Inclusive Team Buyout: records the team's second 50% as received, which unlocks free high-resolution downloads for
- * everyone signed in with the team code (every player folder and the shared team folder).
+ * everyone signed in with the master Team / Event Name and passcode (every player folder and the shared team folder).
  */
 export async function markRosterTeamBalancePaid(input: {
   teamId: string
@@ -521,44 +558,61 @@ export async function markRosterTeamBalanceUnpaid(teamId: string): Promise<Roste
   return rows[0]
 }
 
+export async function generateRosterVaultTeamPasscodePreview() {
+  await requireAdmin()
+  return (await generateTeamPasscode()).passcode
+}
+
+export async function rotateRosterVaultTeamPasscode(teamId: string) {
+  await requireAdmin()
+  const { rows } = await sql<{ name: string }>`SELECT name FROM public.roster_vault_teams WHERE id = ${teamId} LIMIT 1`
+  if (!rows[0]) throw new Error("Team or event not found.")
+  const credentials = await generateTeamPasscode(teamId)
+  await sql`
+    UPDATE public.roster_vault_teams SET
+      passcode_display = ${credentials.passcode}, passcode_salt = ${credentials.salt},
+      passcode_hash = ${credentials.hash}, passcode_lookup_hash = ${credentials.lookupHash}, updated_at = now()
+    WHERE id = ${teamId}
+  `
+  await sql`DELETE FROM public.roster_vault_sessions WHERE team_id = ${teamId}`
+  revalidatePath("/admin/roster-vault")
+  revalidatePath("/vault/roster")
+  return { teamId, username: rows[0].name, passcode: credentials.passcode }
+}
+
 export async function createRosterVaultTeam(input: {
   name: string
-  accessCode: string
-  password: string
+  passcode: string
   vaultBillingMode?: RosterBillingMode
 }) {
   await requireAdmin()
   const billingMode = parseBillingMode(input.vaultBillingMode ?? "parent_pay")
   const name = cleanName(input.name, MAX_TEAM_NAME)
-  const accessCode = normalizeAccessCode(input.accessCode)
-  const password = input.password
-  if (!name) throw new Error("Enter a team name.")
-  if (!/^[A-Z0-9-]{6,32}$/.test(accessCode) || accessCode.length < MIN_CODE_LENGTH) {
-    throw new Error("Team access codes must be 6–32 letters, numbers or hyphens.")
-  }
-  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH || password.length > 128) {
-    throw new Error("Team passwords must be at least 10 characters.")
-  }
-
-  const codeSalt = randomBytes(16).toString("hex")
-  const passwordSalt = randomBytes(16).toString("hex")
+  const passcode = typeof input.passcode === "string" ? input.passcode.trim() : ""
+  if (!name) throw new Error("Enter a team or event name.")
+  if (!/^\d{6}$/.test(passcode)) throw new Error("The team passcode must be six digits. Generate a new passcode and try again.")
+  const lookupHash = hashTeamPasscode(passcode)
+  const { rows: existing } = await sql<{ id: string }>`
+    SELECT id FROM public.roster_vault_teams WHERE passcode_lookup_hash = ${lookupHash} LIMIT 1
+  `
+  if (existing[0]) throw new Error("That passcode is already in use. Generate a new one and try again.")
+  const salt = randomBytes(16).toString("hex")
   let created: RosterVaultTeam
   try {
     const { rows } = await sql<RosterVaultTeam>`
       INSERT INTO public.roster_vault_teams (
-        name, access_code_salt, access_code_hash, access_code_lookup_hash,
-        password_salt, password_hash, vault_billing_mode
+        name, access_code_lookup_hash, passcode_display, passcode_salt, passcode_hash, passcode_lookup_hash, vault_billing_mode
       ) VALUES (
-        ${name}, ${codeSalt}, ${hashCredential(accessCode, codeSalt)}, ${hash(accessCode)},
-        ${passwordSalt}, ${hashCredential(password, passwordSalt)}, ${billingMode}
+        ${name}, NULL, ${passcode}, ${salt}, ${hashCredential(passcode, salt)}, ${lookupHash}, ${billingMode}
       )
       RETURNING id, name, is_active, created_at, 0::int AS player_count,
-                vault_billing_mode, balance_paid, balance_paid_at, balance_payment_method, single_photo_price_cents
+                vault_billing_mode, balance_paid, balance_paid_at, balance_payment_method, single_photo_price_cents,
+                passcode_display
     `
     created = rows[0]
   } catch (error) {
     if (error instanceof Error && "code" in error && error.code === "23505") {
-      throw new Error("That access code is already assigned to another team.")
+      throw new Error("That passcode is already assigned to another team. Generate a new one and try again.")
     }
     throw error
   }
@@ -570,58 +624,32 @@ export async function updateRosterVaultTeam(input: {
   id: string
   name: string
   isActive: boolean
-  accessCode?: string
-  password?: string
   vaultBillingMode?: RosterBillingMode
   /** Dollars-in-cents price for one single-photo download (Parent Pay). Null turns it off. */
   singlePhotoPriceCents?: number | null
 }) {
   await requireAdmin()
   const name = cleanName(input.name, MAX_TEAM_NAME)
-  if (!name) throw new Error("Enter a team name.")
+  if (!name) throw new Error("Enter a team or event name.")
   const billingMode = input.vaultBillingMode === undefined ? null : parseBillingMode(input.vaultBillingMode)
   const singlePhotoPriceProvided = input.singlePhotoPriceCents !== undefined
   const singlePhotoPriceCents = singlePhotoPriceProvided ? parseSinglePhotoPriceCents(input.singlePhotoPriceCents) : null
+  const { rows: currentRows } = await sql<{ name: string }>`
+    SELECT name FROM public.roster_vault_teams WHERE id = ${input.id} LIMIT 1
+  `
+  const current = currentRows[0]
+  if (!current) throw new Error("Team or event not found.")
 
-  let codeFields: { salt: string; hash: string; lookup: string } | null = null
-  const accessCode = normalizeAccessCode(input.accessCode)
-  if (accessCode) {
-    if (!/^[A-Z0-9-]{6,32}$/.test(accessCode)) throw new Error("Access codes must be 6–32 letters, numbers or hyphens.")
-    const salt = randomBytes(16).toString("hex")
-    codeFields = { salt, hash: hashCredential(accessCode, salt), lookup: hash(accessCode) }
-  }
-
-  let passwordFields: { salt: string; hash: string } | null = null
-  if (input.password) {
-    if (input.password.length < MIN_PASSWORD_LENGTH || input.password.length > 128) {
-      throw new Error("Team passwords must be at least 10 characters.")
-    }
-    const salt = randomBytes(16).toString("hex")
-    passwordFields = { salt, hash: hashCredential(input.password, salt) }
-  }
-
-  try {
-    await sql`
-      UPDATE public.roster_vault_teams SET
-        name = ${name},
-        is_active = ${input.isActive},
-        access_code_salt = COALESCE(${codeFields?.salt ?? null}, access_code_salt),
-        access_code_hash = COALESCE(${codeFields?.hash ?? null}, access_code_hash),
-        access_code_lookup_hash = COALESCE(${codeFields?.lookup ?? null}, access_code_lookup_hash),
-        password_salt = COALESCE(${passwordFields?.salt ?? null}, password_salt),
-        password_hash = COALESCE(${passwordFields?.hash ?? null}, password_hash),
-        vault_billing_mode = COALESCE(${billingMode}, vault_billing_mode),
-        single_photo_price_cents = CASE WHEN ${singlePhotoPriceProvided} THEN ${singlePhotoPriceCents}::integer ELSE single_photo_price_cents END,
-        updated_at = now()
-      WHERE id = ${input.id}
-    `
-  } catch (error) {
-    if (error instanceof Error && "code" in error && error.code === "23505") {
-      throw new Error("That access code is already assigned to another team.")
-    }
-    throw error
-  }
-  if (codeFields || passwordFields || !input.isActive) {
+  await sql`
+    UPDATE public.roster_vault_teams SET
+      name = ${name},
+      is_active = ${input.isActive},
+      vault_billing_mode = COALESCE(${billingMode}, vault_billing_mode),
+      single_photo_price_cents = CASE WHEN ${singlePhotoPriceProvided} THEN ${singlePhotoPriceCents}::integer ELSE single_photo_price_cents END,
+      updated_at = now()
+    WHERE id = ${input.id}
+  `
+  if (name !== current.name || !input.isActive) {
     await sql`DELETE FROM public.roster_vault_sessions WHERE team_id = ${input.id}`
   }
   revalidatePath("/admin/roster-vault")
@@ -733,28 +761,26 @@ export async function deleteRosterVaultPlayer(id: string) {
   revalidatePath("/admin/roster-vault")
 }
 
-/** Verifies either the master family/team credentials or one player's name and auto-issued numeric passcode. */
+/** Verifies a team/event name and master passcode or one player's name and individual passcode. */
 export async function loginRosterVault(_previous: RosterLoginState, formData: FormData): Promise<RosterLoginState> {
   const loginType = String(formData.get("loginType") ?? "team")
   const playerUsername = cleanName(formData.get("playerUsername"), MAX_PLAYER_NAME)
   const playerPasscode = String(formData.get("playerPasscode") ?? "").replace(/\s/g, "")
-  const parentName = loginType === "player" ? playerUsername : cleanName(formData.get("fullName"), MAX_PLAYER_NAME)
-  const accessCode = normalizeAccessCode(formData.get("accessCode"))
-  const password = String(formData.get("password") ?? "")
+  const teamUsername = cleanName(formData.get("teamUsername"), MAX_TEAM_NAME)
+  const teamPasscode = String(formData.get("teamPasscode") ?? "").replace(/\s/g, "")
+  let sessionName = loginType === "player" ? playerUsername : teamUsername
 
   if (loginType === "player") {
     if (!playerUsername || !/^\d{6}$/.test(playerPasscode)) return { error: "Enter the player name and 6-digit passcode." }
   } else if (loginType === "team") {
-    if (!parentName || !accessCode || !password || password.length > 128) {
-      return { error: "Enter your name, team access code and team password." }
-    }
+    if (!teamUsername || !/^\d{6}$/.test(teamPasscode)) return { error: "Enter the team/event name and its 6-digit passcode." }
   } else {
     return { error: "Choose a valid sign-in method." }
   }
 
   const codeForThrottle = loginType === "player"
     ? hash(`player|${playerUsername.toLocaleLowerCase()}|${playerPasscode}`)
-    : hash(`team|${accessCode}`)
+    : hash(`team|${teamUsername.toLocaleLowerCase()}|${teamPasscode}`)
   const requestHeaders = await headers()
   const forwardedIp = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim()
   const ip = requestHeaders.get("x-real-ip")?.trim() || forwardedIp || "unknown"
@@ -791,7 +817,6 @@ export async function loginRosterVault(_previous: RosterLoginState, formData: Fo
 
   let teamId: string | null = null
   let playerId: string | null = null
-  let sessionName = parentName
   let validCredentials = false
 
   if (loginType === "player") {
@@ -821,21 +846,24 @@ export async function loginRosterVault(_previous: RosterLoginState, formData: Fo
   } else {
     const { rows } = await sql<{
       id: string
-      access_code_salt: string
-      access_code_hash: string
-      password_salt: string
-      password_hash: string
+      name: string
+      passcode_salt: string | null
+      passcode_hash: string | null
     }>`
-      SELECT id, access_code_salt, access_code_hash, password_salt, password_hash
+      SELECT id, name, passcode_salt, passcode_hash
       FROM public.roster_vault_teams
-      WHERE access_code_lookup_hash = ${hash(accessCode)} AND is_active = true
+      WHERE passcode_lookup_hash = ${hashTeamPasscode(teamPasscode)}
+        AND lower(btrim(name)) = lower(btrim(${teamUsername}))
+        AND is_active = true
       LIMIT 1
     `
     const team = rows[0]
-    const codeCandidate = hashCredential(accessCode, team?.access_code_salt ?? "00000000000000000000000000000000")
-    const passwordCandidate = hashCredential(password, team?.password_salt ?? "00000000000000000000000000000000")
-    validCredentials = Boolean(team && safeHashEqual(codeCandidate, team.access_code_hash) && safeHashEqual(passwordCandidate, team.password_hash))
-    if (team && validCredentials) teamId = team.id
+    const codeCandidate = hashCredential(teamPasscode, team?.passcode_salt ?? "00000000000000000000000000000000")
+    validCredentials = Boolean(team?.passcode_hash && safeHashEqual(codeCandidate, team.passcode_hash))
+    if (team && validCredentials) {
+      teamId = team.id
+      sessionName = team.name
+    }
   }
 
   if (!teamId || !validCredentials) {

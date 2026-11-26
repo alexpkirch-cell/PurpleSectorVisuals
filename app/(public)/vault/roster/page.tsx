@@ -24,7 +24,7 @@ export default async function RosterVaultPage() {
           <span className="font-heading text-[0.65rem] font-semibold tracking-[0.2em] text-zinc-500">PURPLE SECTOR VISUALS</span>
           <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-400">Team media day</p>
           <h1 id="roster-vault-heading" className="font-heading text-2xl font-bold tracking-tight text-white">Roster Vault</h1>
-          <p className="text-sm leading-relaxed text-zinc-400">Sign in as a player with your name and 6-digit passcode, or choose Parent / team to enter the master team credentials.</p>
+          <p className="text-sm leading-relaxed text-zinc-400">Sign in with your Player Name + 6-digit passcode, or choose Team / Event and use the exact team name + its master 6-digit passcode.</p>
         </div>
         <RosterVaultLoginForm />
         <div className="mt-6 border-t border-zinc-800 pt-4 text-center text-xs leading-relaxed text-zinc-600">Private team access. Your credentials are verified securely.</div>
