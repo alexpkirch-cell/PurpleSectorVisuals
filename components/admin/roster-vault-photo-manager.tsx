@@ -6,14 +6,13 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { runPool } from "@/lib/vault-photo-upload"
+import { prepareImage, runPool } from "@/lib/vault-photo-upload"
 import { cn } from "@/lib/utils"
 
 const BUCKET = "roster-vault-media"
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 const MAX_FILES_PER_BATCH = 500
-const PREVIEW_MAX_EDGE = 1280
-const PREVIEW_QUALITY = 0.68
+const UPLOAD_CONCURRENCY = 3
 const IMAGE_EXTENSIONS: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -23,11 +22,7 @@ const IMAGE_EXTENSIONS: Record<string, string> = {
 export type RosterPhotoPreview = {
   id: string
   alt_text: string
-  watermarked_url: string
-}
-
-function extensionFor(file: File) {
-  return IMAGE_EXTENSIONS[file.type]
+  image_url: string
 }
 
 function altTextFromFileName(fileName: string) {
@@ -39,57 +34,15 @@ function altTextFromFileName(fileName: string) {
     .slice(0, 160) || "Gallery photo"
 }
 
-async function makeWatermarkedPreview(file: File): Promise<Blob> {
-  const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
-  const scale = Math.min(1, PREVIEW_MAX_EDGE / Math.max(bitmap.width, bitmap.height))
-  const width = Math.max(1, Math.round(bitmap.width * scale))
-  const height = Math.max(1, Math.round(bitmap.height * scale))
-  const canvas = document.createElement("canvas")
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext("2d")
-  if (!context) {
-    bitmap.close()
-    throw new Error("This browser could not prepare a watermarked preview.")
-  }
-
-  context.fillStyle = "#fff"
-  context.fillRect(0, 0, width, height)
-  context.drawImage(bitmap, 0, 0, width, height)
-  bitmap.close()
-
-  context.save()
-  context.translate(width / 2, height / 2)
-  context.rotate(-Math.PI / 6)
-  const fontSize = Math.max(22, Math.round(Math.min(width, height) * 0.07))
-  const horizontalStep = Math.max(150, fontSize * 4.5)
-  const verticalStep = Math.max(120, fontSize * 3.5)
-  context.font = `700 ${fontSize}px sans-serif`
-  context.textAlign = "center"
-  context.textBaseline = "middle"
-  context.lineJoin = "round"
-  context.lineWidth = Math.max(1.5, fontSize * 0.045)
-  for (let x = -height; x < width + height; x += horizontalStep) {
-    for (let y = -width; y < height + width; y += verticalStep) {
-      context.strokeStyle = "rgba(0, 0, 0, 0.52)"
-      context.strokeText("PSV", x, y)
-      context.fillStyle = "rgba(255, 255, 255, 0.68)"
-      context.fillText("PSV", x, y)
-    }
-  }
-  context.restore()
-
-  const preview = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", PREVIEW_QUALITY))
-  if (!preview) throw new Error("This browser could not encode a watermarked preview.")
-  return preview
-}
-
-/** Uploads one clean original per file and creates its private, lower-resolution watermarked preview locally. */
+/**
+ * Uploads one clean, unmodified original per file to private storage. A smaller clean thumbnail (never stamped) is
+ * generated in the browser so large galleries load quickly once they are unlocked.
+ */
 export function RosterVaultPhotoManager({
   ownerKey,
   storagePrefix,
   heading = "Private gallery images",
-  description = "Upload or drop multiple high-resolution images at once. Watermarked previews are generated automatically; originals stay private until access is included or purchased.",
+  description = "Drop or choose many high-resolution images at once. Each file is stored privately, untouched, and stays hidden from parents until their gallery is unlocked.",
   photos,
   onPhotosChange,
   createRecord,
@@ -102,7 +55,7 @@ export function RosterVaultPhotoManager({
   description?: string
   photos: RosterPhotoPreview[]
   onPhotosChange: (photos: RosterPhotoPreview[]) => void
-  createRecord: (input: { watermarkedPath: string; originalPath: string; altText: string }) => Promise<unknown>
+  createRecord: (input: { originalPath: string; thumbPath: string | null; altText: string }) => Promise<unknown>
   deleteRecord: (id: string) => Promise<void>
   reload: () => Promise<RosterPhotoPreview[]>
 }) {
@@ -124,26 +77,26 @@ export function RosterVaultPhotoManager({
     let failed = 0
     const supabase = createClient()
 
-    await runPool(images, 3, async (file) => {
+    await runPool(images, UPLOAD_CONCURRENCY, async (file) => {
       const id = crypto.randomUUID()
-      const ext = extensionFor(file)
-      const originalPath = `${storagePrefix}/${id}-original.${ext}`
-      const watermarkedPath = `${storagePrefix}/${id}-watermarked.jpg`
+      const originalPath = `${storagePrefix}/${id}-original.${IMAGE_EXTENSIONS[file.type]}`
+      const thumbPath = `${storagePrefix}/${id}-thumb.jpg`
       const uploadedPaths: string[] = []
       try {
-        const preview = await makeWatermarkedPreview(file)
-        const [original, watermarked] = await Promise.allSettled([
-          supabase.storage.from(BUCKET).upload(originalPath, file, { contentType: file.type, upsert: false }),
-          supabase.storage.from(BUCKET).upload(watermarkedPath, preview, { contentType: "image/jpeg", upsert: false }),
-        ])
-        if (original.status === "fulfilled" && !original.value.error) uploadedPaths.push(originalPath)
-        if (watermarked.status === "fulfilled" && !watermarked.value.error) uploadedPaths.push(watermarkedPath)
-        const uploadError = original.status === "rejected"
-          ? original.reason
-          : original.value.error ?? (watermarked.status === "rejected" ? watermarked.reason : watermarked.value.error)
-        if (uploadError) throw new Error(uploadError instanceof Error ? uploadError.message : "Storage upload failed.")
+        const prepared = await prepareImage(file)
+        const original = await supabase.storage.from(BUCKET).upload(originalPath, file, { contentType: file.type, upsert: false })
+        if (original.error) throw new Error(original.error.message)
+        uploadedPaths.push(originalPath)
 
-        await createRecord({ watermarkedPath, originalPath, altText: altTextFromFileName(file.name) })
+        let savedThumbPath: string | null = null
+        if (prepared.thumb) {
+          const thumb = await supabase.storage.from(BUCKET).upload(thumbPath, prepared.thumb, { contentType: "image/jpeg", upsert: false })
+          if (thumb.error) throw new Error(thumb.error.message)
+          uploadedPaths.push(thumbPath)
+          savedThumbPath = thumbPath
+        }
+
+        await createRecord({ originalPath, thumbPath: savedThumbPath, altText: altTextFromFileName(file.name) })
       } catch (error) {
         failed += 1
         if (uploadedPaths.length) await supabase.storage.from(BUCKET).remove(uploadedPaths)
@@ -160,12 +113,13 @@ export function RosterVaultPhotoManager({
       toast.error(error instanceof Error ? error.message : "Uploads finished, but the gallery list could not refresh.")
     }
     const succeeded = images.length - failed
-    if (succeeded > 0) toast.success(`${succeeded} photo${succeeded === 1 ? "" : "s"} uploaded with private originals and automatic proofs`)
+    if (succeeded > 0) toast.success(`${succeeded} photo${succeeded === 1 ? "" : "s"} uploaded`)
     if (failed > 0) toast.error(`${failed} photo${failed === 1 ? "" : "s"} failed to upload`)
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault()
+    event.currentTarget.dataset.dragging = "false"
     if (!uploading && !pending) void uploadFiles(Array.from(event.dataTransfer.files))
   }
 
@@ -205,7 +159,7 @@ export function RosterVaultPhotoManager({
       >
         <ImagePlus className="size-7 text-muted-foreground" aria-hidden="true" />
         <span className="text-sm font-medium text-foreground">Drop photos here or choose files</span>
-        <span className="max-w-lg text-xs leading-relaxed text-muted-foreground">Select up to {MAX_FILES_PER_BATCH} images at once. Each file becomes one gallery photo; its private original and watermarked preview upload together.</span>
+        <span className="max-w-lg text-xs leading-relaxed text-muted-foreground">Select up to {MAX_FILES_PER_BATCH} images at once. Each file becomes one gallery photo.</span>
         <input
           id={`bulk-photo-input-${ownerKey}`}
           type="file"
@@ -237,12 +191,12 @@ export function RosterVaultPhotoManager({
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {photos.map((photo) => (
             <li key={photo.id} className="group relative overflow-hidden rounded-lg border border-border bg-card">
-              {/* eslint-disable-next-line @next/next/no-img-element -- one-hour signed private preview URL */}
-              <img src={photo.watermarked_url} alt={photo.alt_text || "Watermarked gallery preview"} className="aspect-square w-full object-cover" loading="lazy" />
+              {/* eslint-disable-next-line @next/next/no-img-element -- one-hour signed private image URL */}
+              <img src={photo.image_url} alt={photo.alt_text || "Gallery photo"} className="aspect-square w-full object-cover" loading="lazy" />
               <Button type="button" variant="destructive" size="icon-sm" onClick={() => removePhoto(photo)} disabled={pending || uploading} aria-label={`Remove ${photo.alt_text || "gallery photo"}`} className="absolute right-2 top-2 opacity-100 shadow-md sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100">
                 <Trash2 className="size-4" aria-hidden="true" />
               </Button>
-              <p className="truncate px-2 py-1.5 text-[0.65rem] text-muted-foreground">{photo.alt_text || "Watermarked preview"}</p>
+              <p className="truncate px-2 py-1.5 text-[0.65rem] text-muted-foreground">{photo.alt_text || "Gallery photo"}</p>
             </li>
           ))}
         </ul>

@@ -16,7 +16,6 @@ type RosterVaultData = {
   billingMode: "all_inclusive" | "parent_pay" | "prepaid_comped"
   awaitingTeamBalance: boolean
   downloadsIncluded: boolean
-  singlePhotoPriceCents: number | null
   teamFolderPhotoCount: number
   players: {
     id: string
@@ -25,6 +24,7 @@ type RosterVaultData = {
     cover_image_url: string | null
     tier_name: string | null
     tier_price_cents: number | null
+    photo_count: number
     unlocked: boolean
   }[]
 }
@@ -54,8 +54,8 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
       ? "Gallery-only access includes immediate high-resolution downloads. WHCC prints remain optional."
       : "High-resolution downloads are included with this team's prepaid package. WHCC prints remain optional."
     : data.billingMode === "all_inclusive"
-      ? "Browse watermarked proofs now. Downloads unlock as soon as your team's package is paid."
-      : "Browse watermarked proofs, then unlock a full digital bundle or single photos. Prints are always optional."
+      ? "Photos unlock for everyone as soon as your team's package is paid."
+      : "Unlock a player's full digital gallery to see and download every photo. Prints are always optional."
 
   return (
     <div className="min-h-svh bg-[#09090b] text-zinc-100">
@@ -88,11 +88,11 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
                 <span className="font-heading text-lg font-semibold text-white">Team photos</span>
                 <span className="text-sm text-zinc-400">
                   {data.teamFolderPhotoCount} shared photo{data.teamFolderPhotoCount === 1 ? "" : "s"}
-                  {data.downloadsIncluded ? " · downloads included" : data.singlePhotoPriceCents ? ` · ${formatCents(data.singlePhotoPriceCents)} per download` : ""}
+                  {data.downloadsIncluded ? " · downloads included" : " · locked"}
                 </span>
               </span>
             </span>
-            <span className="text-sm font-medium text-fuchsia-400 group-hover:text-fuchsia-300">Open folder</span>
+            <span className="text-sm font-medium text-fuchsia-400 group-hover:text-fuchsia-300">{data.downloadsIncluded ? "Open folder" : "View status"}</span>
           </Link>
         ) : null}
 
@@ -143,22 +143,24 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
                       <div className="flex min-h-8 flex-col items-center gap-0.5">
                         {player.unlocked ? (
                           <span className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.14em] text-emerald-400">
-                            <ShieldCheck className="size-3" aria-hidden="true" /> Downloads unlocked
+                            <ShieldCheck className="size-3" aria-hidden="true" /> Unlocked · {player.photo_count} photo{player.photo_count === 1 ? "" : "s"}
                           </span>
                         ) : data.billingMode === "all_inclusive" ? (
                           <span className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.14em] text-amber-400">
-                            <LockKeyhole className="size-3" aria-hidden="true" /> Proofs until team is paid
+                            <LockKeyhole className="size-3" aria-hidden="true" /> Locked until team is paid
                           </span>
                         ) : (
                           <>
-                            <span className="text-[0.65rem] uppercase tracking-[0.14em] text-zinc-500">{player.tier_name ?? "Full bundle"}</span>
+                            <span className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-[0.14em] text-zinc-500">
+                              <LockKeyhole className="size-3" aria-hidden="true" /> Locked · {player.photo_count} photo{player.photo_count === 1 ? "" : "s"}
+                            </span>
                             {player.tier_price_cents ? <span className="font-mono text-xs text-zinc-300">{formatCents(player.tier_price_cents)}</span> : null}
                           </>
                         )}
                       </div>
-                      <Link href={`/vault/roster/${player.id}`} className={OPEN_LINK_CLASS} aria-label={`${player.unlocked ? "Open" : "View proofs for"} ${player.display_name}'s gallery`}>
+                      <Link href={`/vault/roster/${player.id}`} className={OPEN_LINK_CLASS} aria-label={`${player.unlocked ? "Open" : "View locked status of"} ${player.display_name}'s gallery`}>
                         {player.unlocked ? <Images className="size-3.5" aria-hidden="true" /> : <LockKeyhole className="size-3.5" aria-hidden="true" />}
-                        {player.unlocked ? "Open Gallery" : "View Proofs"}
+                        {player.unlocked ? "Open Gallery" : data.billingMode === "parent_pay" ? "Unlock Gallery" : "View Status"}
                       </Link>
                     </div>
                   </article>

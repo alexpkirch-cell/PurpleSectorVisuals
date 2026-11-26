@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { confirmRosterGalleryCheckout, confirmRosterPhotoCheckout } from "@/app/actions/roster-vault-payments"
+import { confirmRosterGalleryCheckout } from "@/app/actions/roster-vault-payments"
 import { confirmRosterPrintCheckout } from "@/app/actions/roster-vault-print"
 import { getRosterGalleryView } from "@/app/actions/roster-vault"
 import { RosterGallery } from "@/components/vault/roster-gallery"
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 type PageProps = {
   params: Promise<{ playerId: string }>
-  searchParams: Promise<{ session_id?: string; photo_session_id?: string; print_session_id?: string; print_cancelled?: string }>
+  searchParams: Promise<{ session_id?: string; print_session_id?: string; print_cancelled?: string }>
 }
 
 export default async function RosterPlayerGalleryPage({ params, searchParams }: PageProps) {
@@ -25,11 +25,6 @@ export default async function RosterPlayerGalleryPage({ params, searchParams }: 
     const paid = await confirmRosterGalleryCheckout(playerId, query.session_id)
     notice = paid
       ? "Payment received. Your full gallery is unlocked."
-      : "We couldn’t verify that payment yet. If you were charged, refresh in a moment or contact your team organizer."
-  } else if (query.photo_session_id) {
-    const paid = await confirmRosterPhotoCheckout(query.photo_session_id)
-    notice = paid
-      ? "Payment received. Your photo is unlocked."
       : "We couldn’t verify that payment yet. If you were charged, refresh in a moment or contact your team organizer."
   } else if (query.print_session_id) {
     const result = await confirmRosterPrintCheckout(playerId, query.print_session_id)

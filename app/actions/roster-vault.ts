@@ -39,8 +39,6 @@ export type RosterVaultTeam = {
   balance_paid: boolean
   balance_paid_at: string | null
   balance_payment_method: RosterBalanceMethod | null
-  /** Parent Pay teams: price of one single-photo download, or null to turn single-photo checkout off. */
-  single_photo_price_cents: number | null
   passcode_display: string | null
 }
 
@@ -81,7 +79,8 @@ export type RosterVaultPhoto = {
   player_id: string
   alt_text: string
   sort_order: number
-  watermarked_url: string
+  /** Signed admin-only URL of the clean grid thumbnail, or the original when no thumbnail exists. */
+  image_url: string
 }
 
 export type RosterVaultGalleryPhoto = {
@@ -235,7 +234,7 @@ export async function listRosterVaultTeams(): Promise<RosterVaultTeam[]> {
   const { rows } = await sql<RosterVaultTeam>`
     SELECT t.id, t.name, t.is_active, t.created_at, count(p.id)::int AS player_count,
            t.vault_billing_mode, t.vault_experience, t.balance_paid, t.balance_paid_at, t.balance_payment_method,
-           t.single_photo_price_cents, t.passcode_display
+           t.passcode_display
     FROM public.roster_vault_teams t
     LEFT JOIN public.roster_vault_players p ON p.team_id = t.id
     GROUP BY t.id
@@ -373,26 +372,56 @@ export async function updateRosterVaultGalleryTier(input: { id: string; name: st
   revalidatePath("/admin/roster-vault")
 }
 
+type StoredPhotoPaths = { thumb_path: string | null; original_path: string }
+
+/** Admins always see the clean photo: signed URLs for the grid thumbnail when one exists, otherwise the original. */
+async function signAdminPhotoUrls(rows: StoredPhotoPaths[]): Promise<string[]> {
+  if (rows.length === 0) return []
+  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
+  const { data, error } = await storage.createSignedUrls(rows.map((row) => row.thumb_path ?? row.original_path), 3600)
+  if (error || !data || data.length !== rows.length) throw new Error("Could not create gallery image URLs.")
+  return data.map((item) => {
+    if (!item.signedUrl) throw new Error("Could not create gallery image URLs.")
+    return item.signedUrl
+  })
+}
+
+/** Validates the browser-reported storage paths for one clean original and its optional clean thumbnail. */
+function parseCleanPhotoPaths(prefix: string, input: { originalPath: string; thumbPath?: string | null }) {
+  const escapedPrefix = prefix.replace(/[^0-9a-z/-]/gi, "")
+  const originalMatch = new RegExp(`^${escapedPrefix}/([0-9a-f-]{36})-original\\.(jpg|png|webp)$`, "i").exec(input.originalPath)
+  if (!originalMatch) throw new Error("Invalid gallery file path.")
+  const thumbPath = input.thumbPath ?? null
+  if (thumbPath && thumbPath !== `${escapedPrefix}/${originalMatch[1]}-thumb.jpg`) throw new Error("Invalid gallery thumbnail path.")
+  return { originalPath: input.originalPath, thumbPath }
+}
+
+function pathsToRemove(photo: StoredPhotoPaths) {
+  return [photo.original_path, photo.thumb_path].filter((path): path is string => Boolean(path))
+}
+
 export async function listRosterVaultPhotosAdmin(playerId: string) {
   await requireAdmin()
-  const { rows } = await sql<Omit<RosterVaultPhoto, "watermarked_url"> & { watermarked_path: string }>`
-    SELECT id, player_id, alt_text, sort_order, watermarked_path
+  const { rows } = await sql<Omit<RosterVaultPhoto, "image_url"> & StoredPhotoPaths>`
+    SELECT id, player_id, alt_text, sort_order, thumb_path, original_path
     FROM public.roster_vault_player_photos
     WHERE player_id = ${playerId}
     ORDER BY sort_order ASC, created_at ASC
   `
-  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
-  return Promise.all(rows.map(async ({ watermarked_path, ...photo }) => {
-    const { data, error } = await storage.createSignedUrl(watermarked_path, 3600)
-    if (error || !data?.signedUrl) throw new Error("Could not create a gallery preview URL.")
-    return { ...photo, watermarked_url: data.signedUrl }
+  const urls = await signAdminPhotoUrls(rows)
+  return rows.map((row, index): RosterVaultPhoto => ({
+    id: row.id,
+    player_id: row.player_id,
+    alt_text: row.alt_text,
+    sort_order: row.sort_order,
+    image_url: urls[index],
   }))
 }
 
 export async function createRosterVaultPlayerPhoto(input: {
   playerId: string
-  watermarkedPath: string
   originalPath: string
+  thumbPath?: string | null
   altText?: string
 }) {
   await requireAdmin()
@@ -401,19 +430,15 @@ export async function createRosterVaultPlayerPhoto(input: {
   `
   if (!playerRows[0]) throw new Error("Player not found.")
   const safeId = input.playerId.replace(/[^0-9a-f-]/gi, "")
-  const watermarkedMatch = new RegExp(`^${safeId}/([0-9a-f-]{36})-watermarked\\.(jpg|png|webp)$`, "i").exec(input.watermarkedPath)
-  const originalMatch = new RegExp(`^${safeId}/([0-9a-f-]{36})-original\\.(jpg|png|webp)$`, "i").exec(input.originalPath)
-  if (!watermarkedMatch || !originalMatch || watermarkedMatch[1] !== originalMatch[1]) {
-    throw new Error("Invalid gallery file paths.")
-  }
+  const { originalPath, thumbPath } = parseCleanPhotoPaths(safeId, input)
   const { rows: orderRows } = await sql<{ next_order: number }>`
     SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS next_order
     FROM public.roster_vault_player_photos WHERE player_id = ${input.playerId}
   `
   const altText = cleanName(input.altText, 160)
   const { rows } = await sql<{ id: string; sort_order: number }>`
-    INSERT INTO public.roster_vault_player_photos (player_id, watermarked_path, original_path, alt_text, sort_order)
-    VALUES (${input.playerId}, ${input.watermarkedPath}, ${input.originalPath}, ${altText}, ${orderRows[0].next_order})
+    INSERT INTO public.roster_vault_player_photos (player_id, original_path, thumb_path, alt_text, sort_order)
+    VALUES (${input.playerId}, ${originalPath}, ${thumbPath}, ${altText}, ${orderRows[0].next_order})
     RETURNING id, sort_order
   `
   revalidatePath("/admin/roster-vault")
@@ -422,12 +447,12 @@ export async function createRosterVaultPlayerPhoto(input: {
 
 export async function deleteRosterVaultPlayerPhoto(id: string) {
   await requireAdmin()
-  const { rows } = await sql<{ watermarked_path: string; original_path: string }>`
-    SELECT watermarked_path, original_path FROM public.roster_vault_player_photos WHERE id = ${id}
+  const { rows } = await sql<StoredPhotoPaths>`
+    SELECT thumb_path, original_path FROM public.roster_vault_player_photos WHERE id = ${id}
   `
   const photo = rows[0]
   if (!photo) return
-  const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove([photo.watermarked_path, photo.original_path])
+  const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove(pathsToRemove(photo))
   if (error) throw new Error("Could not delete the private storage files. The gallery record was kept.")
   await sql`DELETE FROM public.roster_vault_player_photos WHERE id = ${id}`
   revalidatePath("/admin/roster-vault")
@@ -443,56 +468,44 @@ function parseVaultExperience(value: unknown): "full_client_vault" | "gallery_on
   throw new Error("Choose Full Client Vault or Gallery-Only Direct Access.")
 }
 
-function parseSinglePhotoPriceCents(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null
-  const cents = Math.round(Number(value))
-  if (!Number.isInteger(cents) || cents < 100 || cents > 1_000_000) {
-    throw new Error("Enter a single-photo price between $1.00 and $10,000.00, or leave it blank to turn it off.")
-  }
-  return cents
-}
-
 export type RosterVaultTeamPhoto = Omit<RosterVaultPhoto, "player_id">
 
 export async function listRosterVaultTeamPhotosAdmin(teamId: string): Promise<RosterVaultTeamPhoto[]> {
   await requireAdmin()
-  const { rows } = await sql<Omit<RosterVaultTeamPhoto, "watermarked_url"> & { watermarked_path: string }>`
-    SELECT id, alt_text, sort_order, watermarked_path
+  const { rows } = await sql<Omit<RosterVaultTeamPhoto, "image_url"> & StoredPhotoPaths>`
+    SELECT id, alt_text, sort_order, thumb_path, original_path
     FROM public.roster_vault_team_photos
     WHERE team_id = ${teamId}
     ORDER BY sort_order ASC, created_at ASC
   `
-  const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
-  return Promise.all(rows.map(async ({ watermarked_path, ...photo }) => {
-    const { data, error } = await storage.createSignedUrl(watermarked_path, 3600)
-    if (error || !data?.signedUrl) throw new Error("Could not create a team folder preview URL.")
-    return { ...photo, watermarked_url: data.signedUrl }
+  const urls = await signAdminPhotoUrls(rows)
+  return rows.map((row, index): RosterVaultTeamPhoto => ({
+    id: row.id,
+    alt_text: row.alt_text,
+    sort_order: row.sort_order,
+    image_url: urls[index],
   }))
 }
 
 export async function createRosterVaultTeamPhoto(input: {
   teamId: string
-  watermarkedPath: string
   originalPath: string
+  thumbPath?: string | null
   altText?: string
 }) {
   await requireAdmin()
   const { rows: teamRows } = await sql<{ id: string }>`SELECT id FROM public.roster_vault_teams WHERE id = ${input.teamId} LIMIT 1`
   if (!teamRows[0]) throw new Error("Team not found.")
   const safeId = input.teamId.replace(/[^0-9a-f-]/gi, "")
-  const watermarkedMatch = new RegExp(`^teams/${safeId}/([0-9a-f-]{36})-watermarked\\.(jpg|png|webp)$`, "i").exec(input.watermarkedPath)
-  const originalMatch = new RegExp(`^teams/${safeId}/([0-9a-f-]{36})-original\\.(jpg|png|webp)$`, "i").exec(input.originalPath)
-  if (!watermarkedMatch || !originalMatch || watermarkedMatch[1] !== originalMatch[1]) {
-    throw new Error("Invalid team folder file paths.")
-  }
+  const { originalPath, thumbPath } = parseCleanPhotoPaths(`teams/${safeId}`, input)
   const { rows: orderRows } = await sql<{ next_order: number }>`
     SELECT COALESCE(MAX(sort_order), -1)::int + 1 AS next_order
     FROM public.roster_vault_team_photos WHERE team_id = ${input.teamId}
   `
   const altText = cleanName(input.altText, 160)
   const { rows } = await sql<{ id: string; sort_order: number }>`
-    INSERT INTO public.roster_vault_team_photos (team_id, watermarked_path, original_path, alt_text, sort_order)
-    VALUES (${input.teamId}, ${input.watermarkedPath}, ${input.originalPath}, ${altText}, ${orderRows[0].next_order})
+    INSERT INTO public.roster_vault_team_photos (team_id, original_path, thumb_path, alt_text, sort_order)
+    VALUES (${input.teamId}, ${originalPath}, ${thumbPath}, ${altText}, ${orderRows[0].next_order})
     RETURNING id, sort_order
   `
   revalidatePath("/admin/roster-vault")
@@ -501,12 +514,12 @@ export async function createRosterVaultTeamPhoto(input: {
 
 export async function deleteRosterVaultTeamPhoto(id: string) {
   await requireAdmin()
-  const { rows } = await sql<{ watermarked_path: string; original_path: string }>`
-    SELECT watermarked_path, original_path FROM public.roster_vault_team_photos WHERE id = ${id}
+  const { rows } = await sql<StoredPhotoPaths>`
+    SELECT thumb_path, original_path FROM public.roster_vault_team_photos WHERE id = ${id}
   `
   const photo = rows[0]
   if (!photo) return
-  const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove([photo.watermarked_path, photo.original_path])
+  const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove(pathsToRemove(photo))
   if (error) throw new Error("Could not delete the private storage files. The team folder record was kept.")
   await sql`DELETE FROM public.roster_vault_team_photos WHERE id = ${id}`
   revalidatePath("/admin/roster-vault")
@@ -617,7 +630,7 @@ export async function createRosterVaultTeam(input: {
       )
       RETURNING id, name, is_active, created_at, 0::int AS player_count,
                 vault_billing_mode, vault_experience, balance_paid, balance_paid_at, balance_payment_method,
-                single_photo_price_cents, passcode_display
+                passcode_display
     `
     created = rows[0]
   } catch (error) {
@@ -636,9 +649,7 @@ export async function updateRosterVaultTeam(input: {
   isActive: boolean
   vaultBillingMode?: RosterBillingMode
   vaultExperience?: "full_client_vault" | "gallery_only"
-  /** Dollars-in-cents price for one single-photo download (Parent Pay). Null turns it off. */
-  singlePhotoPriceCents?: number | null
-}): Promise<Pick<RosterVaultTeam, "name" | "is_active" | "vault_billing_mode" | "vault_experience" | "single_photo_price_cents">> {
+}): Promise<Pick<RosterVaultTeam, "name" | "is_active" | "vault_billing_mode" | "vault_experience">> {
   await requireAdmin()
   const name = cleanName(input.name, MAX_TEAM_NAME)
   if (!name) throw new Error("Enter a team or event name.")
@@ -657,23 +668,16 @@ export async function updateRosterVaultTeam(input: {
 
   const vaultExperience = requestedExperience ?? current.vault_experience
   const billingMode = vaultExperience === "gallery_only" ? "prepaid_comped" : requestedBillingMode ?? current.vault_billing_mode
-  const singlePhotoPriceProvided = input.singlePhotoPriceCents !== undefined || vaultExperience === "gallery_only"
-  const singlePhotoPriceCents = vaultExperience === "gallery_only"
-    ? null
-    : input.singlePhotoPriceCents === undefined
-      ? null
-      : parseSinglePhotoPriceCents(input.singlePhotoPriceCents)
 
-  const { rows } = await sql<Pick<RosterVaultTeam, "name" | "is_active" | "vault_billing_mode" | "vault_experience" | "single_photo_price_cents">>`
+  const { rows } = await sql<Pick<RosterVaultTeam, "name" | "is_active" | "vault_billing_mode" | "vault_experience">>`
     UPDATE public.roster_vault_teams SET
       name = ${name},
       is_active = ${input.isActive},
       vault_billing_mode = ${billingMode},
       vault_experience = ${vaultExperience},
-      single_photo_price_cents = CASE WHEN ${singlePhotoPriceProvided} THEN ${singlePhotoPriceCents}::integer ELSE single_photo_price_cents END,
       updated_at = now()
     WHERE id = ${input.id}
-    RETURNING name, is_active, vault_billing_mode, vault_experience, single_photo_price_cents
+    RETURNING name, is_active, vault_billing_mode, vault_experience
   `
   if (name !== current.name || !input.isActive) {
     await sql`DELETE FROM public.roster_vault_sessions WHERE team_id = ${input.id}`
@@ -774,13 +778,13 @@ export async function updateRosterVaultPlayer(input: {
 
 export async function deleteRosterVaultPlayer(id: string) {
   await requireAdmin()
-  const { rows: photos } = await sql<{ watermarked_path: string; original_path: string }>`
-    SELECT ph.watermarked_path, ph.original_path
+  const { rows: photos } = await sql<StoredPhotoPaths>`
+    SELECT ph.thumb_path, ph.original_path
     FROM public.roster_vault_player_photos ph
     WHERE ph.player_id = ${id}
   `
   if (photos.length) {
-    const paths = photos.flatMap((photo) => [photo.watermarked_path, photo.original_path])
+    const paths = photos.flatMap(pathsToRemove)
     const { error } = await createAdminClient().storage.from(ROSTER_VAULT_BUCKET).remove(paths)
     if (error) throw new Error("Could not remove the player's private gallery files.")
   }
@@ -929,13 +933,15 @@ export async function getRosterVaultData() {
       tier_name: string | null
       tier_price_cents: number | null
       bundle_owned: boolean
+      photo_count: number
     }>`
       SELECT p.id, p.display_name, p.jersey_number, p.cover_image_url,
              t.name AS tier_name, t.price_cents AS tier_price_cents,
              EXISTS (
                SELECT 1 FROM public.roster_vault_orders o
                WHERE o.player_id = p.id AND o.buyer_session_id = ${session.id} AND o.status = 'paid'
-             ) AS bundle_owned
+             ) AS bundle_owned,
+             (SELECT count(*)::int FROM public.roster_vault_player_photos ph WHERE ph.player_id = p.id) AS photo_count
       FROM public.roster_vault_players p
       LEFT JOIN public.roster_vault_gallery_tiers t ON t.id = p.tier_id AND t.is_active = true
       WHERE p.team_id = ${session.team_id} AND p.is_active = true
@@ -955,22 +961,23 @@ export async function getRosterVaultData() {
     playerId: session.player_id,
     vaultExperience: billing.experience,
     billingMode: billing.mode,
-    /** All-Inclusive team whose balance is not paid yet: proofs only. */
+    /** All-Inclusive team whose balance is not paid yet: every folder stays locked. */
     awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid,
     downloadsIncluded,
-    singlePhotoPriceCents: billing.mode === "parent_pay" ? billing.singlePhotoPriceCents : null,
     teamFolderPhotoCount: teamPhotoCount.rows[0]?.total ?? 0,
     players: playersResult.rows.map((player) => ({ ...player, unlocked: downloadsIncluded || player.bundle_owned })),
   }
 }
 
+/** Only unlocked photos ever reach the browser. Both URLs are short-lived signed links to clean, unmodified files. */
 export type RosterGalleryPhoto = {
   id: string
   altText: string
-  /** The watermarked proof until this photo is unlocked, then the clean original. */
+  /** Grid image: the clean thumbnail when one exists, otherwise the original. */
   imageUrl: string
+  /** The clean original, signed to download as an attachment. */
+  downloadUrl: string
   fileName: string
-  unlocked: boolean
 }
 
 export type RosterGalleryView = {
@@ -981,46 +988,53 @@ export type RosterGalleryView = {
   jerseyNumber: string | null
   teamName: string
   billingMode: RosterBillingMode
-  /** Every original is unlocked for this viewer: the player bundle was bought, or the team buyout is paid. */
+  /** Every photo is unlocked for this viewer: the player bundle was bought, or the team package is prepaid/paid. */
   allUnlocked: boolean
-  /** All-Inclusive team whose balance is still outstanding, so only watermarked proofs are shown. */
+  /** All-Inclusive team whose balance is still outstanding, so the folder stays locked. */
   awaitingTeamBalance: boolean
   /** The full digital bundle this parent can still buy (Parent Pay, player folders). */
   bundle: { tierName: string; priceCents: number } | null
-  /** Price of one single-photo download (Parent Pay only), or null when single-photo checkout is off. */
-  singlePhotoPriceCents: number | null
+  /** Photos in the folder, locked or not. Locked photos are counted but never sent to the browser. */
+  photoCount: number
+  /** Unlocked photos only. Empty while the folder is locked. */
   photos: RosterGalleryPhoto[]
   printProducts: Pick<RosterVaultPrintProduct, "id" | "name" | "price_cents">[]
 }
 
-type GalleryPhotoRow = { id: string; watermarked_path: string; original_path: string; alt_text: string }
+type GalleryPhotoRow = { id: string; thumb_path: string | null; original_path: string; alt_text: string }
 
-/** Signs the clean original only for unlocked photos; everything else gets the watermarked proof. */
-async function signGalleryPhotos(rows: GalleryPhotoRow[], unlocked: (id: string) => boolean, label: string) {
+/** Signs clean files for unlocked photos only. Locked photos are filtered out before any URL is created. */
+async function signUnlockedGalleryPhotos(rows: GalleryPhotoRow[], unlocked: (id: string) => boolean, label: string) {
+  const unlockedRows = rows.filter((photo) => unlocked(photo.id))
+  if (unlockedRows.length === 0) return []
+
   const storage = createAdminClient().storage.from(ROSTER_VAULT_BUCKET)
   const baseName = label.replace(/[^a-z0-9-]+/gi, "-").replace(/^-+|-+$/g, "") || "photo"
+  const { data: displayUrls, error: displayError } = await storage.createSignedUrls(
+    unlockedRows.map((photo) => photo.thumb_path ?? photo.original_path),
+    3600,
+  )
+  if (displayError || !displayUrls || displayUrls.length !== unlockedRows.length) throw new Error("Could not open the gallery.")
 
-  return Promise.all(rows.map(async (photo, index): Promise<RosterGalleryPhoto> => {
-    const isUnlocked = unlocked(photo.id)
+  return Promise.all(unlockedRows.map(async (photo, index): Promise<RosterGalleryPhoto> => {
     const extension = photo.original_path.split(".").pop()?.toLowerCase() || "jpg"
     const fileName = `${baseName}-${String(index + 1).padStart(2, "0")}.${extension}`
-    const { data, error } = isUnlocked
-      ? await storage.createSignedUrl(photo.original_path, 3600, { download: fileName })
-      : await storage.createSignedUrl(photo.watermarked_path, 3600)
-    if (error || !data?.signedUrl) throw new Error("Could not open the gallery.")
+    const { data, error } = await storage.createSignedUrl(photo.original_path, 3600, { download: fileName })
+    const imageUrl = displayUrls[index]?.signedUrl
+    if (error || !data?.signedUrl || !imageUrl) throw new Error("Could not open the gallery.")
     return {
       id: photo.id,
       altText: photo.alt_text || `${label}, gallery photo ${index + 1}`,
-      imageUrl: data.signedUrl,
+      imageUrl,
+      downloadUrl: data.signedUrl,
       fileName,
-      unlocked: isUnlocked,
     }
   }))
 }
 
 /**
- * A player folder for the signed-in parent. Watermarked proofs are always visible; originals are only signed once the
- * team buyout is paid, this session bought the player's bundle, or this session bought that single photo.
+ * A player folder for the signed-in parent. Access is binary: until the team package is prepaid/paid or this session
+ * bought the player's bundle, no photo is signed or sent; only the photo count is returned.
  */
 export async function getRosterGalleryView(playerId: string): Promise<RosterGalleryView | null> {
   const session = await getRosterVaultSession()
@@ -1051,7 +1065,7 @@ export async function getRosterGalleryView(playerId: string): Promise<RosterGall
 
   const [{ rows: photoRows }, { rows: printProducts }] = await Promise.all([
     sql<GalleryPhotoRow>`
-      SELECT id, watermarked_path, original_path, alt_text
+      SELECT id, thumb_path, original_path, alt_text
       FROM public.roster_vault_player_photos
       WHERE player_id = ${playerId}
       ORDER BY sort_order ASC, created_at ASC
@@ -1063,7 +1077,7 @@ export async function getRosterGalleryView(playerId: string): Promise<RosterGall
     `,
   ])
 
-  const photos = await signGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), player.display_name)
+  const photos = await signUnlockedGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), player.display_name)
   const canBuyBundle =
     billing.mode === "parent_pay" && !allUnlocked && Boolean(player.tier_name) && (player.tier_price_cents ?? 0) >= 100
 
@@ -1078,9 +1092,9 @@ export async function getRosterGalleryView(playerId: string): Promise<RosterGall
     allUnlocked,
     awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid && !bundleOwned,
     bundle: canBuyBundle && !session.player_id ? { tierName: player.tier_name as string, priceCents: player.tier_price_cents as number } : null,
-    singlePhotoPriceCents: billing.mode === "parent_pay" && !allUnlocked && !session.player_id ? billing.singlePhotoPriceCents : null,
+    photoCount: photoRows.length,
     photos,
-    printProducts: session.player_id ? [] : printProducts,
+    printProducts: session.player_id || photos.length === 0 ? [] : printProducts,
   }
 }
 
@@ -1094,12 +1108,12 @@ export async function getRosterTeamFolderView(): Promise<RosterGalleryView | nul
   const paidPhotoIds = allUnlocked ? new Set<string>() : await listPaidPhotoIds(session.id, "team")
 
   const { rows: photoRows } = await sql<GalleryPhotoRow>`
-    SELECT id, watermarked_path, original_path, alt_text
+    SELECT id, thumb_path, original_path, alt_text
     FROM public.roster_vault_team_photos
     WHERE team_id = ${session.team_id}
     ORDER BY sort_order ASC, created_at ASC
   `
-  const photos = await signGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), `${session.team_name} team photo`)
+  const photos = await signUnlockedGalleryPhotos(photoRows, (id) => allUnlocked || paidPhotoIds.has(id), `${session.team_name} team photo`)
 
   return {
     scope: "team",
@@ -1112,7 +1126,7 @@ export async function getRosterTeamFolderView(): Promise<RosterGalleryView | nul
     allUnlocked,
     awaitingTeamBalance: billing.mode === "all_inclusive" && !billing.balancePaid,
     bundle: null,
-    singlePhotoPriceCents: billing.mode === "parent_pay" && !allUnlocked ? billing.singlePhotoPriceCents : null,
+    photoCount: photoRows.length,
     photos,
     printProducts: [],
   }

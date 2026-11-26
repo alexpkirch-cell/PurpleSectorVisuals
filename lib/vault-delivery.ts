@@ -6,7 +6,7 @@ import { hasVaultSession, isAdminViewer } from "@/lib/vault-session"
 
 /**
  * Final photos are visible to admins at any stage, and to the vault's signed-in client once the shoot is Ready for
- * Delivery or Delivered & Settled. The remaining balance still gates watermarks and original-file downloads. Vaults
+ * Delivery or Delivered & Settled. The remaining balance still gates every photo and original-file download. Vaults
  * with no linked shoot that are already Active
  * count as delivered, matching the portal's tab gating.
  */
@@ -24,7 +24,7 @@ export async function canViewDelivery(vaultId: string): Promise<boolean> {
 }
 
 export interface DeliveryBalanceState {
-  /** True while the client's second 50% payment is outstanding: no photo previews or downloads are exposed. */
+  /** True while the client's second 50% payment is outstanding: no photos or downloads are exposed. */
   locked: boolean
   /** Dollars still owed; 0 once unlocked. */
   balanceDue: number

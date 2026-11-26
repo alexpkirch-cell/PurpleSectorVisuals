@@ -12,8 +12,6 @@ import {
 } from "@/app/actions/roster-vault"
 import { BALANCE_METHOD_LABELS, BalancePaymentDialog } from "@/components/admin/balance-payment-dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 
 type BillingMode = RosterVaultTeam["vault_billing_mode"]
@@ -23,19 +21,19 @@ const MODE_OPTIONS: { value: BillingMode; title: string; description: string }[]
     value: "prepaid_comped",
     title: "Prepaid / Comped",
     description:
-      "The team has already paid or is providing the gallery as a complimentary service. Everyone gets immediate high-resolution downloads; WHCC prints remain optional.",
+      "The team has already paid or is providing the gallery as a complimentary service. Photos are visible and downloadable immediately; WHCC prints remain optional.",
   },
   {
     value: "parent_pay",
     title: "Low-Retainer / Parent Pay-Per-Order",
     description:
-      "Parents see watermarked proofs. High-resolution files are locked behind their own Stripe checkout: one photo, a player's full digital bundle, or WHCC prints.",
+      "Each player's folder stays locked, showing only a photo count, until the parent pays that player's full-gallery price. Then every photo is visible and downloadable; WHCC prints remain optional.",
   },
   {
     value: "all_inclusive",
     title: "All-Inclusive Team Buyout",
     description:
-      "The team pays up front. Once the team's 50% balance is marked paid, anyone signed in with the master Team / Event Name and passcode can download every player folder and the team folder. WHCC prints stay optional.",
+      "The team pays up front. Every folder stays locked until the team's 50% balance is marked paid; then anyone signed in with the master Team / Event Name and passcode sees and downloads every player folder and the team folder.",
   },
 ]
 
@@ -51,13 +49,11 @@ export function RosterVaultBillingSettings({
   onTeamChange: (team: RosterVaultTeam) => void
 }) {
   const [mode, setMode] = useState<BillingMode>(team.vault_experience === "gallery_only" ? "prepaid_comped" : team.vault_billing_mode)
-  const [priceUsd, setPriceUsd] = useState(team.vault_experience === "gallery_only" || !team.single_photo_price_cents ? "" : (team.single_photo_price_cents / 100).toFixed(2))
   const [pending, startTransition] = useTransition()
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false)
 
   const billingModeToSave = team.vault_experience === "gallery_only" ? "prepaid_comped" : mode
-  const priceToSave = team.vault_experience === "gallery_only" ? null : priceUsd.trim() === "" ? null : Math.round(Number(priceUsd) * 100)
-  const dirty = billingModeToSave !== team.vault_billing_mode || priceToSave !== team.single_photo_price_cents
+  const dirty = billingModeToSave !== team.vault_billing_mode
 
   function saveBilling() {
     startTransition(async () => {
@@ -67,10 +63,8 @@ export function RosterVaultBillingSettings({
           name: team.name,
           isActive: team.is_active,
           vaultBillingMode: billingModeToSave,
-          singlePhotoPriceCents: priceToSave,
         })
         setMode(saved.vault_billing_mode)
-        setPriceUsd(saved.single_photo_price_cents ? (saved.single_photo_price_cents / 100).toFixed(2) : "")
         onTeamChange({ ...team, ...saved })
         toast.success("Billing mode saved. It applies to parents immediately.")
       } catch (error) {
@@ -137,22 +131,7 @@ export function RosterVaultBillingSettings({
       )}
 
       {team.vault_experience === "full_client_vault" && mode === "parent_pay" ? (
-        <div className="flex max-w-xs flex-col gap-1.5">
-          <Label htmlFor="roster-single-photo-price">Single-photo download price (USD)</Label>
-          <Input
-            id="roster-single-photo-price"
-            type="number"
-            min="1"
-            max="10000"
-            step="0.01"
-            inputMode="decimal"
-            value={priceUsd}
-            onChange={(event) => setPriceUsd(event.target.value)}
-            placeholder="Leave blank to turn off"
-            disabled={pending}
-          />
-          <p className="text-xs text-muted-foreground">Full-bundle prices come from the gallery tiers below. Parents pay these prices at checkout.</p>
-        </div>
+        <p className="text-xs text-muted-foreground">Each player&apos;s full-gallery price comes from the gallery pricing tiers below. Parents pay it at checkout to unlock that player&apos;s photos.</p>
       ) : null}
 
       <div>
@@ -188,7 +167,7 @@ export function RosterVaultBillingSettings({
           <p className="text-xs text-muted-foreground">
             {team.balance_paid
               ? `Paid by ${BALANCE_METHOD_LABELS[team.balance_payment_method ?? ""] ?? "unknown method"}${team.balance_paid_at ? ` on ${formatPaidDate(team.balance_paid_at)}` : ""}. Every player folder and the team folder download free for anyone signed in with the master Team / Event Name and passcode.`
-              : "Until this is marked paid, parents only see watermarked proofs. Marking it paid unlocks free downloads for the whole team."}
+              : "Until this is marked paid, every folder stays locked and parents see only a photo count. Marking it paid unlocks the photos and free downloads for the whole team."}
           </p>
           <BalancePaymentDialog
             open={balanceDialogOpen}

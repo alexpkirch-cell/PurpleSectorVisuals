@@ -4,7 +4,7 @@ import { VAULT_PHOTOS_BUCKET, VAULT_THUMB_MAX_EDGE, vaultPhotoPath, vaultThumbPa
 
 const THUMB_QUALITY = 0.85
 
-interface PreparedImage {
+export interface PreparedImage {
   width: number | null
   height: number | null
   thumb: Blob | null
@@ -23,8 +23,8 @@ function extensionFor(file: File) {
   return file.type.split("/")[1]?.replace(/[^a-z0-9]/g, "") || "jpg"
 }
 
-/** Reads true (orientation-corrected) dimensions and builds a smaller preview; formats the browser can't decode upload as-is. */
-async function prepareImage(file: File): Promise<PreparedImage> {
+/** Reads true (orientation-corrected) dimensions and builds a smaller clean grid thumbnail; formats the browser can't decode upload as-is. */
+export async function prepareImage(file: File): Promise<PreparedImage> {
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
     const { width, height } = bitmap

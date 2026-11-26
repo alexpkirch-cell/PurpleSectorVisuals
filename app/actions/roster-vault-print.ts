@@ -2,6 +2,7 @@
 
 import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import { sql } from "@/lib/db"
+import { getRosterTeamBilling, hasPaidPlayerBundle, listPaidPhotoIds, teamDownloadsIncluded } from "@/lib/roster-vault-access"
 import { PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
@@ -78,8 +79,15 @@ export async function startRosterPrintCheckout(input: {
     const player = players[0]
     if (!player || !player.is_active) return { success: false, error: "That player is not available in this team roster." }
 
-    // Professional prints are an optional purchase in both billing modes, orderable straight from the watermarked proofs;
-    // the original files go to WHCC from the server and are never sent to the browser.
+    // Prints are an optional purchase, but only for photos the viewer can already see: a folder that is still locked
+    // (unpaid Parent Pay bundle or unpaid team buyout) cannot be ordered from. Originals go to WHCC from the server.
+    const [billing, bundleOwned] = await Promise.all([
+      getRosterTeamBilling(player.team_id),
+      hasPaidPlayerBundle(parentSession.id, player.team_id, player.id),
+    ])
+    const allUnlocked = teamDownloadsIncluded(billing) || bundleOwned
+    const paidPhotoIds = allUnlocked ? new Set<string>() : await listPaidPhotoIds(parentSession.id, "player")
+
     const productIds = [...new Set(selections.map((item) => item.productId))]
     const photoIds = [...new Set(selections.map((item) => item.photoId))]
     const [{ rows: products }, { rows: photos }] = await Promise.all([
@@ -103,6 +111,9 @@ export async function startRosterPrintCheckout(input: {
 
     if (products.length !== productIds.length) return { success: false, error: "One or more print options are no longer available." }
     if (photos.length !== photoIds.length) return { success: false, error: "One or more gallery photos are no longer available." }
+    if (!allUnlocked && photos.some((photo) => !paidPhotoIds.has(photo.id))) {
+      return { success: false, error: "Unlock this gallery before ordering prints." }
+    }
 
     const productsById = new Map(products.map((product) => [product.id, product]))
     const photosById = new Map(photos.map((photo) => [photo.id, photo]))

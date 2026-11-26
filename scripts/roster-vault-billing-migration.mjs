@@ -51,8 +51,8 @@ async function main() {
     CREATE TABLE IF NOT EXISTS public.roster_vault_team_photos (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       team_id uuid NOT NULL REFERENCES public.roster_vault_teams(id) ON DELETE CASCADE,
-      watermarked_path text NOT NULL,
       original_path text NOT NULL,
+      thumb_path text,
       alt_text text NOT NULL DEFAULT '',
       sort_order integer NOT NULL DEFAULT 0,
       created_at timestamptz NOT NULL DEFAULT now()
