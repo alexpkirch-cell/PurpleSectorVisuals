@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils"
 type RosterVaultData = {
   teamName: string
   parentName: string
-  billingMode: "all_inclusive" | "parent_pay"
+  vaultExperience: "full_client_vault" | "gallery_only"
+  billingMode: "all_inclusive" | "parent_pay" | "prepaid_comped"
   awaitingTeamBalance: boolean
   downloadsIncluded: boolean
   singlePhotoPriceCents: number | null
@@ -48,11 +49,12 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
     })
   }
 
-  const modeSummary =
-    data.billingMode === "all_inclusive"
-      ? data.downloadsIncluded
-        ? "High-resolution downloads are included with your team package."
-        : "Browse watermarked proofs now. Downloads unlock as soon as your team's package is paid."
+  const modeSummary = data.downloadsIncluded
+    ? data.vaultExperience === "gallery_only"
+      ? "Gallery-only access includes immediate high-resolution downloads. WHCC prints remain optional."
+      : "High-resolution downloads are included with this team's prepaid package. WHCC prints remain optional."
+    : data.billingMode === "all_inclusive"
+      ? "Browse watermarked proofs now. Downloads unlock as soon as your team's package is paid."
       : "Browse watermarked proofs, then unlock a full digital bundle or single photos. Prints are always optional."
 
   return (
