@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { CircleCheck, Download, DownloadCloud, Images, Lock, Printer } from "lucide-react"
 import useSWR from "swr"
 
-import { checkBalanceStatus } from "@/app/actions/stripe"
+import { chargeBalanceWithSavedCard, checkBalanceStatus } from "@/app/actions/stripe"
 import { getDeliveryPhotos, type VaultDeliveryData, type VaultPhotoView } from "@/app/actions/vault-photos"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -58,6 +58,8 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
 
   const [payDialogOpen, setPayDialogOpen] = useState(false)
   const [justUnlocked, setJustUnlocked] = useState(false)
+  const [savedCardError, setSavedCardError] = useState<string | null>(null)
+  const [chargingSavedCard, startSavedCardCharge] = useTransition()
 
   const {
     data: delivery,
@@ -68,8 +70,10 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
     revalidateOnFocus: false,
   })
   const photos = delivery?.photos ?? null
+  const photoCount = delivery?.photoCount ?? photos?.length ?? 0
   const printProducts = delivery?.printProducts ?? []
   const locked = delivery?.locked ?? false
+  const hasSavedCard = delivery?.hasSavedCard ?? false
   const balanceLabel = currency.format(delivery?.balanceDue ?? 0)
   const openPhoto = photos?.find((photo) => photo.id === openId) ?? null
 
@@ -83,6 +87,19 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
     }
   }
 
+  function handleSavedCardCharge() {
+    setSavedCardError(null)
+    startSavedCardCharge(async () => {
+      const result = await chargeBalanceWithSavedCard(vaultId)
+      if (!result.success) {
+        setSavedCardError(result.error)
+        return
+      }
+      await handlePaymentComplete()
+      setJustUnlocked(true)
+    })
+  }
+
   return (
     <section aria-labelledby="delivery-heading" className="flex flex-col gap-6">
       <div className="flex flex-col items-start gap-4 rounded-2xl border border-primary/40 bg-card p-6 sm:flex-row sm:items-center sm:justify-between">
@@ -92,24 +109,38 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
           </span>
           <div className="flex flex-col gap-1">
             <h2 id="delivery-heading" className="font-heading text-xl font-medium text-foreground">
-              Your gallery is ready
+              {locked ? "Your gallery is locked" : "Your gallery is ready"}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {photos && photos.length > 0
+              {photoCount > 0
                 ? locked
-                  ? `${photos.length} finished ${photos.length === 1 ? "photo" : "photos"} are ready. These are watermarked previews until your remaining 50% balance of ${balanceLabel} is paid.`
-                  : `${photos.length} finished ${photos.length === 1 ? "photo" : "photos"}, delivered in full resolution.`
+                  ? `${photoCount} finished ${photoCount === 1 ? "photo is" : "photos are"} ready. Pay the remaining 50% balance of ${balanceLabel} to unlock your gallery.`
+                  : `${photoCount} finished ${photoCount === 1 ? "photo" : "photos"}, delivered in full resolution.`
                 : "Your finished photos will appear here."}
             </p>
           </div>
         </div>
 
-        {photos && photos.length > 0 && locked ? (
-          <Button type="button" size="lg" onClick={() => setPayDialogOpen(true)} className="w-full shrink-0 sm:w-auto">
-            <Lock data-icon="inline-start" />
-            Pay Remaining Balance ({balanceLabel}) to Unlock Downloads
-          </Button>
-        ) : photos && photos.length > 0 ? (
+        {locked && photoCount > 0 ? (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-64">
+            {hasSavedCard ? (
+              <>
+                <Button type="button" size="lg" onClick={handleSavedCardCharge} disabled={chargingSavedCard} className="w-full">
+                  <Lock data-icon="inline-start" />
+                  {chargingSavedCard ? "Authorizing payment…" : `Authorize & Pay Remaining 50% (${balanceLabel})`}
+                </Button>
+                <Button type="button" variant="outline" size="lg" onClick={() => setPayDialogOpen(true)} className="w-full">
+                  Use a different card
+                </Button>
+              </>
+            ) : (
+              <Button type="button" size="lg" onClick={() => setPayDialogOpen(true)} className="w-full">
+                <Lock data-icon="inline-start" />
+                Pay Remaining 50% ({balanceLabel})
+              </Button>
+            )}
+          </div>
+        ) : !locked && photoCount > 0 ? (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button
               type="button"
@@ -137,6 +168,13 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
         ) : null}
       </div>
 
+      {savedCardError ? (
+        <div role="alert" className="flex flex-col gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+          <p>{savedCardError}</p>
+          <Button type="button" variant="outline" onClick={() => setPayDialogOpen(true)}>Use a different card</Button>
+        </div>
+      ) : null}
+
       {justUnlocked && !locked ? (
         <p role="status" className="flex items-center gap-2 rounded-lg border border-emerald-900/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-100">
           <CircleCheck className="size-4 shrink-0" aria-hidden="true" />
@@ -148,7 +186,7 @@ export function DeliveryTab({ vaultId, printNotice }: { vaultId: string; printNo
         <p role="status" className="text-xs text-muted-foreground">Print options are being prepared. Check back soon or contact the studio.</p>
       ) : null}
 
-      {isLoading ? (
+      {locked ? null : isLoading ? (
         <div className="columns-2 gap-3 sm:columns-3 lg:columns-4" role="status" aria-label="Loading your photos">
           {[3, 2, 4, 3, 2, 4].map((ratio, index) => (
             <div

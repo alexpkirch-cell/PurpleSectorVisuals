@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { listActivePackages } from "@/app/actions/packages"
 import { listPendingPrintOrders } from "@/app/actions/print-orders"
 import { listShoots } from "@/app/actions/shoots"
-import { listStandardPrintProductsAdmin } from "@/app/actions/standard-vault-print"
+import { listStandardPrintProductsAdmin, listWhccCatalogProductsAdmin } from "@/app/actions/standard-vault-print"
 import { OperationsDashboard } from "@/components/admin/operations/operations-dashboard"
 import { PrintFulfillmentQueue } from "@/components/admin/print-fulfillment-queue"
 import { StandardPrintCatalogManager } from "@/components/admin/standard-print-catalog-manager"
@@ -15,11 +15,12 @@ export const metadata: Metadata = {
 }
 
 export default async function AdminOperationsPage() {
-  const [shoots, pendingPrintOrders, packages, standardPrintProducts] = await Promise.all([
+  const [shoots, pendingPrintOrders, packages, standardPrintProducts, whccCatalog] = await Promise.all([
     listShoots(),
     listPendingPrintOrders(),
     listActivePackages(),
     listStandardPrintProductsAdmin(),
+    listWhccCatalogProductsAdmin(),
   ])
 
   const now = new Date()
@@ -34,7 +35,7 @@ export default async function AdminOperationsPage() {
       monthKey={monthKey}
       monthLabel={monthLabel}
       todayKey={todayKey}
-      printCatalog={<StandardPrintCatalogManager initialProducts={standardPrintProducts} />}
+      printCatalog={<StandardPrintCatalogManager initialProducts={standardPrintProducts} initialCatalog={whccCatalog} />}
       printQueue={<PrintFulfillmentQueue initialOrders={pendingPrintOrders} />}
     />
   )

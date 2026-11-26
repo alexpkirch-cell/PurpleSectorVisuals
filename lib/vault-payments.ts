@@ -1,10 +1,12 @@
 import "server-only"
 
 import type Stripe from "stripe"
+import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
 import { advanceShootForVault } from "@/lib/shoot-booking"
 import { getStripeClient } from "@/lib/stripe"
+import { CLIENT_VAULT_LOGIN_URL } from "@/lib/site-url"
 
 /**
  * Persists a paid retainer checkout: flips deposit_paid, vaults the card
@@ -78,6 +80,64 @@ export async function recordDepositPayment(vaultId: string, session: Stripe.Chec
 
 export type BalancePaymentMethod = "stripe" | "cash" | "check" | "external_transfer"
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character] ?? character)
+}
+
+async function sendBalancePaidConfirmation(vaultId: string) {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  const domain = process.env.RESEND_EMAIL_DOMAIN?.trim().replace(/^@/, "")
+  if (!apiKey || !domain) return
+
+  const { rows } = await sql<{
+    client_name: string | null
+    client_email: string | null
+    pin_code: string
+    balance_confirmation_email_sent_at: string | null
+  }>`
+    SELECT COALESCE(NULLIF(BTRIM(s.client_name), ''), NULLIF(BTRIM(v.client_name), ''), 'Client') AS client_name,
+           COALESCE(NULLIF(BTRIM(s.client_email), ''), NULLIF(BTRIM(b.email), '')) AS client_email,
+           v.pin_code, v.balance_confirmation_email_sent_at
+    FROM vaults v
+    LEFT JOIN shoots s ON s.id = v.shoot_id
+    LEFT JOIN booking_requests b ON b.id = v.booking_request_id
+    WHERE v.id = ${vaultId} AND v.balance_paid = true
+    LIMIT 1
+  `
+  const vault = rows[0]
+  if (!vault?.client_email || vault.balance_confirmation_email_sent_at) return
+
+  const name = vault.client_name ?? "Client"
+  const safeName = escapeHtml(name)
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `vault-balance-paid-${vaultId}`,
+      },
+      body: JSON.stringify({
+        from: `Purple Sector Visuals <vault@${domain}>`,
+        to: [vault.client_email],
+        subject: "Your gallery is ready",
+        html: `<p>Hi ${safeName},</p><p>Your remaining balance has been received. Your full-resolution gallery and print ordering are now unlocked.</p><p>Sign in at <a href="${CLIENT_VAULT_LOGIN_URL}">your client vault</a> using your name and six-digit passcode.</p><p>Username: <strong>${safeName}</strong><br>Passcode: <strong>${escapeHtml(vault.pin_code)}</strong></p>`,
+        text: `Hi ${name}, your remaining balance has been received. Your full-resolution gallery and print ordering are unlocked. Sign in at ${CLIENT_VAULT_LOGIN_URL} using your name and six-digit passcode. Username: ${name}. Passcode: ${vault.pin_code}.`,
+      }),
+    })
+    if (!response.ok) {
+      console.error("[v0] Balance confirmation email failed with status", response.status)
+      return
+    }
+    await sql`
+      UPDATE vaults SET balance_confirmation_email_sent_at = COALESCE(balance_confirmation_email_sent_at, now())
+      WHERE id = ${vaultId} AND balance_paid = true
+    `
+  } catch (error) {
+    console.error("[v0] Balance confirmation email failed:", error)
+  }
+}
+
 /**
  * Marks a vault's second 50% payment as received, which unlocks the full-resolution gallery. Safe to call repeatedly
  * (webhook, client poll, admin action): only the first call that flips the flag writes the payment log row and marks
@@ -108,13 +168,15 @@ export async function recordBalancePayment(
 
   const flipped = rows[0]
   if (!flipped) {
-    // Already paid: just attach the Stripe payment intent if the first confirmation did not have it yet.
+    // Replayed webhook or client poll: attach the intent and retry any unsent confirmation email.
     if (paymentIntentId) {
       await sql`
         UPDATE vaults SET balance_payment_intent_id = COALESCE(balance_payment_intent_id, ${paymentIntentId})
         WHERE id = ${vaultId}
       `
     }
+    await markShootDeliveredIfBalancePaid(vaultId)
+    await sendBalancePaidConfirmation(vaultId)
     return { alreadyPaid: true as const }
   }
 
@@ -125,10 +187,32 @@ export async function recordBalancePayment(
       ${paymentIntentId}, ${options.note ?? null}, ${options.recordedBy ?? null}
     )
   `
-  if (flipped.shoot_id) {
-    await sql`UPDATE shoots SET is_paid = true WHERE id = ${flipped.shoot_id}`
-  }
+  await markShootDeliveredIfBalancePaid(vaultId)
+  await sendBalancePaidConfirmation(vaultId)
   return { alreadyPaid: false as const }
+}
+
+async function markShootDeliveredIfBalancePaid(vaultId: string) {
+  const { rows } = await sql<{ shoot_id: string | null }>`
+    SELECT shoot_id FROM vaults WHERE id = ${vaultId} AND balance_paid = true LIMIT 1
+  `
+  const shootId = rows[0]?.shoot_id
+  if (!shootId) return
+
+  await sql`
+    UPDATE shoots SET
+      is_paid = true,
+      final_amount = CASE
+        WHEN status = 'ready_for_delivery' THEN COALESCE(final_amount, total_price, (SELECT final_quoted_fee FROM vaults WHERE id = ${vaultId}))
+        ELSE final_amount
+      END,
+      status = CASE WHEN status = 'ready_for_delivery' THEN 'delivered_settled' ELSE status END
+    WHERE id = ${shootId}
+  `
+  revalidatePath("/admin")
+  revalidatePath("/admin/operations")
+  revalidatePath("/admin/financials")
+  revalidatePath("/vault")
 }
 
 export type OffSessionChargeResult = { success: true; paymentIntentId: string } | { success: false; error: string }

@@ -24,17 +24,33 @@ export interface VaultPhotoView {
   downloadUrl: string | null
 }
 
+export type StandardPrintCategory = "photographic" | "fine_art" | "canvas_wall" | "displays"
+
 export interface StandardVaultPrintProduct {
   id: string
   name: string
   price_cents: number
+  whcc_product_id: string
+  catalog_product_name: string | null
+  category_ref: string | null
+  category_name: string | null
+  client_category: StandardPrintCategory
+  size_value: string | null
+  size_label: string | null
+  surface_value: string | null
+  surface_label: string | null
+  print_width: number | null
+  print_height: number | null
 }
 
 export interface VaultDeliveryData {
   photos: VaultPhotoView[]
+  photoCount: number
   printProducts: StandardVaultPrintProduct[]
   /** The second 50% payment is outstanding: photos are watermarked previews with no download or print access. */
   locked: boolean
+  /** Whether a payment method was saved during retainer checkout. */
+  hasSavedCard: boolean
   /** Dollars owed to unlock; 0 when unlocked. */
   balanceDue: number
 }
@@ -226,17 +242,24 @@ export async function getDeliveryPhotos(vaultId: string): Promise<VaultDeliveryD
   const [photoRows, printProducts, balance] = await Promise.all([
     selectVaultPhotos(vaultId),
     sql<StandardVaultPrintProduct>`
-      SELECT id, name, price_cents
-      FROM public.whcc_print_products
-      WHERE is_active = true
-      ORDER BY sort_order ASC, name ASC
+      SELECT id, name, price_cents, whcc_product_id, catalog_product_name, category_ref, category_name,
+             client_category, size_value, size_label, surface_value, surface_label, print_width, print_height
+      FROM public.whcc_print_products AS product
+      WHERE product.is_active = true
+        AND (product.category_ref IS NULL OR EXISTS (
+          SELECT 1 FROM public.whcc_catalog_products AS catalog
+          WHERE catalog.ref = product.whcc_product_id AND catalog.is_available = true AND catalog.completion = 'api'
+        ))
+      ORDER BY product.sort_order ASC, product.name ASC
     `.then((result) => result.rows),
     getDeliveryBalanceState(vaultId),
   ])
   return {
-    photos: await toPhotoViews(photoRows, balance.locked ? { watermarkedForVaultId: vaultId } : undefined),
+    photos: balance.locked ? [] : await toPhotoViews(photoRows),
+    photoCount: photoRows.length,
     printProducts: balance.locked ? [] : printProducts,
     locked: balance.locked,
+    hasSavedCard: balance.hasSavedCard,
     balanceDue: balance.balanceDue,
   }
 }

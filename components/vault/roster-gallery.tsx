@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react"
 import JSZip from "jszip"
-import { ArrowLeft, Download, ImageOff, LockKeyhole, ShieldCheck, ShoppingCart } from "lucide-react"
+import { ArrowLeft, Download, ImageOff, LockKeyhole, LogOut, ShieldCheck, ShoppingCart } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
-import type { RosterGalleryPhoto, RosterGalleryView } from "@/app/actions/roster-vault"
+import { logoutRosterVault, type RosterGalleryPhoto, type RosterGalleryView } from "@/app/actions/roster-vault"
 import { startRosterGalleryCheckout, startRosterPhotoCheckout } from "@/app/actions/roster-vault-payments"
 import { Button } from "@/components/ui/button"
 import { RosterPrintOrderDialog } from "@/components/vault/roster-print-order-dialog"
@@ -111,14 +111,28 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
     })
   }
 
+  function signOut() {
+    startTransition(async () => {
+      await logoutRosterVault()
+      router.replace("/vault/roster")
+      router.refresh()
+    })
+  }
+
   return (
     <div className="min-h-svh bg-[#09090b] text-zinc-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-20 pt-28 sm:px-8 sm:pt-32">
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800 pb-6">
           <div className="flex flex-col gap-3">
-            <Link href="/vault/roster" className="inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fuchsia-400">
-              <ArrowLeft className="size-4" aria-hidden="true" /> Back to roster
-            </Link>
+            {view.viewerIsPlayer ? (
+              <Button type="button" variant="outline" size="sm" className="w-fit" onClick={signOut} disabled={pending}>
+                <LogOut className="size-4" aria-hidden="true" /> Sign out
+              </Button>
+            ) : (
+              <Link href="/vault/roster" className="inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-fuchsia-400">
+                <ArrowLeft className="size-4" aria-hidden="true" /> Back to roster
+              </Link>
+            )}
             <StatusBadge view={view} />
             <p className="text-sm text-zinc-500">{view.teamName} <span className="px-1.5 text-zinc-700">/</span> {isTeamFolder ? "TEAM FOLDER" : "PLAYER GALLERY"}</p>
             <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{view.title}</h1>
@@ -130,7 +144,9 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
                   ? "browse the watermarked proofs while your team finishes its package payment"
                   : unlockedPhotos.length > 0
                     ? `${unlockedPhotos.length} of ${view.photos.length} photos unlocked`
-                    : "preview the watermarked proofs, then unlock the high-resolution files"}
+                    : view.viewerIsPlayer
+                      ? "preview the proofs; your team organizer controls access to original files"
+                      : "preview the watermarked proofs, then unlock the high-resolution files"}
             </p>
           </div>
 
@@ -151,7 +167,7 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
                 {downloading ? "Preparing high-res files…" : `Download purchased (${unlockedPhotos.length})`}
               </Button>
             ) : null}
-            {view.playerId ? (
+            {view.playerId && !view.viewerIsPlayer ? (
               <RosterPrintOrderDialog
                 gallery={{ playerId: view.playerId, playerName: view.title, photos: view.photos, printProducts: view.printProducts }}
               />
@@ -202,7 +218,7 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
         )}
 
         <p className="flex items-center justify-center gap-2 border-t border-zinc-900 pt-5 text-xs text-zinc-600">
-          <LockKeyhole className="size-3.5" aria-hidden="true" /> Private gallery — high-resolution files are only released to this signed-in team member after purchase or team payment.
+          <LockKeyhole className="size-3.5" aria-hidden="true" /> Private gallery — original files unlock after a parent purchase or team payment.
         </p>
       </div>
     </div>

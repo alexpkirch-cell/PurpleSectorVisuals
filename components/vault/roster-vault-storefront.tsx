@@ -39,7 +39,7 @@ const OPEN_LINK_CLASS = cn(
 export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const firstName = data.parentName.split(/\s+/)[0]
+  const firstName = data.parentName === data.teamName ? null : data.parentName.split(/\s+/)[0]
 
   function signOut() {
     startTransition(async () => {
@@ -65,7 +65,7 @@ export function RosterVaultStorefront({ data }: { data: RosterVaultData }) {
             </div>
             <p className="text-sm text-zinc-500">PURPLE SECTOR VISUALS <span className="px-1.5 text-zinc-700">/</span> MEDIA DAY</p>
             <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{data.teamName}</h1>
-            <p className="text-sm text-zinc-400">Welcome, {firstName}. {modeSummary}</p>
+            <p className="text-sm text-zinc-400">{firstName ? `Welcome, ${firstName}. ` : `Welcome to ${data.teamName}. `}{modeSummary}</p>
           </div>
           <Button type="button" variant="outline" onClick={signOut} disabled={pending} className="border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900 hover:text-white">
             <LogOut className="size-4" aria-hidden="true" />

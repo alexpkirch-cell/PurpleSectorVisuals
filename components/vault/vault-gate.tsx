@@ -18,7 +18,7 @@ export function VaultGate({ code }: { code: string }) {
             <span className="font-heading text-xs font-bold tracking-[0.18em] text-zinc-500">PURPLE SECTOR VISUALS</span>
             <h1 className="font-heading text-xl font-medium text-zinc-50">Unlock your vault</h1>
             <p className="text-sm leading-relaxed text-zinc-400">
-              Confirm the email on your booking and the 6-digit access code we sent you to view your gallery.
+              Enter the name or username on your booking and the 6-digit passcode to view your gallery.
             </p>
           </div>
         </div>

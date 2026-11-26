@@ -9,7 +9,12 @@ import { sql } from "@/lib/db"
 export async function allocateVaultPin(): Promise<string> {
   for (let attempt = 0; attempt < 20; attempt++) {
     const pin = String(randomInt(1, 1_000_000)).padStart(6, "0")
-    const { rows } = await sql<{ id: string }>`SELECT id FROM vaults WHERE pin_code = ${pin} LIMIT 1`
+    const { rows } = await sql<{ id: string }>`
+      SELECT id FROM vaults WHERE pin_code = ${pin}
+      UNION ALL
+      SELECT id FROM shoots WHERE vault_access_code = ${pin}
+      LIMIT 1
+    `
     if (rows.length === 0) return pin
   }
   throw new Error("Couldn't allocate a unique vault PIN. Please try again.")

@@ -7,7 +7,7 @@ import { KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { authenticateVaultWithEmailPin, type VaultAuthState } from "@/app/(public)/vault/actions"
+import { authenticateVaultWithNamePin, type VaultAuthState } from "@/app/(public)/vault/actions"
 
 // Lets anyone preview the vault gallery flow without a real booking.
 const DEMO_EMAIL = "demo@purplesectorvisuals.com"
@@ -17,15 +17,15 @@ export function VaultLoginForm({ defaultPin = "" }: { defaultPin?: string }) {
   const router = useRouter()
 
   async function submitAction(prevState: VaultAuthState, formData: FormData): Promise<VaultAuthState> {
-    const email = String(formData.get("email") ?? "").trim().toLowerCase()
+    const username = String(formData.get("username") ?? "").trim().toLowerCase()
     const pin = String(formData.get("pin") ?? "").trim()
 
-    if (email === DEMO_EMAIL && pin === DEMO_PIN) {
+    if (username === DEMO_EMAIL && pin === DEMO_PIN) {
       router.push("/vault/demo")
       return {}
     }
 
-    return authenticateVaultWithEmailPin(prevState, formData)
+    return authenticateVaultWithNamePin(prevState, formData)
   }
 
   const [state, action, isPending] = useActionState(submitAction, {})
@@ -33,17 +33,17 @@ export function VaultLoginForm({ defaultPin = "" }: { defaultPin?: string }) {
   return (
     <form action={action} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email address</Label>
+        <Label htmlFor="username">Name / Username</Label>
         <Input
-          id="email"
-          name="email"
-          type="email"
-          placeholder="you@example.com"
+          id="username"
+          name="username"
+          type="text"
+          placeholder="Name on your booking"
           required
-          autoComplete="email"
+          autoComplete="username"
           autoFocus
         />
-        <p className="text-xs text-zinc-500">The email you used when you booked.</p>
+        <p className="text-xs text-zinc-500">Use the name on your booking or its email address.</p>
       </div>
 
       <div className="flex flex-col gap-1.5">

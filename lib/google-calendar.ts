@@ -68,7 +68,7 @@ export async function syncShootToGoogleCalendar(shootId: string): Promise<Calend
     const window = calendarEventWindow(shoot)
     if (!window) return { status: "skipped", reason: "no_date" }
 
-    const vaultUrl = shoot.vault_pin_code ? clientVaultUrl(shoot.vault_pin_code) : null
+    const vaultUrl = shoot.vault_pin_code ? clientVaultUrl() : null
 
     const event: calendar_v3.Schema$Event = {
       summary: calendarEventTitle(shoot),

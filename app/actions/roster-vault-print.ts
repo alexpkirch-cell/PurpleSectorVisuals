@@ -41,6 +41,7 @@ export async function startRosterPrintCheckout(input: {
 }): Promise<RosterPrintCheckoutResult> {
   const parentSession = await getRosterVaultSession()
   if (!parentSession) return { success: false, error: "Your team session expired. Sign in again to continue." }
+  if (parentSession.player_id) return { success: false, error: "Player accounts cannot order prints." }
   if (!isUuid(input.playerId) || !isUuid(input.idempotencyKey)) {
     return { success: false, error: "The print selection is invalid. Refresh the gallery and try again." }
   }
@@ -273,7 +274,7 @@ export async function startRosterPrintCheckout(input: {
 
 export async function confirmRosterPrintCheckout(playerId: string, checkoutSessionId: string) {
   const parentSession = await getRosterVaultSession()
-  if (!parentSession || !isUuid(playerId) || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return "invalid" as const
+  if (!parentSession || parentSession.player_id || !isUuid(playerId) || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return "invalid" as const
 
   try {
     const checkout = await getStripeClient().checkout.sessions.retrieve(checkoutSessionId)

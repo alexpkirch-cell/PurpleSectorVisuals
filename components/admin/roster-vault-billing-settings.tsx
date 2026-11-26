@@ -29,7 +29,7 @@ const MODE_OPTIONS: { value: BillingMode; title: string; description: string }[]
     value: "all_inclusive",
     title: "All-Inclusive Team Buyout",
     description:
-      "The team pays up front. Once the team's 50% balance is marked paid, anyone with the team code downloads every player folder and the team folder for free. WHCC prints stay optional.",
+      "The team pays up front. Once the team's 50% balance is marked paid, anyone signed in with the master Team / Event Name and passcode can download every player folder and the team folder. WHCC prints stay optional.",
   },
 ]
 
@@ -174,7 +174,7 @@ export function RosterVaultBillingSettings({
           </div>
           <p className="text-xs text-muted-foreground">
             {team.balance_paid
-              ? `Paid by ${BALANCE_METHOD_LABELS[team.balance_payment_method ?? ""] ?? "unknown method"}${team.balance_paid_at ? ` on ${formatPaidDate(team.balance_paid_at)}` : ""}. Every player folder and the team folder download free for anyone with the team code.`
+              ? `Paid by ${BALANCE_METHOD_LABELS[team.balance_payment_method ?? ""] ?? "unknown method"}${team.balance_paid_at ? ` on ${formatPaidDate(team.balance_paid_at)}` : ""}. Every player folder and the team folder download free for anyone signed in with the master Team / Event Name and passcode.`
               : "Until this is marked paid, parents only see watermarked proofs. Marking it paid unlocks free downloads for the whole team."}
           </p>
           <BalancePaymentDialog

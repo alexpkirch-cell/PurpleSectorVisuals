@@ -111,16 +111,6 @@ export interface ShootPhoto {
   created_at: string
 }
 
-const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789" // no ambiguous chars (0/O, 1/I/L)
-
-function generateVaultCode() {
-  let code = ""
-  for (let i = 0; i < 4; i++) {
-    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
-  }
-  return `PS-${code}`
-}
-
 async function requireAdmin() {
   const supabase = await createClient()
   const {
@@ -172,16 +162,7 @@ export async function createShootInquiry(formData: {
   const selectedAddons = packageQuote?.selectedAddOns.map((addon) => ({ label: addon.name, amount: addon.price })) ?? []
   const schedule = packageQuote?.quote ?? computeQuote({ basePrice: 0, addons: [], discountType: "fixed", discountValue: 0 })
 
-  let vaultAccessCode = generateVaultCode()
-
-  // Guard against the rare collision on the unique code.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { rows } = await sql<{ id: string }>`
-      SELECT id FROM shoots WHERE vault_access_code = ${vaultAccessCode}
-    `
-    if (rows.length === 0) break
-    vaultAccessCode = generateVaultCode()
-  }
+  const vaultAccessCode = await allocateVaultPin()
 
   const { rows } = await sql<{ id: string }>`
     INSERT INTO shoots (
@@ -312,14 +293,7 @@ export async function createManualBooking(input: {
   const status: ShootStatus = startingStage
   const driverReimbursement = Math.max(0, Number(input.driverReimbursement) || 0)
 
-  let vaultAccessCode = generateVaultCode()
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { rows } = await sql<{ id: string }>`
-      SELECT id FROM shoots WHERE vault_access_code = ${vaultAccessCode}
-    `
-    if (rows.length === 0) break
-    vaultAccessCode = generateVaultCode()
-  }
+  const vaultAccessCode = await allocateVaultPin()
 
   const { rows: inserted } = await sql<{ id: string }>`
     INSERT INTO shoots (
@@ -340,7 +314,7 @@ export async function createManualBooking(input: {
     RETURNING id
   `
   const shootId = inserted[0].id
-  const pinCode = await allocateVaultPin()
+  const pinCode = vaultAccessCode
   const balancePaid = balanceAmount === 0
 
   await sql`
@@ -750,16 +724,24 @@ export async function generateVaultAndAdvance(id: string): Promise<Shoot> {
       : standardSplit.deposit
   const balanceAmount = isComped ? 0 : roundMoney(Math.max(totalQuote - depositAmount, 0))
 
-  const { rows: existingVaultRows } = await sql<{ id: string; countersigned_at: string | null }>`
-    SELECT id, countersigned_at FROM vaults WHERE shoot_id = ${id}
+  const { rows: existingVaultRows } = await sql<{ id: string; pin_code: string; countersigned_at: string | null }>`
+    SELECT id, pin_code, countersigned_at FROM vaults WHERE shoot_id = ${id}
   `
   if (existingVaultRows[0]?.countersigned_at) {
     throw new Error("This agreement is countersigned and locked, so its vault can't be regenerated.")
   }
 
+  const existingPin = existingVaultRows[0]?.pin_code
+  const pinCode = existingPin && /^\d{6}$/.test(existingPin)
+    ? existingPin
+    : /^\d{6}$/.test(shoot.vault_access_code ?? "")
+      ? shoot.vault_access_code
+      : await allocateVaultPin()
+
   if (existingVaultRows.length > 0) {
     await sql`
       UPDATE vaults SET
+        pin_code = ${pinCode},
         deposit_amount = ${depositAmount},
         balance_amount = ${balanceAmount},
         final_quoted_fee = ${totalQuote},
@@ -772,7 +754,6 @@ export async function generateVaultAndAdvance(id: string): Promise<Shoot> {
       WHERE shoot_id = ${id}
     `
   } else {
-    const pinCode = await allocateVaultPin()
     await sql`
       INSERT INTO vaults (
         shoot_id, pin_code, status, deposit_paid, deposit_paid_at, deposit_payment_method,
@@ -796,6 +777,7 @@ export async function generateVaultAndAdvance(id: string): Promise<Shoot> {
       selected_addons = ${JSON.stringify(selectedAddons)},
       total_price = ${totalQuote},
       base_price = ${totalQuote},
+      vault_access_code = ${pinCode},
       is_comped = ${isComped},
       deposit_amount = ${depositAmount},
       balance_amount = ${balanceAmount},
