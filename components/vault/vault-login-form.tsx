@@ -18,7 +18,7 @@ export function VaultLoginForm({ defaultPin = "" }: { defaultPin?: string }) {
 
   async function submitAction(prevState: VaultAuthState, formData: FormData): Promise<VaultAuthState> {
     const username = String(formData.get("username") ?? "").trim().toLowerCase()
-    const pin = String(formData.get("pin") ?? "").trim()
+    const pin = String(formData.get("pin") ?? "").replace(/\D/g, "")
 
     if (username === DEMO_EMAIL && pin === DEMO_PIN) {
       router.push("/vault/demo")
@@ -38,22 +38,24 @@ export function VaultLoginForm({ defaultPin = "" }: { defaultPin?: string }) {
           id="username"
           name="username"
           type="text"
-          placeholder="Name on your booking"
+          placeholder="Booking, team / event, or player name"
           required
+          maxLength={254}
           autoComplete="username"
           autoFocus
         />
-        <p className="text-xs text-zinc-500">Use the name on your booking or its email address.</p>
+        <p className="text-xs text-zinc-500">
+          Use the name on your booking (or its email), your Team / Event name, or your player name. Capitalization does not matter.
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="pin">6-digit access code</Label>
+        <Label htmlFor="pin">6-digit passcode</Label>
         <Input
           id="pin"
           name="pin"
           inputMode="numeric"
-          pattern="[0-9]{6}"
-          maxLength={6}
+          maxLength={16}
           defaultValue={/^\d{6}$/.test(defaultPin) ? defaultPin : ""}
           placeholder="123456"
           autoComplete="one-time-code"
