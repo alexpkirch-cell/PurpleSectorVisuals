@@ -13,7 +13,7 @@ type PhotoChoice = { productId: string; quantity: number }
 type PrintGallery = {
   playerId: string
   playerName: string
-  /** Thumbnails shown in the picker; watermarked proofs are fine because WHCC prints are fulfilled from the originals server-side. */
+  /** Unlocked photos only; WHCC prints are fulfilled from the originals server-side. */
   photos: { id: string; altText: string; imageUrl: string }[]
   printProducts: { id: string; name: string; price_cents: number }[]
 }
@@ -68,7 +68,7 @@ export function RosterPrintOrderDialog({ gallery }: { gallery: PrintGallery }) {
           <Printer data-icon="inline-start" /> Order Professional Prints
         </Button>
         <span className="text-center text-xs text-muted-foreground">
-          {gallery.photos.length === 0 ? "Prints are available when gallery photos are ready." : "Print options are not configured for this team yet."}
+          {gallery.photos.length === 0 ? "Prints are available once your photos are unlocked." : "Print options are not configured for this team yet."}
         </span>
       </div>
     )

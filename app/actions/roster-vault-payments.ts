@@ -6,8 +6,8 @@ import { getRosterVaultSession } from "@/app/actions/roster-vault"
 import { sql } from "@/lib/db"
 import { PUBLIC_SITE_ORIGIN } from "@/lib/site-url"
 import { getStripeClient, logStripeError } from "@/lib/stripe"
-import { getRosterTeamBilling, hasPaidPlayerBundle } from "@/lib/roster-vault-access"
-import { recordRosterVaultGalleryPayment, recordRosterVaultPhotoPayment } from "@/lib/roster-vault-payments"
+import { getRosterTeamBilling } from "@/lib/roster-vault-access"
+import { recordRosterVaultGalleryPayment } from "@/lib/roster-vault-payments"
 
 export type RosterCheckoutResult =
   | { success: true; paid: true; url?: never }
@@ -21,8 +21,8 @@ export async function startRosterGalleryCheckout(playerId: string): Promise<Rost
   if (parentSession.player_id) return { success: false, error: "Player accounts can view their own gallery but cannot start purchases." }
 
   const billing = await getRosterTeamBilling(parentSession.team_id)
-  if (billing.mode === "all_inclusive") {
-    return { success: false, error: "Digital downloads are included with this team's package. Nothing to purchase." }
+  if (billing.mode !== "parent_pay") {
+    return { success: false, error: "Digital downloads are handled through this team's package. Nothing to purchase." }
   }
 
   try {
@@ -176,158 +176,6 @@ export async function confirmRosterGalleryCheckout(playerId: string, checkoutSes
     return recordRosterVaultGalleryPayment(checkout)
   } catch (error) {
     logStripeError("roster gallery checkout confirmation failed", error)
-    return false
-  }
-}
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * Parent Pay teams: one hosted Checkout for a single high-resolution download. The price is the team's single-photo
- * price read from the database; the browser only names the photo.
- */
-export async function startRosterPhotoCheckout(input: { photoKind: "player" | "team"; photoId: string }): Promise<RosterCheckoutResult> {
-  const parentSession = await getRosterVaultSession()
-  if (!parentSession) return { success: false, error: "Your team session expired. Sign in again to continue." }
-  if (parentSession.player_id) return { success: false, error: "Player accounts cannot start purchases." }
-  if ((input.photoKind !== "player" && input.photoKind !== "team") || !UUID_PATTERN.test(input.photoId)) {
-    return { success: false, error: "That photo is not available." }
-  }
-
-  const billing = await getRosterTeamBilling(parentSession.team_id)
-  if (billing.mode !== "parent_pay") {
-    return { success: false, error: "Digital downloads are included with this team's package. Nothing to purchase." }
-  }
-  if (!billing.singlePhotoPriceCents) {
-    return { success: false, error: "Single-photo downloads are not available for this team. Ask your organizer about the full gallery." }
-  }
-
-  try {
-    let playerId: string | null = null
-    let description: string
-    if (input.photoKind === "player") {
-      const { rows } = await sql<{ player_id: string; display_name: string }>`
-        SELECT ph.player_id, p.display_name
-        FROM public.roster_vault_player_photos ph
-        JOIN public.roster_vault_players p ON p.id = ph.player_id
-        WHERE ph.id = ${input.photoId} AND p.team_id = ${parentSession.team_id} AND p.is_active = true
-        LIMIT 1
-      `
-      const photo = rows[0]
-      if (!photo) return { success: false, error: "That photo is not available in this team roster." }
-      playerId = photo.player_id
-      description = `${photo.display_name} — single photo download`
-      if (await hasPaidPlayerBundle(parentSession.id, parentSession.team_id, photo.player_id)) {
-        return { success: true, paid: true }
-      }
-    } else {
-      const { rows } = await sql<{ id: string }>`
-        SELECT id FROM public.roster_vault_team_photos WHERE id = ${input.photoId} AND team_id = ${parentSession.team_id} LIMIT 1
-      `
-      if (!rows[0]) return { success: false, error: "That photo is not available in this team folder." }
-      description = `${parentSession.team_name} — team photo download`
-    }
-
-    const stripe = getStripeClient()
-    const { rows: existingRows } = await sql<{
-      id: string
-      status: string
-      amount_cents: number
-      stripe_session_id: string | null
-    }>`
-      SELECT id, status, amount_cents, stripe_session_id
-      FROM public.roster_vault_photo_orders
-      WHERE buyer_session_id = ${parentSession.id} AND photo_kind = ${input.photoKind} AND photo_id = ${input.photoId}
-      LIMIT 1
-    `
-    const existing = existingRows[0]
-    if (existing?.status === "paid") return { success: true, paid: true }
-
-    if (existing?.status === "pending" && existing.stripe_session_id) {
-      const openSession = await stripe.checkout.sessions.retrieve(existing.stripe_session_id)
-      if (openSession.status === "open" && existing.amount_cents === billing.singlePhotoPriceCents && openSession.url) {
-        return { success: true, paid: false, url: openSession.url }
-      }
-      if (openSession.status === "complete") {
-        if (await recordRosterVaultPhotoPayment(openSession)) return { success: true, paid: true }
-        return { success: false, error: "Payment is processing. Refresh this page in a moment." }
-      }
-      if (openSession.status === "open") await stripe.checkout.sessions.expire(openSession.id)
-    }
-
-    const attemptKey = randomUUID()
-    const { rows: orderRows } = await sql<{ id: string; checkout_attempt_key: string }>`
-      INSERT INTO public.roster_vault_photo_orders (
-        team_id, buyer_session_id, photo_kind, photo_id, player_id, amount_cents, currency, status, checkout_attempt_key
-      ) VALUES (
-        ${parentSession.team_id}, ${parentSession.id}, ${input.photoKind}, ${input.photoId}, ${playerId},
-        ${billing.singlePhotoPriceCents}, 'usd', 'pending', ${attemptKey}::uuid
-      )
-      ON CONFLICT (buyer_session_id, photo_kind, photo_id) DO UPDATE SET
-        amount_cents = EXCLUDED.amount_cents, status = 'pending', stripe_session_id = NULL, stripe_payment_intent_id = NULL,
-        paid_at = NULL, checkout_attempt_key = EXCLUDED.checkout_attempt_key, created_at = now()
-      WHERE roster_vault_photo_orders.status <> 'paid'
-      RETURNING id, checkout_attempt_key
-    `
-    const order = orderRows[0]
-    if (!order) return { success: true, paid: true }
-
-    const returnPath = playerId ? `/vault/roster/${playerId}` : "/vault/roster/team"
-    const metadata = {
-      kind: "roster_photo",
-      rosterPhotoOrderId: order.id,
-      photoKind: input.photoKind,
-      photoId: input.photoId,
-      teamId: parentSession.team_id,
-      rosterSessionId: parentSession.id,
-      checkoutAttemptKey: order.checkout_attempt_key,
-    }
-    const checkout = await stripe.checkout.sessions.create({
-      ui_mode: "hosted_page",
-      mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: description, description: "High-resolution, watermark-free digital download" },
-          unit_amount: billing.singlePhotoPriceCents,
-        },
-        quantity: 1,
-      }],
-      success_url: `${PUBLIC_SITE_ORIGIN}${returnPath}?photo_session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${PUBLIC_SITE_ORIGIN}${returnPath}`,
-      metadata,
-      payment_intent_data: { metadata },
-    }, { idempotencyKey: `roster-photo-${order.id}-${order.checkout_attempt_key}` })
-
-    await sql`
-      UPDATE public.roster_vault_photo_orders SET stripe_session_id = ${checkout.id}
-      WHERE id = ${order.id} AND checkout_attempt_key = ${order.checkout_attempt_key}::uuid
-    `
-    if (!checkout.url) return { success: false, error: "Stripe did not return a checkout link." }
-    return { success: true, paid: false, url: checkout.url }
-  } catch (error) {
-    logStripeError("roster photo checkout failed", error)
-    return { success: false, error: "Could not start checkout. Please try again." }
-  }
-}
-
-/** Confirms a returned single-photo Checkout so the download unlocks even if the webhook has not landed yet. */
-export async function confirmRosterPhotoCheckout(checkoutSessionId: string) {
-  const parentSession = await getRosterVaultSession()
-  if (!parentSession || parentSession.player_id || !/^cs_(test|live)_[A-Za-z0-9]+$/.test(checkoutSessionId)) return false
-
-  try {
-    const checkout = await getStripeClient().checkout.sessions.retrieve(checkoutSessionId)
-    const metadata = checkout.metadata
-    if (
-      metadata?.kind !== "roster_photo" ||
-      metadata.teamId !== parentSession.team_id ||
-      metadata.rosterSessionId !== parentSession.id
-    ) return false
-
-    return recordRosterVaultPhotoPayment(checkout)
-  } catch (error) {
-    logStripeError("roster photo checkout confirmation failed", error)
     return false
   }
 }

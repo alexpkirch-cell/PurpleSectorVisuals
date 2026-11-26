@@ -47,7 +47,7 @@ export interface VaultDeliveryData {
   photos: VaultPhotoView[]
   photoCount: number
   printProducts: StandardVaultPrintProduct[]
-  /** The second 50% payment is outstanding: photos are watermarked previews with no download or print access. */
+  /** The second 50% payment is outstanding: no photos, downloads, or print products are returned, only the count. */
   locked: boolean
   /** Whether a payment method was saved during retainer checkout. */
   hasSavedCard: boolean
@@ -66,22 +66,9 @@ interface VaultPhotoRow {
   size_bytes: string | number | null
 }
 
-async function toPhotoViews(rows: VaultPhotoRow[], options?: { watermarkedForVaultId?: string }): Promise<VaultPhotoView[]> {
+/** Signs clean files. Callers must only pass photos the viewer is allowed to see: locked galleries are never signed. */
+async function toPhotoViews(rows: VaultPhotoRow[]): Promise<VaultPhotoView[]> {
   if (rows.length === 0) return []
-
-  // Locked galleries never receive a signed URL for any stored file: previews come from the watermark route.
-  if (options?.watermarkedForVaultId) {
-    const vaultId = options.watermarkedForVaultId
-    return rows.map((row) => ({
-      id: row.id,
-      fileName: row.file_name,
-      width: row.width,
-      height: row.height,
-      sizeBytes: null,
-      thumbUrl: `/api/vault-delivery/${vaultId}/preview/${row.id}`,
-      downloadUrl: null,
-    }))
-  }
 
   const [display, originals] = await Promise.all([
     signStoragePaths(rows.map((row) => ({ bucket: row.bucket, path: row.thumb_path ?? row.storage_path }))),

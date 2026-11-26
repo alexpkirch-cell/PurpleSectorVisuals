@@ -34,7 +34,7 @@ export const TRACKER_NODES: readonly TrackerNode[] = [
     id: "delivered",
     label: "Delivered",
     headline: "Your gallery is ready",
-    detail: "Your photos are ready. Head to Final Delivery for watermarked proofs and any balance due.",
+    detail: "Your photos are ready. Head to Final Delivery to see them, or to pay any remaining balance that unlocks your gallery.",
   },
 ]
 
