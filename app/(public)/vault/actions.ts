@@ -5,28 +5,34 @@ import { redirect } from "next/navigation"
 
 import { sql } from "@/lib/db"
 import { getClientIp } from "@/lib/request-ip"
+import { startRosterSession, verifyRosterPlayerLogin, verifyRosterTeamLogin } from "@/lib/roster-vault-login"
 import { isVaultLoginBlocked, recordVaultLoginAttempt, VAULT_LOCKOUT_MESSAGE } from "@/lib/vault-throttle"
 import { grantVaultSession } from "@/lib/vault-session"
 
 export type VaultAuthState = { error?: string }
 
+const NO_MATCH_MESSAGE = "That name/username and 6-digit passcode don't match an active vault. Double-check and try again."
+
 /**
- * Client vault login: the booking email and the 6-digit access code must both match the
- * same vault. On success a signed session cookie is set and the client lands in
- * their vault. Repeated misses lock the email (and the IP) out for a few minutes.
+ * One sign-in for every kind of vault. The name/username and 6-digit passcode are checked in order against:
+ *   1. individual client bookings (booking name or email + booking passcode),
+ *   2. Team / Event master logins (team name + master passcode, active teams only), then
+ *   3. individual Roster Vault players (player name + player passcode).
+ * The first match sets that vault's session and routes there. A single attempt log and lockout (per name and per IP)
+ * covers all three lookups, so the 6-digit code can't be brute-forced by trying the other vault types.
  */
 export async function authenticateVaultWithNamePin(
   _prevState: VaultAuthState,
   formData: FormData,
 ): Promise<VaultAuthState> {
   const username = String(formData.get("username") ?? "").trim().replace(/\s+/g, " ").slice(0, 254)
-  const pin = String(formData.get("pin") ?? "").replace(/\s/g, "")
+  const pin = String(formData.get("pin") ?? "").replace(/\D/g, "")
 
   if (!username) {
-    return { error: "Enter the name or email address on your booking." }
+    return { error: "Enter your name or username." }
   }
   if (!/^\d{6}$/.test(pin)) {
-    return { error: "Your access code is 6 digits." }
+    return { error: "Your passcode is 6 digits." }
   }
 
   const ip = getClientIp(await headers())
@@ -51,12 +57,19 @@ export async function authenticateVaultWithNamePin(
   `
 
   const vault = rows[0]
-  await recordVaultLoginAttempt(username, ip, Boolean(vault))
-
-  if (!vault) {
-    return { error: "That email and access code don't match a vault. Double-check and try again." }
+  if (vault) {
+    await recordVaultLoginAttempt(username, ip, true)
+    await grantVaultSession(vault.id)
+    redirect("/vault")
   }
 
-  await grantVaultSession(vault.id)
-  redirect("/vault")
+  const rosterIdentity = (await verifyRosterTeamLogin(username, pin)) ?? (await verifyRosterPlayerLogin(username, pin))
+  await recordVaultLoginAttempt(username, ip, Boolean(rosterIdentity))
+
+  if (!rosterIdentity) {
+    return { error: NO_MATCH_MESSAGE }
+  }
+
+  await startRosterSession(rosterIdentity)
+  redirect(rosterIdentity.playerId ? `/vault/roster/${rosterIdentity.playerId}` : "/vault/roster")
 }

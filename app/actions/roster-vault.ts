@@ -1,10 +1,20 @@
 "use server"
 
-import { createHash, createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from "node:crypto"
+import { randomBytes, randomInt } from "node:crypto"
 import { cookies, headers } from "next/headers"
 import { revalidatePath } from "next/cache"
 
 import { sql } from "@/lib/db"
+import {
+  hash,
+  hashCredential,
+  hashPlayerPasscode,
+  hashTeamPasscode,
+  ROSTER_SESSION_COOKIE,
+  startRosterSession,
+  verifyRosterPlayerLogin,
+  verifyRosterTeamLogin,
+} from "@/lib/roster-vault-login"
 import {
   getRosterTeamBilling,
   hasPaidPlayerBundle,
@@ -15,9 +25,6 @@ import {
 import { createAdminClient, createClient } from "@/lib/supabase/server"
 
 const ROSTER_VAULT_BUCKET = "roster-vault-media"
-const SESSION_COOKIE = "roster_vault_session"
-// A media-day gallery is typically revisited after the event; keep the parent session long-lived but revocable on sign-out or credential rotation.
-const SESSION_HOURS = 24 * 30
 const MAX_ATTEMPTS = 8
 const ATTEMPT_WINDOW_MINUTES = 15
 const MAX_TEAM_NAME = 100
@@ -96,32 +103,6 @@ function cleanName(value: unknown, maxLength: number) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : ""
 }
 
-function hash(value: string) {
-  return createHash("sha256").update(value).digest("hex")
-}
-
-function hashPlayerPasscode(value: string) {
-  const key = process.env.SUPABASE_JWT_SECRET
-  if (!key) throw new Error("Player passcode verification is not configured.")
-  return createHmac("sha256", key).update(`roster-player-passcode:v1:${value}`).digest("hex")
-}
-
-function hashTeamPasscode(value: string) {
-  const key = process.env.SUPABASE_JWT_SECRET
-  if (!key) throw new Error("Team passcode verification is not configured.")
-  return createHmac("sha256", key).update(`roster-team-passcode:v1:${value}`).digest("hex")
-}
-
-function hashCredential(value: string, salt: string) {
-  return scryptSync(value, Buffer.from(salt, "hex"), 64).toString("hex")
-}
-
-function safeHashEqual(actual: string, expected: string) {
-  const left = Buffer.from(actual, "hex")
-  const right = Buffer.from(expected, "hex")
-  return left.length === right.length && timingSafeEqual(left, right)
-}
-
 function validCoverUrl(value: unknown) {
   const url = cleanName(value, MAX_COVER_URL_LENGTH)
   if (!url) return null
@@ -144,7 +125,7 @@ async function requireAdmin() {
 
 export async function getRosterVaultSession() {
   const jar = await cookies()
-  const token = jar.get(SESSION_COOKIE)?.value
+  const token = jar.get(ROSTER_SESSION_COOKIE)?.value
   if (!token || !/^[0-9a-f]{64}$/.test(token)) return null
 
   const { rows } = await sql<{ id: string; team_id: string; team_name: string; parent_name: string; player_id: string | null }>`
@@ -796,10 +777,9 @@ export async function deleteRosterVaultPlayer(id: string) {
 export async function loginRosterVault(_previous: RosterLoginState, formData: FormData): Promise<RosterLoginState> {
   const loginType = String(formData.get("loginType") ?? "team")
   const playerUsername = cleanName(formData.get("playerUsername"), MAX_PLAYER_NAME)
-  const playerPasscode = String(formData.get("playerPasscode") ?? "").replace(/\s/g, "")
+  const playerPasscode = String(formData.get("playerPasscode") ?? "").replace(/\D/g, "")
   const teamUsername = cleanName(formData.get("teamUsername"), MAX_TEAM_NAME)
-  const teamPasscode = String(formData.get("teamPasscode") ?? "").replace(/\s/g, "")
-  let sessionName = loginType === "player" ? playerUsername : teamUsername
+  const teamPasscode = String(formData.get("teamPasscode") ?? "").replace(/\D/g, "")
 
   if (loginType === "player") {
     if (!playerUsername || !/^\d{6}$/.test(playerPasscode)) return { error: "Enter the player name and 6-digit passcode." }
@@ -846,76 +826,16 @@ export async function loginRosterVault(_previous: RosterLoginState, formData: Fo
   `
   if (attemptRows[0]?.blocked) return { error: "Unable to sign in. Check your credentials or wait before trying again." }
 
-  let teamId: string | null = null
-  let playerId: string | null = null
-  let validCredentials = false
+  const identity = loginType === "player"
+    ? await verifyRosterPlayerLogin(playerUsername, playerPasscode)
+    : await verifyRosterTeamLogin(teamUsername, teamPasscode)
 
-  if (loginType === "player") {
-    const { rows } = await sql<{
-      id: string
-      team_id: string
-      display_name: string
-      passcode_salt: string | null
-      passcode_hash: string | null
-    }>`
-      SELECT p.id, p.team_id, p.display_name, p.passcode_salt, p.passcode_hash
-      FROM public.roster_vault_players p
-      JOIN public.roster_vault_teams t ON t.id = p.team_id AND t.is_active = true
-      WHERE p.is_active = true
-        AND p.passcode_lookup_hash = ${hashPlayerPasscode(playerPasscode)}
-        AND lower(btrim(p.display_name)) = lower(btrim(${playerUsername}))
-      LIMIT 1
-    `
-    const player = rows[0]
-    const codeCandidate = hashCredential(playerPasscode, player?.passcode_salt ?? "00000000000000000000000000000000")
-    validCredentials = Boolean(player?.passcode_hash && safeHashEqual(codeCandidate, player.passcode_hash))
-    if (player && validCredentials) {
-      teamId = player.team_id
-      playerId = player.id
-      sessionName = player.display_name
-    }
-  } else {
-    const { rows } = await sql<{
-      id: string
-      name: string
-      passcode_salt: string | null
-      passcode_hash: string | null
-    }>`
-      SELECT id, name, passcode_salt, passcode_hash
-      FROM public.roster_vault_teams
-      WHERE passcode_lookup_hash = ${hashTeamPasscode(teamPasscode)}
-        AND lower(btrim(name)) = lower(btrim(${teamUsername}))
-        AND is_active = true
-      LIMIT 1
-    `
-    const team = rows[0]
-    const codeCandidate = hashCredential(teamPasscode, team?.passcode_salt ?? "00000000000000000000000000000000")
-    validCredentials = Boolean(team?.passcode_hash && safeHashEqual(codeCandidate, team.passcode_hash))
-    if (team && validCredentials) {
-      teamId = team.id
-      sessionName = team.name
-    }
-  }
-
-  if (!teamId || !validCredentials) {
+  if (!identity) {
     return { error: "Unable to sign in. Check your credentials or wait before trying again." }
   }
 
   await sql`DELETE FROM public.roster_vault_login_attempts WHERE attempt_key = ANY(${attemptKeys}::text[])`
-  const token = randomBytes(32).toString("hex")
-  await sql`
-    INSERT INTO public.roster_vault_sessions (team_id, player_id, token_hash, parent_name, expires_at)
-    VALUES (${teamId}, ${playerId}, ${hash(token)}, ${sessionName}, now() + make_interval(hours => ${SESSION_HOURS}))
-  `
-
-  const jar = await cookies()
-  jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/vault/roster",
-    maxAge: SESSION_HOURS * 60 * 60,
-  })
+  await startRosterSession(identity)
   return {}
 }
 
@@ -1134,9 +1054,9 @@ export async function getRosterTeamFolderView(): Promise<RosterGalleryView | nul
 
 export async function logoutRosterVault() {
   const jar = await cookies()
-  const token = jar.get(SESSION_COOKIE)?.value
+  const token = jar.get(ROSTER_SESSION_COOKIE)?.value
   if (token && /^[0-9a-f]{64}$/.test(token)) {
     await sql`DELETE FROM public.roster_vault_sessions WHERE token_hash = ${hash(token)}`
   }
-  jar.delete(SESSION_COOKIE)
+  jar.delete(ROSTER_SESSION_COOKIE)
 }

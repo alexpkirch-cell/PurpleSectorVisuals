@@ -35,7 +35,7 @@ function VaultLogin() {
         <div className="mb-6 flex flex-col gap-1">
           <span className="font-heading text-xs font-bold tracking-[0.18em] text-zinc-500">PURPLE SECTOR VISUALS</span>
           <h1 className="font-heading text-xl font-medium text-zinc-50">Client Vault</h1>
-          <p className="text-sm text-zinc-400">Enter the name or username on your booking and its 6-digit passcode to unlock your vault.</p>
+          <p className="text-sm text-zinc-400">Enter your name or username and 6-digit passcode. Client bookings, team and event vaults, and individual players all sign in here.</p>
         </div>
         <VaultLoginForm />
       </div>

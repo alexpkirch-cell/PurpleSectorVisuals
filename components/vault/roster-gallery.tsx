@@ -19,7 +19,14 @@ function photoCountLabel(count: number) {
 }
 
 function StatusBadge({ view, lockedCount }: { view: RosterGalleryView; lockedCount: number }) {
-  if (lockedCount === 0 && view.photos.length > 0) {
+  if (lockedCount > 0) {
+    return (
+      <div className={`flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em] ${view.awaitingTeamBalance ? "text-amber-400" : "text-fuchsia-400"}`}>
+        <LockKeyhole className="size-4" aria-hidden="true" /> Locked
+      </div>
+    )
+  }
+  if (view.photos.length > 0) {
     return (
       <div className="flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-emerald-400">
         <ShieldCheck className="size-4" aria-hidden="true" />
@@ -27,11 +34,7 @@ function StatusBadge({ view, lockedCount }: { view: RosterGalleryView; lockedCou
       </div>
     )
   }
-  return (
-    <div className={`flex items-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.22em] ${view.awaitingTeamBalance ? "text-amber-400" : "text-fuchsia-400"}`}>
-      <LockKeyhole className="size-4" aria-hidden="true" /> Locked
-    </div>
-  )
+  return <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-zinc-500">Photos coming soon</div>
 }
 
 export function RosterGallery({ view, notice }: { view: RosterGalleryView; notice?: string | null }) {
