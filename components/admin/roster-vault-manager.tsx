@@ -136,8 +136,8 @@ export function RosterVaultManager({
         const isActive = formData.get("isActive") === "on"
         const name = String(formData.get("name") ?? "").trim()
         const vaultExperience = formData.get("vaultExperience") === "full_client_vault" ? "full_client_vault" : "gallery_only"
-        await updateRosterVaultTeam({ id: selectedTeam.id, name, isActive, vaultExperience })
-        setTeams((current) => current.map((team) => team.id === selectedTeam.id ? { ...team, name, is_active: isActive, vault_experience: vaultExperience } : team))
+        const saved = await updateRosterVaultTeam({ id: selectedTeam.id, name, isActive, vaultExperience })
+        setTeams((current) => current.map((team) => team.id === selectedTeam.id ? { ...team, ...saved } : team))
         toast.success("Team settings saved")
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save team settings")
@@ -392,12 +392,12 @@ export function RosterVaultManager({
           </section>
 
           <RosterVaultBillingSettings
-            key={selectedTeam.id}
+            key={`${selectedTeam.id}-${selectedTeam.vault_experience}`}
             team={selectedTeam}
             onTeamChange={(updated) => setTeams((current) => current.map((team) => team.id === updated.id ? updated : team))}
           />
 
-          <RosterVaultTeamFolder key={`folder-${selectedTeam.id}`} teamId={selectedTeam.id} />
+          <RosterVaultTeamFolder key={`folder-${selectedTeam.id}`} teamId={selectedTeam.id} players={players.map((player) => ({ id: player.id, display_name: player.display_name }))} />
 
           <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5" aria-labelledby="gallery-tiers-heading">
             <div>
@@ -586,13 +586,24 @@ export function RosterVaultManager({
               </div>
               <p className="text-xs text-muted-foreground">Parents sign in with the exact Team / Event Name (case-insensitive) and this passcode. You can rotate it later in the roster manager.</p>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="create-team-billing">Delivery &amp; billing mode</Label>
-              <select id="create-team-billing" name="vaultBillingMode" defaultValue="parent_pay" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
-                <option value="parent_pay">Low-Retainer / Parent Pay-Per-Order</option>
-                <option value="all_inclusive">All-Inclusive Team Buyout</option>
-              </select>
-              <p className="text-xs text-muted-foreground">Parent Pay: parents buy single photos, full player bundles, or prints. All-Inclusive: downloads unlock when you mark the team&apos;s 50% balance paid. You can change this later.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="create-team-experience">Vault experience</Label>
+                <select id="create-team-experience" name="vaultExperience" defaultValue="gallery_only" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
+                  <option value="gallery_only">Gallery-Only Direct Access</option>
+                  <option value="full_client_vault">Full Client Vault</option>
+                </select>
+                <p className="text-xs text-muted-foreground">Gallery-Only opens on the roster and skips paperwork, appointments, and the invoice.</p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="create-team-billing">Delivery &amp; billing mode</Label>
+                <select id="create-team-billing" name="vaultBillingMode" defaultValue="prepaid_comped" className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
+                  <option value="prepaid_comped">Prepaid / Comped (Free Downloads)</option>
+                  <option value="parent_pay">Parent Pay-Per-Order</option>
+                  <option value="all_inclusive">All-Inclusive Team Buyout</option>
+                </select>
+                <p className="text-xs text-muted-foreground">New Gallery-Only vaults are free and direct by default. Full Client Vaults can use Parent Pay or an All-Inclusive team balance.</p>
+              </div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setNewTeamOpen(false)}>Cancel</Button><Button type="submit" disabled={pending || !newTeamPasscode}>Create Team / Event Vault</Button></DialogFooter>
           </form>

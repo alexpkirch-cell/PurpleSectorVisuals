@@ -20,6 +20,12 @@ type BillingMode = RosterVaultTeam["vault_billing_mode"]
 
 const MODE_OPTIONS: { value: BillingMode; title: string; description: string }[] = [
   {
+    value: "prepaid_comped",
+    title: "Prepaid / Comped",
+    description:
+      "The team has already paid or is providing the gallery as a complimentary service. Everyone gets immediate high-resolution downloads; WHCC prints remain optional.",
+  },
+  {
     value: "parent_pay",
     title: "Low-Retainer / Parent Pay-Per-Order",
     description:
@@ -44,27 +50,28 @@ export function RosterVaultBillingSettings({
   team: RosterVaultTeam
   onTeamChange: (team: RosterVaultTeam) => void
 }) {
-  const [mode, setMode] = useState<BillingMode>(team.vault_billing_mode)
-  const [priceUsd, setPriceUsd] = useState(team.single_photo_price_cents ? (team.single_photo_price_cents / 100).toFixed(2) : "")
+  const [mode, setMode] = useState<BillingMode>(team.vault_experience === "gallery_only" ? "prepaid_comped" : team.vault_billing_mode)
+  const [priceUsd, setPriceUsd] = useState(team.vault_experience === "gallery_only" || !team.single_photo_price_cents ? "" : (team.single_photo_price_cents / 100).toFixed(2))
   const [pending, startTransition] = useTransition()
   const [balanceDialogOpen, setBalanceDialogOpen] = useState(false)
 
-  const dirty =
-    mode !== team.vault_billing_mode ||
-    (priceUsd.trim() === "" ? null : Math.round(Number(priceUsd) * 100)) !== team.single_photo_price_cents
+  const billingModeToSave = team.vault_experience === "gallery_only" ? "prepaid_comped" : mode
+  const priceToSave = team.vault_experience === "gallery_only" ? null : priceUsd.trim() === "" ? null : Math.round(Number(priceUsd) * 100)
+  const dirty = billingModeToSave !== team.vault_billing_mode || priceToSave !== team.single_photo_price_cents
 
   function saveBilling() {
-    const singlePhotoPriceCents = priceUsd.trim() === "" ? null : Math.round(Number(priceUsd) * 100)
     startTransition(async () => {
       try {
-        await updateRosterVaultTeam({
+        const saved = await updateRosterVaultTeam({
           id: team.id,
           name: team.name,
           isActive: team.is_active,
-          vaultBillingMode: mode,
-          singlePhotoPriceCents,
+          vaultBillingMode: billingModeToSave,
+          singlePhotoPriceCents: priceToSave,
         })
-        onTeamChange({ ...team, vault_billing_mode: mode, single_photo_price_cents: singlePhotoPriceCents })
+        setMode(saved.vault_billing_mode)
+        setPriceUsd(saved.single_photo_price_cents ? (saved.single_photo_price_cents / 100).toFixed(2) : "")
+        onTeamChange({ ...team, ...saved })
         toast.success("Billing mode saved. It applies to parents immediately.")
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save billing settings")
@@ -103,7 +110,12 @@ export function RosterVaultBillingSettings({
         <p className="mt-1 text-xs text-muted-foreground">Choose how this team receives its high-resolution photos. Switching takes effect for parents right away.</p>
       </div>
 
-      <div role="radiogroup" aria-label="Vault billing mode" className="grid gap-3 lg:grid-cols-2">
+      {team.vault_experience === "gallery_only" ? (
+        <p className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm leading-relaxed text-foreground">
+          Gallery-Only Direct Access is free and immediate. The vault uses Prepaid / Comped delivery, bypasses paperwork and digital checkout, and keeps WHCC print ordering optional.
+        </p>
+      ) : (
+        <div role="radiogroup" aria-label="Vault billing mode" className="grid gap-3 lg:grid-cols-3">
         {MODE_OPTIONS.map((option) => (
           <button
             key={option.value}
@@ -121,9 +133,10 @@ export function RosterVaultBillingSettings({
             <span className="text-xs leading-relaxed text-muted-foreground">{option.description}</span>
           </button>
         ))}
-      </div>
+        </div>
+      )}
 
-      {mode === "parent_pay" ? (
+      {team.vault_experience === "full_client_vault" && mode === "parent_pay" ? (
         <div className="flex max-w-xs flex-col gap-1.5">
           <Label htmlFor="roster-single-photo-price">Single-photo download price (USD)</Label>
           <Input
@@ -148,7 +161,7 @@ export function RosterVaultBillingSettings({
         </Button>
       </div>
 
-      {team.vault_billing_mode === "all_inclusive" ? (
+      {team.vault_experience === "full_client_vault" && team.vault_billing_mode === "all_inclusive" ? (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-background/50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
