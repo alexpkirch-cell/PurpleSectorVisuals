@@ -2,10 +2,12 @@ import "server-only"
 
 import { sql } from "@/lib/db"
 
-export type RosterBillingMode = "all_inclusive" | "parent_pay"
+export type RosterBillingMode = "all_inclusive" | "parent_pay" | "prepaid_comped"
+export type VaultExperience = "full_client_vault" | "gallery_only"
 
 export type RosterTeamBilling = {
   mode: RosterBillingMode
+  experience: VaultExperience
   /** The team's second 50% is received (set by an admin). Only meaningful for all_inclusive teams. */
   balancePaid: boolean
   /** Price of one single-photo download in parent_pay mode; null disables single-photo checkout. */
@@ -15,21 +17,27 @@ export type RosterTeamBilling = {
 export type RosterPhotoKind = "player" | "team"
 
 export async function getRosterTeamBilling(teamId: string): Promise<RosterTeamBilling> {
-  const { rows } = await sql<{ vault_billing_mode: RosterBillingMode; balance_paid: boolean; single_photo_price_cents: number | null }>`
-    SELECT vault_billing_mode, balance_paid, single_photo_price_cents
+  const { rows } = await sql<{
+    vault_billing_mode: RosterBillingMode
+    vault_experience: VaultExperience
+    balance_paid: boolean
+    single_photo_price_cents: number | null
+  }>`
+    SELECT vault_billing_mode, vault_experience, balance_paid, single_photo_price_cents
     FROM public.roster_vault_teams WHERE id = ${teamId} LIMIT 1
   `
   const team = rows[0]
   return {
-    mode: team?.vault_billing_mode === "all_inclusive" ? "all_inclusive" : "parent_pay",
+    mode: team?.vault_billing_mode === "all_inclusive" || team?.vault_billing_mode === "prepaid_comped" ? team.vault_billing_mode : "parent_pay",
+    experience: team?.vault_experience === "full_client_vault" ? "full_client_vault" : "gallery_only",
     balancePaid: Boolean(team?.balance_paid),
     singlePhotoPriceCents: team?.single_photo_price_cents ?? null,
   }
 }
 
-/** All-Inclusive Team Buyout: once the team's balance is paid, every original is free for anyone signed in with the master team username and passcode. */
+/** Gallery-Only and Prepaid/Comped teams bypass digital payment prompts; buyout teams unlock after their balance is paid. */
 export function teamDownloadsIncluded(billing: RosterTeamBilling) {
-  return billing.mode === "all_inclusive" && billing.balancePaid
+  return billing.experience === "gallery_only" || billing.mode === "prepaid_comped" || (billing.mode === "all_inclusive" && billing.balancePaid)
 }
 
 /** True when this parent session bought the full digital bundle for the player (a paid tier order). */

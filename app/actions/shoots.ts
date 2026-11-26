@@ -92,6 +92,7 @@ export interface Shoot {
   discount_value: string | null
   total_price: string | null
   is_comped: boolean | null
+  vault_experience: "full_client_vault" | "gallery_only"
   driver_reimbursement: string | null
   assigned_shooters: AssignedShooter[] | null
   assigned_editors: string[] | null
@@ -189,11 +190,11 @@ export async function createShootInquiry(formData: {
 }
 
 type ManualBookingStage = "new_inquiry" | "booked" | "color_grading" | "ready_for_delivery"
-type ManualRetainerMethod = "none" | "cash" | "venmo_zelle" | "check"
+type ManualRetainerMethod = "none" | "stripe" | "cash" | "venmo_zelle" | "check"
 
 const MANUAL_SHOOT_TYPES = new Set(["Portraits", "Athletics", "Automotive", "Events", "Commercial", "Custom"])
 const MANUAL_BOOKING_STAGES = new Set<ManualBookingStage>(["new_inquiry", "booked", "color_grading", "ready_for_delivery"])
-const MANUAL_RETAINER_METHODS = new Set<ManualRetainerMethod>(["none", "cash", "venmo_zelle", "check"])
+const MANUAL_RETAINER_METHODS = new Set<ManualRetainerMethod>(["none", "stripe", "cash", "venmo_zelle", "check"])
 const roundMoney = (amount: number) => Math.round(amount * 100) / 100
 
 /** Admin intake for both new leads and already-shot sessions, with a selectable start stage and payment schedule. */
@@ -216,6 +217,8 @@ export async function createManualBooking(input: {
   assignedEditors: string[]
   driverReimbursement?: number
   startingStage?: ManualBookingStage
+  vaultExperience?: "full_client_vault" | "gallery_only"
+  paidInFull?: boolean
   retainerAmount?: number
   retainerPaid?: boolean
   retainerMethod?: ManualRetainerMethod
@@ -231,6 +234,9 @@ export async function createManualBooking(input: {
 
   const startingStage = input.startingStage ?? "new_inquiry"
   if (!MANUAL_BOOKING_STAGES.has(startingStage)) throw new Error("Choose a valid starting pipeline stage.")
+  const vaultExperience = input.vaultExperience ?? "full_client_vault"
+  if (vaultExperience !== "full_client_vault" && vaultExperience !== "gallery_only") throw new Error("Choose a valid vault experience.")
+  if (input.paidInFull !== undefined && typeof input.paidInFull !== "boolean") throw new Error("Choose a valid payment status.")
   const retainerMethod = input.retainerMethod ?? "none"
   if (!MANUAL_RETAINER_METHODS.has(retainerMethod)) throw new Error("Choose a valid retainer payment method.")
 
@@ -275,17 +281,19 @@ export async function createManualBooking(input: {
   if (!shootType || !MANUAL_SHOOT_TYPES.has(shootType)) {
     throw new Error("Choose a valid shoot type from the five core categories or Custom.")
   }
-  const isComped = quote.isComped && Boolean(selectedPackage)
+  const galleryOnly = vaultExperience === "gallery_only"
   const total = roundMoney(quote.total)
+  const isComped = Boolean(quote.isComped || total === 0 || galleryOnly)
+  const paidInFull = Boolean(input.paidInFull) && !isComped
   const rawRetainer = input.retainerAmount === undefined
     ? roundMoney(total / 2)
     : Number(input.retainerAmount)
-  if (!Number.isFinite(rawRetainer) || rawRetainer < 0 || rawRetainer > total) {
+  if (!isComped && !paidInFull && (!Number.isFinite(rawRetainer) || rawRetainer < 0 || rawRetainer > total)) {
     throw new Error("Retainer must be between $0.00 and the total quote.")
   }
-  const depositAmount = isComped ? 0 : roundMoney(rawRetainer)
-  const balanceAmount = isComped ? 0 : roundMoney(total - depositAmount)
-  const depositPaid = isComped || depositAmount === 0 || Boolean(input.retainerPaid)
+  const depositAmount = isComped ? 0 : paidInFull ? total : roundMoney(rawRetainer)
+  const balanceAmount = isComped || paidInFull ? 0 : roundMoney(total - depositAmount)
+  const depositPaid = isComped || paidInFull || depositAmount === 0 || Boolean(input.retainerPaid)
   const paymentMethod: ManualRetainerMethod = depositAmount === 0 ? "none" : retainerMethod
   if (startingStage === "ready_for_delivery" && depositAmount > 0 && !depositPaid) {
     throw new Error("Pay or record the retainer before starting a shoot at Ready for Delivery.")
@@ -300,7 +308,7 @@ export async function createManualBooking(input: {
       client_name, client_email, client_phone, shoot_type, shoot_date, location, location_maps_url,
       preferred_shooter, notes, vault_access_code, status,
       package_id, is_custom_package, selected_package, package_price, selected_add_on_ids, selected_addons, discount_type, discount_value,
-      total_price, base_price, deposit_amount, balance_amount, deposit_amount_custom, is_comped,
+      total_price, base_price, deposit_amount, balance_amount, deposit_amount_custom, is_comped, vault_experience,
       driver_reimbursement, is_paid, assigned_shooters, assigned_editors
     )
     VALUES (
@@ -308,7 +316,7 @@ export async function createManualBooking(input: {
       ${shootDate}, ${location}, ${locationMapsUrl}, ${leadShooterName(shooters)},
       ${input.notes?.trim() || null}, ${vaultAccessCode}, ${status},
       ${packageId}, ${Boolean(input.isCustomPackage)}, ${selectedPackage || null}, ${packagePrice}, ${selectedAddOnIds}::text[], ${JSON.stringify(addons)}, ${input.discountType},
-      ${Number(input.discountValue) || 0}, ${total}, ${total}, ${depositAmount}, ${balanceAmount}, true, ${isComped},
+      ${Number(input.discountValue) || 0}, ${total}, ${total}, ${depositAmount}, ${balanceAmount}, true, ${isComped}, ${vaultExperience},
       ${driverReimbursement}, ${depositPaid && balanceAmount === 0}, ${JSON.stringify(shooters)}, ${JSON.stringify(editors)}
     )
     RETURNING id
@@ -319,10 +327,10 @@ export async function createManualBooking(input: {
 
   await sql`
     INSERT INTO vaults (
-      shoot_id, pin_code, status, contract_signed, deposit_paid, deposit_paid_at, deposit_payment_method,
+      shoot_id, pin_code, status, is_unlocked, contract_signed, deposit_paid, deposit_paid_at, deposit_payment_method,
       deposit_amount, balance_amount, balance_paid, final_quoted_fee, shoot_date, client_name
     ) VALUES (
-      ${shootId}, ${pinCode}, 'Onboarding', false, ${depositPaid},
+      ${shootId}, ${pinCode}, ${galleryOnly ? "Active" : "Onboarding"}, ${galleryOnly || isComped || paidInFull}, false, ${depositPaid},
       CASE WHEN ${depositPaid} THEN now() ELSE NULL END,
       CASE WHEN ${depositPaid} THEN ${paymentMethod} ELSE NULL END,
       ${depositAmount}, ${balanceAmount}, ${balancePaid}, ${total}, ${shootDate}, ${clientName}
@@ -333,13 +341,13 @@ export async function createManualBooking(input: {
     await sql`
       INSERT INTO vault_payments (vault_id, shoot_id, payment_type, method, amount, note, recorded_by)
       SELECT v.id, ${shootId}, 'retainer', ${paymentMethod}, ${depositAmount},
-             ${depositAmount === 0 ? "Retainer waived ($0.00) during manual booking" : "Retainer recorded during manual booking"},
+             ${galleryOnly ? "Gallery-only direct access; no portal payment is due" : paidInFull ? "Full payment recorded during manual booking" : depositAmount === 0 ? "Retainer waived ($0.00) during manual booking" : "Retainer recorded during manual booking"},
              ${admin.name}
       FROM vaults v WHERE v.shoot_id = ${shootId}
     `
   }
 
-  await saveVaultDocuments(shootId)
+  if (!galleryOnly) await saveVaultDocuments(shootId)
   if (startingStage === "booked") await finalizeBookedShoot(shootId)
 
   revalidatePath("/admin")

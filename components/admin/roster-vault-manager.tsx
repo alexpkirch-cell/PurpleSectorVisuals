@@ -111,7 +111,8 @@ export function RosterVaultManager({
         const team = await createRosterVaultTeam({
           name: String(formData.get("teamName") ?? ""),
           passcode: String(formData.get("passcode") ?? ""),
-          vaultBillingMode: formData.get("vaultBillingMode") === "all_inclusive" ? "all_inclusive" : "parent_pay",
+          vaultBillingMode: formData.get("vaultBillingMode") === "all_inclusive" ? "all_inclusive" : formData.get("vaultBillingMode") === "prepaid_comped" ? "prepaid_comped" : "parent_pay",
+          vaultExperience: formData.get("vaultExperience") === "full_client_vault" ? "full_client_vault" : "gallery_only",
         })
         setTeams((current) => [team, ...current])
         setPlayers([])
@@ -134,8 +135,9 @@ export function RosterVaultManager({
       try {
         const isActive = formData.get("isActive") === "on"
         const name = String(formData.get("name") ?? "").trim()
-        await updateRosterVaultTeam({ id: selectedTeam.id, name, isActive })
-        setTeams((current) => current.map((team) => team.id === selectedTeam.id ? { ...team, name, is_active: isActive } : team))
+        const vaultExperience = formData.get("vaultExperience") === "full_client_vault" ? "full_client_vault" : "gallery_only"
+        await updateRosterVaultTeam({ id: selectedTeam.id, name, isActive, vaultExperience })
+        setTeams((current) => current.map((team) => team.id === selectedTeam.id ? { ...team, name, is_active: isActive, vault_experience: vaultExperience } : team))
         toast.success("Team settings saved")
       } catch (error) {
         toast.error(error instanceof Error ? error.message : "Could not save team settings")
@@ -351,10 +353,17 @@ export function RosterVaultManager({
               <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
               <h2 className="font-heading text-base font-semibold text-foreground">{selectedTeam.name} master login</h2>
             </div>
-            <form key={selectedTeam.id} action={handleTeamUpdate} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
+            <form key={selectedTeam.id} action={handleTeamUpdate} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_14rem_auto_auto] sm:items-end">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="roster-team-name">Team / Event Name (login username)</Label>
                 <Input id="roster-team-name" name="name" defaultValue={selectedTeam.name} required maxLength={100} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="roster-vault-experience">Vault Experience</Label>
+                <select id="roster-vault-experience" name="vaultExperience" defaultValue={selectedTeam.vault_experience} className="h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:border-ring focus-visible:outline-none">
+                  <option value="full_client_vault">Full Client Vault</option>
+                  <option value="gallery_only">Gallery-Only Direct Access</option>
+                </select>
               </div>
               <label className="flex h-9 items-center gap-2 text-sm text-muted-foreground">
                 <input type="checkbox" name="isActive" defaultChecked={selectedTeam.is_active} className="accent-primary" />
