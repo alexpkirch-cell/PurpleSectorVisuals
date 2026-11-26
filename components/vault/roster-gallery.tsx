@@ -37,7 +37,11 @@ function StatusBadge({ view, lockedCount }: { view: RosterGalleryView; lockedCou
   return <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-zinc-500">Photos coming soon</div>
 }
 
-export function RosterGallery({ view, notice }: { view: RosterGalleryView; notice?: string | null }) {
+/**
+ * `standalone` is the whole vault when there is no roster to go back to (an event with a single shared gallery): the
+ * header shows the vault name with a Sign out button instead of a link to a roster page that would have nothing on it.
+ */
+export function RosterGallery({ view, notice, standalone = false }: { view: RosterGalleryView; notice?: string | null; standalone?: boolean }) {
   const router = useRouter()
   const [downloading, setDownloading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -100,19 +104,19 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
   }
 
   const lockedMessage = view.viewerIsPlayer
-    ? "Your team organizer controls when photos are released. They will appear here as soon as your gallery is unlocked."
+    ? "Your organizer controls when photos are released. They will appear here as soon as your gallery is unlocked."
     : view.awaitingTeamBalance
-      ? "These photos unlock as soon as your team's package is paid. Your organizer will let you know when they are ready."
+      ? "These photos unlock as soon as the package is paid. Your organizer will let you know when they are ready."
       : view.bundle
         ? "Pay once to see and download every photo in full resolution, then order prints if you like."
-        : "This gallery is not available to unlock yet. Please contact your team organizer."
+        : "This gallery is not available to unlock yet. Please contact your organizer."
 
   return (
     <div className="min-h-svh bg-[#09090b] text-zinc-100">
       <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 pb-20 pt-28 sm:px-8 sm:pt-32">
         <header className="flex flex-wrap items-start justify-between gap-5 border-b border-zinc-800 pb-6">
           <div className="flex flex-col gap-3">
-            {view.viewerIsPlayer ? (
+            {view.viewerIsPlayer || standalone ? (
               <Button type="button" variant="outline" size="sm" className="w-fit" onClick={signOut} disabled={pending}>
                 <LogOut className="size-4" aria-hidden="true" /> Sign out
               </Button>
@@ -122,8 +126,11 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
               </Link>
             )}
             <StatusBadge view={view} lockedCount={lockedCount} />
-            <p className="text-sm text-zinc-500">{view.teamName} <span className="px-1.5 text-zinc-700">/</span> {isTeamFolder ? "TEAM FOLDER" : "PLAYER GALLERY"}</p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{view.title}</h1>
+            <p className="text-sm text-zinc-500">
+              {standalone ? "PURPLE SECTOR VISUALS" : view.teamName} <span className="px-1.5 text-zinc-700">/</span>{" "}
+              {standalone ? "EVENT GALLERY" : isTeamFolder ? "TEAM FOLDER" : "PLAYER GALLERY"}
+            </p>
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-white sm:text-4xl">{standalone ? view.teamName : view.title}</h1>
             <p className="text-sm text-zinc-400">
               {view.jerseyNumber ? `#${view.jerseyNumber} · ` : ""}
               {view.photoCount === 0
@@ -180,7 +187,7 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
           <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-zinc-800 bg-zinc-950/60 px-6 text-center">
             <ImageOff className="size-8 text-zinc-600" aria-hidden="true" />
             <h2 className="font-heading text-lg font-semibold text-white">Photos are being prepared</h2>
-            <p className="max-w-sm text-sm leading-relaxed text-zinc-500">The team will add finished images here soon.</p>
+            <p className="max-w-sm text-sm leading-relaxed text-zinc-500">Finished images will appear here as soon as they are ready.</p>
           </div>
         ) : view.photos.length > 0 ? (
           <ul className="columns-1 gap-3 sm:columns-2 sm:gap-4 lg:columns-3" aria-label={`${view.title} gallery`}>
@@ -202,7 +209,7 @@ export function RosterGallery({ view, notice }: { view: RosterGalleryView; notic
         ) : null}
 
         <p className="flex items-center justify-center gap-2 border-t border-zinc-900 pt-5 text-xs text-zinc-600">
-          <LockKeyhole className="size-3.5" aria-hidden="true" /> Private gallery — photos are released only after a parent purchase, team payment, or a prepaid team package.
+          <LockKeyhole className="size-3.5" aria-hidden="true" /> Private gallery — photos are released only after a purchase, a team payment, or a prepaid package.
         </p>
       </div>
     </div>

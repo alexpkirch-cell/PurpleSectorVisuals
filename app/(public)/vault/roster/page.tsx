@@ -1,20 +1,28 @@
 import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 
-import { getRosterVaultData } from "@/app/actions/roster-vault"
+import { getRosterTeamFolderView, getRosterVaultData } from "@/app/actions/roster-vault"
+import { RosterGallery } from "@/components/vault/roster-gallery"
 import { RosterVaultLoginForm } from "@/components/vault/roster-vault-login-form"
 import { RosterVaultStorefront } from "@/components/vault/roster-vault-storefront"
 
 export const metadata: Metadata = {
   title: "Roster Vault | Purple Sector Visuals",
-  description: "Private player galleries for Purple Sector Visuals team media days.",
+  description: "Private team, event, and player galleries from Purple Sector Visuals.",
   robots: { index: false, follow: false },
 }
 
 export default async function RosterVaultPage() {
   const data = await getRosterVaultData()
   if (data?.playerId) redirect(`/vault/roster/${data.playerId}`)
-  if (data) return <RosterVaultStorefront data={data} />
+  if (data) {
+    // With no players there is no roster to pick from, so show the shared gallery itself instead of an empty selector.
+    if (data.players.length === 0) {
+      const galleryView = await getRosterTeamFolderView()
+      if (galleryView) return <RosterGallery view={galleryView} standalone />
+    }
+    return <RosterVaultStorefront data={data} />
+  }
 
   return (
     <div className="relative flex min-h-[calc(100svh-4rem)] items-center justify-center overflow-hidden bg-[#09090b] px-4 py-12 sm:min-h-screen">
@@ -22,7 +30,7 @@ export default async function RosterVaultPage() {
       <section className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#111114]/95 p-6 shadow-2xl shadow-black/50 sm:p-8" aria-labelledby="roster-vault-heading">
         <div className="mb-7 flex flex-col gap-2">
           <span className="font-heading text-[0.65rem] font-semibold tracking-[0.2em] text-zinc-500">PURPLE SECTOR VISUALS</span>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-400">Team media day</p>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.2em] text-fuchsia-400">Event gallery</p>
           <h1 id="roster-vault-heading" className="font-heading text-2xl font-bold tracking-tight text-white">Roster Vault</h1>
           <p className="text-sm leading-relaxed text-zinc-400">Sign in with your Player Name + 6-digit passcode, or choose Team / Event and use the exact team name + its master 6-digit passcode.</p>
         </div>
