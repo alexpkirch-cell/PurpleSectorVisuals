@@ -45,7 +45,8 @@ const STARTING_STAGES = [
 ] as const
 
 const RETAINER_METHODS = [
-  { value: "none", label: "None" },
+  { value: "none", label: "None / recorded elsewhere" },
+  { value: "stripe", label: "Stripe / card" },
   { value: "cash", label: "Cash" },
   { value: "venmo_zelle", label: "Venmo / Zelle" },
   { value: "check", label: "Check" },
@@ -94,6 +95,8 @@ export function ManualBookingDialog({
   const [retainerOverride, setRetainerOverride] = useState<string | null>(null)
   const [retainerStatus, setRetainerStatus] = useState<"pending" | "paid">("pending")
   const [retainerMethod, setRetainerMethod] = useState<RetainerMethod>("none")
+  const [paidInFull, setPaidInFull] = useState(false)
+  const [vaultExperience, setVaultExperience] = useState<"full_client_vault" | "gallery_only">("full_client_vault")
   const [isSaving, setIsSaving] = useState(false)
 
   const suggestedCategories: readonly string[] = SHOOT_TYPES.find((type) => type.label === shootType)?.categories ?? []
@@ -122,12 +125,13 @@ export function ManualBookingDialog({
     discountValue: Number(discountValue) || 0,
   })
   const hasPricing = packageId !== ""
-  const defaultRetainer = quote.isComped ? 0 : Math.round(quote.total * 50) / 100
-  const retainerAmount = quote.isComped
-    ? 0
-    : retainerOverride === null ? defaultRetainer : Math.max(0, Number(retainerOverride) || 0)
-  const remainingBalance = Math.max(0, Math.round((quote.total - retainerAmount) * 100) / 100)
-  const retainerPaid = quote.isComped || retainerAmount === 0 || retainerStatus === "paid"
+  const galleryOnly = vaultExperience === "gallery_only"
+  const isComped = quote.isComped || quote.total <= 0 || galleryOnly
+  const fullPayment = paidInFull && !isComped
+  const defaultRetainer = isComped ? 0 : Math.round(quote.total * 50) / 100
+  const retainerAmount = isComped ? 0 : fullPayment ? quote.total : retainerOverride === null ? defaultRetainer : Math.max(0, Number(retainerOverride) || 0)
+  const remainingBalance = isComped || fullPayment ? 0 : Math.max(0, Math.round((quote.total - retainerAmount) * 100) / 100)
+  const retainerPaid = isComped || fullPayment || retainerAmount === 0 || retainerStatus === "paid"
 
   function resetForm() {
     setShootType("")
@@ -146,6 +150,8 @@ export function ManualBookingDialog({
     setRetainerOverride(null)
     setRetainerStatus("pending")
     setRetainerMethod("none")
+    setPaidInFull(false)
+    setVaultExperience("full_client_vault")
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -175,6 +181,8 @@ export function ManualBookingDialog({
         assignedEditors: editors,
         driverReimbursement: Number(driverReimbursement) || 0,
         startingStage,
+        vaultExperience,
+        paidInFull: fullPayment,
         retainerAmount,
         retainerPaid,
         retainerMethod,
@@ -251,6 +259,23 @@ export function ManualBookingDialog({
                 >
                   {STARTING_STAGES.map((stage) => <option key={stage.value} value={stage.value}>{stage.label}</option>)}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="mb-vault-experience">Vault Experience</Label>
+                <select
+                  id="mb-vault-experience"
+                  value={vaultExperience}
+                  onChange={(event) => {
+                    const experience = event.target.value as "full_client_vault" | "gallery_only"
+                    setVaultExperience(experience)
+                    if (experience === "gallery_only") setPaidInFull(false)
+                  }}
+                  className={selectClass}
+                >
+                  <option value="full_client_vault">Full Client Vault</option>
+                  <option value="gallery_only">Gallery-Only Direct Access</option>
+                </select>
+                <p className="text-[0.65rem] text-muted-foreground">{galleryOnly ? "Opens directly to the photo grid; client payments and onboarding tabs are bypassed. Treat this as prepaid or comped access." : "Includes paperwork, prep, invoice, tracker, and delivery tabs."}</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-shoot-date">Shoot Date</Label>
@@ -384,9 +409,24 @@ export function ManualBookingDialog({
               </p>
             </div>
 
+            <label className="flex items-start gap-2 rounded-lg border border-border bg-background/50 p-3 text-sm text-foreground">
+              <input
+                type="checkbox"
+                checked={paidInFull || galleryOnly}
+                onChange={(event) => setPaidInFull(event.target.checked)}
+                disabled={!hasPricing || isComped || galleryOnly}
+                className="mt-0.5 accent-primary"
+              />
+              <span className="flex flex-col gap-0.5">
+                <span>Paid in Full / Prepaid</span>
+                <span className="text-xs text-muted-foreground">Records the full quote as paid now and sets the remaining balance to $0.00.</span>
+              </span>
+            </label>
+            {galleryOnly ? <p className="text-xs text-muted-foreground">Gallery-Only Direct Access skips contract, prep, and invoice tabs and waives portal payment gates. WHCC prints remain optional.</p> : null}
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="mb-retainer-amount">Retainer / Deposit Amount ($)</Label>
+                <Label htmlFor="mb-retainer-amount">{fullPayment ? "Amount paid at booking ($)" : "Retainer / Deposit Amount ($)"}</Label>
                 <Input
                   id="mb-retainer-amount"
                   type="number"
@@ -394,16 +434,16 @@ export function ManualBookingDialog({
                   max={quote.total}
                   step="0.01"
                   inputMode="decimal"
-                  value={retainerOverride ?? defaultRetainer.toFixed(2)}
+                  value={isComped ? "0.00" : fullPayment ? quote.total.toFixed(2) : retainerOverride ?? defaultRetainer.toFixed(2)}
                   onChange={(event) => setRetainerOverride(event.target.value)}
-                  disabled={!hasPricing || quote.isComped}
+                  disabled={!hasPricing || isComped || fullPayment}
                 />
-                <p className="text-[0.65rem] text-muted-foreground">Defaults to 50% of the quote. Enter $0.00 for no retainer.</p>
+                <p className="text-[0.65rem] text-muted-foreground">{fullPayment ? "No balance payment prompt will be shown in the client vault." : "Defaults to 50% of the quote. Enter $0.00 for no retainer."}</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-balance-due">Remaining Balance Due at Delivery ($)</Label>
                 <Input id="mb-balance-due" readOnly value={formatCurrency(remainingBalance)} aria-readonly="true" />
-                <p className="text-[0.65rem] text-muted-foreground">Total minus the retainer / deposit amount.</p>
+                <p className="text-[0.65rem] text-muted-foreground">{galleryOnly || fullPayment || isComped ? "No client payment is due through the portal." : "Total minus the retainer / deposit amount."}</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="mb-retainer-status">Retainer Status</Label>
@@ -411,19 +451,19 @@ export function ManualBookingDialog({
                   id="mb-retainer-status"
                   value={retainerPaid ? "paid" : "pending"}
                   onChange={(event) => setRetainerStatus(event.target.value as "pending" | "paid")}
-                  disabled={!hasPricing || retainerAmount === 0 || quote.isComped}
+                  disabled={!hasPricing || retainerAmount === 0 || isComped || fullPayment}
                   className={selectClass}
                 >
                   <option value="pending">Pending via Portal</option>
                   <option value="paid">Paid / Waived ($0)</option>
                 </select>
                 {retainerPaid && retainerAmount > 0 ? (
-                  <p className="text-[0.65rem] text-muted-foreground">Offline retainer; the portal will only ask for the remaining balance.</p>
+                  <p className="text-[0.65rem] text-muted-foreground">{fullPayment ? "Full payment recorded; no balance remains." : "Offline retainer; the portal will only ask for the remaining balance."}</p>
                 ) : null}
               </div>
               {retainerPaid && retainerAmount > 0 ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="mb-retainer-method">Offline Payment Method (optional)</Label>
+                  <Label htmlFor="mb-retainer-method">{fullPayment ? "Prepayment method" : "Offline Payment Method"}</Label>
                   <select
                     id="mb-retainer-method"
                     value={retainerMethod}
@@ -453,20 +493,17 @@ export function ManualBookingDialog({
                       muted
                     />
                   )}
+                  {galleryOnly && quote.total > 0 ? <QuoteRow label="Gallery-only direct-access waiver" value={`-${formatCurrency(quote.total)}`} muted /> : null}
                   <div className="flex items-center justify-between border-t border-border pt-2 font-medium text-foreground">
                     <span className="flex items-center gap-2">
                       Total
-                      {quote.isComped && (
-                        <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">
-                          Comped
-                        </Badge>
-                      )}
+                      {galleryOnly ? <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Gallery Only</Badge> : isComped ? <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Comped</Badge> : fullPayment ? <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">Paid in Full</Badge> : null}
                     </span>
-                    <span>{formatCurrency(quote.total)}</span>
+                    <span>{formatCurrency(galleryOnly || isComped ? 0 : quote.total)}</span>
                   </div>
                   <QuoteRow
-                    label="Retainer / Deposit"
-                    value={retainerPaid && retainerAmount === 0 ? "$0.00 (Waived)" : formatCurrency(retainerAmount)}
+                    label={galleryOnly ? "Gallery-Only Direct Access" : fullPayment ? "Prepaid amount" : "Retainer / Deposit"}
+                    value={galleryOnly || isComped ? "$0.00 (Waived)" : formatCurrency(retainerAmount)}
                     muted
                   />
                   <QuoteRow label="Due at Delivery" value={formatCurrency(remainingBalance)} muted />

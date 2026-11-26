@@ -34,6 +34,7 @@ export type RosterVaultTeam = {
   player_count: number
   created_at: string
   vault_billing_mode: RosterBillingMode
+  vault_experience: "full_client_vault" | "gallery_only"
   /** All-Inclusive teams: the team's second 50% has been received, which unlocks every original. */
   balance_paid: boolean
   balance_paid_at: string | null
@@ -233,7 +234,7 @@ export async function listRosterVaultTeams(): Promise<RosterVaultTeam[]> {
   await issuePasscodesForTeams()
   const { rows } = await sql<RosterVaultTeam>`
     SELECT t.id, t.name, t.is_active, t.created_at, count(p.id)::int AS player_count,
-           t.vault_billing_mode, t.balance_paid, t.balance_paid_at, t.balance_payment_method,
+           t.vault_billing_mode, t.vault_experience, t.balance_paid, t.balance_paid_at, t.balance_payment_method,
            t.single_photo_price_cents, t.passcode_display
     FROM public.roster_vault_teams t
     LEFT JOIN public.roster_vault_players p ON p.team_id = t.id
@@ -433,8 +434,13 @@ export async function deleteRosterVaultPlayerPhoto(id: string) {
 }
 
 function parseBillingMode(value: unknown): RosterBillingMode {
-  if (value === "all_inclusive" || value === "parent_pay") return value
-  throw new Error("Choose All-Inclusive Team Buyout or Low-Retainer / Parent Pay-Per-Order.")
+  if (value === "all_inclusive" || value === "parent_pay" || value === "prepaid_comped") return value
+  throw new Error("Choose a valid team billing mode.")
+}
+
+function parseVaultExperience(value: unknown): "full_client_vault" | "gallery_only" {
+  if (value === "full_client_vault" || value === "gallery_only") return value
+  throw new Error("Choose Full Client Vault or Gallery-Only Direct Access.")
 }
 
 function parseSinglePhotoPriceCents(value: unknown): number | null {
@@ -584,9 +590,11 @@ export async function createRosterVaultTeam(input: {
   name: string
   passcode: string
   vaultBillingMode?: RosterBillingMode
+  vaultExperience?: "full_client_vault" | "gallery_only"
 }) {
   await requireAdmin()
   const billingMode = parseBillingMode(input.vaultBillingMode ?? "parent_pay")
+  const vaultExperience = parseVaultExperience(input.vaultExperience ?? "gallery_only")
   const name = cleanName(input.name, MAX_TEAM_NAME)
   const passcode = typeof input.passcode === "string" ? input.passcode.trim() : ""
   if (!name) throw new Error("Enter a team or event name.")
@@ -601,13 +609,14 @@ export async function createRosterVaultTeam(input: {
   try {
     const { rows } = await sql<RosterVaultTeam>`
       INSERT INTO public.roster_vault_teams (
-        name, access_code_lookup_hash, passcode_display, passcode_salt, passcode_hash, passcode_lookup_hash, vault_billing_mode
+        name, access_code_lookup_hash, passcode_display, passcode_salt, passcode_hash, passcode_lookup_hash,
+        vault_billing_mode, vault_experience
       ) VALUES (
-        ${name}, NULL, ${passcode}, ${salt}, ${hashCredential(passcode, salt)}, ${lookupHash}, ${billingMode}
+        ${name}, NULL, ${passcode}, ${salt}, ${hashCredential(passcode, salt)}, ${lookupHash}, ${billingMode}, ${vaultExperience}
       )
       RETURNING id, name, is_active, created_at, 0::int AS player_count,
-                vault_billing_mode, balance_paid, balance_paid_at, balance_payment_method, single_photo_price_cents,
-                passcode_display
+                vault_billing_mode, vault_experience, balance_paid, balance_paid_at, balance_payment_method,
+                single_photo_price_cents, passcode_display
     `
     created = rows[0]
   } catch (error) {
@@ -625,6 +634,7 @@ export async function updateRosterVaultTeam(input: {
   name: string
   isActive: boolean
   vaultBillingMode?: RosterBillingMode
+  vaultExperience?: "full_client_vault" | "gallery_only"
   /** Dollars-in-cents price for one single-photo download (Parent Pay). Null turns it off. */
   singlePhotoPriceCents?: number | null
 }) {
@@ -632,6 +642,7 @@ export async function updateRosterVaultTeam(input: {
   const name = cleanName(input.name, MAX_TEAM_NAME)
   if (!name) throw new Error("Enter a team or event name.")
   const billingMode = input.vaultBillingMode === undefined ? null : parseBillingMode(input.vaultBillingMode)
+  const vaultExperience = input.vaultExperience === undefined ? null : parseVaultExperience(input.vaultExperience)
   const singlePhotoPriceProvided = input.singlePhotoPriceCents !== undefined
   const singlePhotoPriceCents = singlePhotoPriceProvided ? parseSinglePhotoPriceCents(input.singlePhotoPriceCents) : null
   const { rows: currentRows } = await sql<{ name: string }>`
@@ -645,6 +656,7 @@ export async function updateRosterVaultTeam(input: {
       name = ${name},
       is_active = ${input.isActive},
       vault_billing_mode = COALESCE(${billingMode}, vault_billing_mode),
+      vault_experience = COALESCE(${vaultExperience}, vault_experience),
       single_photo_price_cents = CASE WHEN ${singlePhotoPriceProvided} THEN ${singlePhotoPriceCents}::integer ELSE single_photo_price_cents END,
       updated_at = now()
     WHERE id = ${input.id}
